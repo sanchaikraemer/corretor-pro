@@ -5429,6 +5429,11 @@ function cp1225LinhaDeOndeVeio(a){
       `A análise nova não foi concluída agora, então as antigas voltaram pra você não ficar sem nada — `+
       `mas provavelmente você já enviou essas mensagens.` +
       (motivoReuso ? `<br><br><b>Por que a nova não saiu:</b> ${escapeHtml(motivoReuso)}` : "") +
+      // v1310 — quando o motivo é falta de crédito na OpenAI, o botão leva direto pra página que
+      // resolve. Sem ele, sobrava um endereço escrito no meio do texto pra digitar na mão.
+      (/SEM CRÉDITOS|sem cr[ée]ditos/i.test(motivoReuso)
+        ? `<div style="margin-top:12px"><a href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener" class="btn" style="display:inline-block;text-decoration:none;padding:11px 18px;font-size:14px">Abrir a página de créditos da OpenAI</a></div>`
+        : "") +
       `<br><br>Toque em <b>↻ Reanalisar</b> aqui em cima para gerar as novas.</div>`
     : "";
   const lida = a.conversaLidaPelaIA;
@@ -5516,7 +5521,9 @@ function cp1308FaixaModoHtml(a){
   const desligadas = [
     modo.cerebro === false ? "o seu Cérebro" : "",
     modo.aprendizado === false ? "o aprendizado" : "",
-    modo.regrasEscrita === false ? "as regras de escrita" : ""
+    modo.regrasEscrita === false ? "as regras de escrita" : "",
+    // v1310 — a quarta chave: o manual de vendas que vem de fábrica no app.
+    modo.pisoComercial === false ? "o manual de vendas do app" : ""
   ].filter(Boolean);
   if(!desligadas.length) return "";
   const lista = desligadas.length === 1
@@ -6362,6 +6369,8 @@ function sanitizeCerebroConfigV762(cfg) {
     usarCerebro: cpChaveLigada(c.usarCerebro),
     usarAprendizado: cpChaveLigada(c.usarAprendizado),
     usarRegrasEscrita: cpChaveLigada(c.usarRegrasEscrita),
+    // v1310 — quarta chave: o manual de vendas que vem de fábrica no app (piso comercial).
+    usarPisoComercial: cpChaveLigada(c.usarPisoComercial),
     regrasTexto: temRegrasTexto && typeof c.regrasTexto === "string" ? c.regrasTexto : regrasLegadasParaTexto(c.regras),
     objecoesTexto: temObjecoesTexto && typeof c.objecoesTexto === "string" ? c.objecoesTexto : objecoesLegadasParaTexto(c.objecoes),
     regras: Array.isArray(c.regras) ? c.regras : [],
@@ -6408,6 +6417,7 @@ export function obterCerebroConfigParaAnalise() {
       usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", cfg, "usarCerebro"),
       usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", cfg, "usarAprendizado"),
       usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", cfg, "usarRegrasEscrita"),
+      usarPisoComercial: cpLerChaveDoFormulario("cerebroUsarPisoComercial", cfg, "usarPisoComercial"),
       regras: [],
       objecoes: []
     };
@@ -7177,6 +7187,7 @@ async function carregarCerebro(){
   const chaveCer = qs("#cerebroUsarCerebro"); if(chaveCer) chaveCer.checked = cpChaveLigada(config.usarCerebro);
   const chaveApr = qs("#cerebroUsarAprendizado"); if(chaveApr) chaveApr.checked = cpChaveLigada(config.usarAprendizado);
   const chaveReg = qs("#cerebroUsarRegrasEscrita"); if(chaveReg) chaveReg.checked = cpChaveLigada(config.usarRegrasEscrita);
+  const chavePiso = qs("#cerebroUsarPisoComercial"); if(chavePiso) chavePiso.checked = cpChaveLigada(config.usarPisoComercial);
   // v1091 — marca os dias em que ele atende.
   const diasSalvos = cpNormalizarDiasAtendimento(config.diasAtendimento);
   qsa('#cerebroDiasSemana input[type="checkbox"]').forEach(c => { c.checked = diasSalvos.includes(Number(c.dataset.dia)); });
@@ -7264,6 +7275,7 @@ async function salvarCerebro(){
     usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", null, "usarCerebro"),
     usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", null, "usarAprendizado"),
     usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", null, "usarRegrasEscrita"),
+    usarPisoComercial: cpLerChaveDoFormulario("cerebroUsarPisoComercial", null, "usarPisoComercial"),
     regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
     objecoesTexto: qs("#cerebroObjecoesTexto")?.value || "",
     regras: [],
@@ -7345,6 +7357,7 @@ async function zerarCerebroTudo(){
       usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", null, "usarCerebro"),
       usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", null, "usarAprendizado"),
       usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", null, "usarRegrasEscrita"),
+      usarPisoComercial: cpLerChaveDoFormulario("cerebroUsarPisoComercial", null, "usarPisoComercial"),
       regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
     };
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
@@ -7760,8 +7773,14 @@ Tamanho: ${file?((file.size/1024/1024).toFixed(1)+" MB"):""}`;
   if(raw.includes("aborted") || raw.includes("AbortError") || raw.includes("Demorou demais")){
     return "Demorou demais. O serviço de análise pode estar lento. Tente novamente em alguns minutos.";
   }
-  if(/quota|insufficient|429|billing/i.test(raw)){
-    return "A conta do provedor de análise está sem créditos. Confira o painel do provedor e tente de novo.";
+  // v1310 — print do dono (19/08/2026, 15:44): a tela mostrava o erro cru da OpenAI, em inglês
+  // ("You have no credits remaining..."), e ele respondeu "isso não me resolve nada". O motivo
+  // estava certo; faltava dizer, em português, o que houve e onde se resolve.
+  if(/credit_balance_exhausted|insufficient_quota|no credits remaining|quota|billing/i.test(raw)){
+    return "A conta da OpenAI (a inteligência que escreve as análises) está SEM CRÉDITOS. Enquanto ela não tiver saldo, nenhuma análise nova sai. Para resolver: entre em platform.openai.com, vá em Billing (cobrança) e adicione créditos. Depois é só reanalisar — a conversa já está guardada, nada se perdeu.";
+  }
+  if(/rate limit|rate_limit|429/i.test(raw)){
+    return "A OpenAI recusou o pedido por excesso de chamadas em pouco tempo. Espere um ou dois minutos e tente de novo.";
   }
   if(/HTTP 4\d\d/i.test(raw)){
     return "O servidor não aceitou o arquivo. Verifique se é o ZIP exportado pelo WhatsApp (com texto e mídia).";

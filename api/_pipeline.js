@@ -1050,6 +1050,7 @@ function sanitizeCerebroConfig(valor = {}) {
     usarCerebro: _chaveLigada(v.usarCerebro),
     usarAprendizado: _chaveLigada(v.usarAprendizado),
     usarRegrasEscrita: _chaveLigada(v.usarRegrasEscrita),
+    usarPisoComercial: _chaveLigada(v.usarPisoComercial),
     // v1091 — preferência de trabalho do corretor (dias em que ele atende). Não vai pro prompt da
     // IA, mas PRECISA sobreviver à limpeza: é ela que o app lê pra saber se hoje tem fila.
     diasAtendimento: Array.isArray(v.diasAtendimento)
@@ -3939,7 +3940,18 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const chaveCerebro = configCerebro?.usarCerebro !== false;
   const chaveAprendizado = configCerebro?.usarAprendizado !== false;
   const chaveRegrasEscrita = configCerebro?.usarRegrasEscrita !== false;
-  const modoAnalise = { cerebro: chaveCerebro, aprendizado: chaveAprendizado, regrasEscrita: chaveRegrasEscrita };
+  // v1310 — QUARTA CHAVE: o piso comercial do próprio app (INTELIGENCIA_CARTEIRA).
+  //
+  // Pedido do dono (19/08/2026): com as três chaves desligadas ele queria "analisar puramente o
+  // histórico, como no ChatGPT" — e ainda não era, porque este bloco, que é um manual de condução
+  // que vem de fábrica no app (sem nada dele: sem preço, sem empreendimento, sem regra dele),
+  // continuava indo em toda análise. Com as quatro desligadas, o que sai daqui é só a conversa.
+  //
+  // O que NÃO sai nunca, nem com tudo desligado: as proteções de integridade (não inventar fato,
+  // valor, data ou promessa; não transformar silêncio em aceite). Elas não são método comercial —
+  // são o que impede o app de escrever um preço que ninguém disse. Regra do projeto desde a v827.
+  const chavePisoComercial = configCerebro?.usarPisoComercial !== false;
+  const modoAnalise = { cerebro: chaveCerebro, aprendizado: chaveAprendizado, regrasEscrita: chaveRegrasEscrita, pisoComercial: chavePisoComercial };
   // "Prévia" continua querendo dizer só uma coisa: conta nova, Cérebro ainda vazio (é o que a tela
   // usa pra convidar o corretor a configurar). Chave desligada é outra coisa — foi ELE que
   // desligou, então não cabe convite nenhum; o que cabe é a tela dizer, em destaque, em que modo
@@ -4164,9 +4176,13 @@ Aplique sempre estas proteções de integridade, que não são estratégia comer
 - fatos voláteis exigem confirmação adequada;
 - quando uma fonte não sustentar uma afirmação, mantenha a incerteza em vez de completar a lacuna.
 
-${INTELIGENCIA_CARTEIRA}
+${chavePisoComercial
+  ? `${INTELIGENCIA_CARTEIRA}
 O bloco acima é apenas uma rede de segurança geral. Havendo Cérebro Comercial configurado, qualquer
-regra comercial dele prevalece e este piso NÃO deve virar checklist ou roteiro automático.
+regra comercial dele prevalece e este piso NÃO deve virar checklist ou roteiro automático.`
+  : `(A Inteligência Comercial Base foi DESLIGADA nesta análise pelo próprio corretor, que está
+comparando o resultado com e sem ela. Não há manual de condução nesta execução: leia a conversa e
+conduza pelo que ela mostra, mantendo as proteções de integridade acima.)`}
 
 === INÍCIO DO CÉREBRO COMERCIAL ===
 ${cerebroNoPedido
@@ -4179,8 +4195,10 @@ condições. Analise a conversa integralmente e gere uma condução útil e prop
   : `(DESLIGADO NESTA ANÁLISE pelo próprio corretor — ele está comparando o resultado com e sem as
 regras dele. O texto do Cérebro existe e continua salvo; só não foi enviado desta vez.)
 
-Sem o Cérebro, use a Inteligência Comercial Base acima como ponto de partida, sem inventar fatos nem
-condições. Analise a conversa integralmente e gere uma condução útil e proporcional ao estágio real.`}
+${chavePisoComercial
+  ? "Sem o Cérebro, use a Inteligência Comercial Base acima como ponto de partida, sem inventar fatos nem condições."
+  : "Sem o Cérebro e sem a Inteligência Comercial Base, trabalhe apenas com o que a conversa mostra, sem inventar fatos nem condições."}
+Analise a conversa integralmente e gere uma condução útil e proporcional ao estágio real.`}
 === FIM DO CÉREBRO COMERCIAL ===
 ${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" é referência auxiliar de escrita e condução. Nunca supera o Cérebro nem cria fatos.` : ""}
 
@@ -4795,7 +4813,10 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
     // corretor prefere saber que não deu a receber uma leitura pior sem aviso. Então a análise
     // carrega uma frase escrita pra ele — a tela mostra essa, e guarda o texto técnico só no
     // detalhe de diagnóstico.
-    const avisoParaOCorretor = "Não deu pra analisar esta conversa agora — a IA não respondeu a tempo. Toque em Reanalisar.";
+    // v1310 — quando o provedor DISSE o motivo (sem créditos, limite de chamadas, chave recusada),
+    // é esse motivo que aparece, em português. Só na falta dele fica a frase geral de tempo.
+    const avisoParaOCorretor = erroDaIAEmPortugues(detail)
+      || "Não deu pra analisar esta conversa agora — a IA não respondeu a tempo. Toque em Reanalisar.";
     return {
       mode: "erro_api",
       error: detail,
@@ -5648,6 +5669,40 @@ function analiseUtilizavel(analise) {
 
 // A análise salva volta pra tela quando a nova não deu certo. Carimba que é isso que aconteceu —
 // nada aqui pode se passar por análise recém-feita (foi a data mentirosa que confundiu o dono).
+// v1310 — O ERRO TÉCNICO DA IA, EM PORTUGUÊS, COM O QUE FAZER.
+//
+// Print do dono (19/08/2026, 15:44): a tela mostrou, em inglês e em código,
+// "[HTTP 429 · code=credit_balance_exhausted · type=insufficient_quota] You have no credits
+// remaining. Add credits to continue using the API at https://platform.openai.com/..." — e a
+// resposta dele foi "isso não me resolve nada". Estava certo: era o motivo CERTO escrito na língua
+// errada. Quem lê é corretor de imóveis, e a frase precisa dizer o que houve e o que fazer.
+//
+// Esta função só TRADUZ o que o provedor de IA respondeu. O texto técnico continua guardado no
+// diagnóstico, que é onde ele serve.
+export function erroDaIAEmPortugues(textoTecnico) {
+  const t = String(textoTecnico || "");
+  if (!t.trim()) return "";
+  if (/credit_balance_exhausted|insufficient_quota|no credits remaining|exceeded your current quota|billing/i.test(t)) {
+    return "A conta da OpenAI (a inteligência que escreve as análises) está SEM CRÉDITOS. " +
+      "Enquanto ela não tiver saldo, nenhuma análise nova sai — nem aqui, nem no Reanalisar. " +
+      "Para resolver: entre em platform.openai.com, vá em Billing (cobrança) e adicione créditos. " +
+      "Feito isso, é só reanalisar: nada se perdeu.";
+  }
+  if (/rate limit|rate_limit|429/i.test(t)) {
+    return "A OpenAI recusou o pedido por excesso de chamadas em pouco tempo. Espere um ou dois minutos e toque em Reanalisar.";
+  }
+  if (/invalid[_ ]api[_ ]key|incorrect api key|unauthorized|401/i.test(t)) {
+    return "A chave de acesso da OpenAI não está sendo aceita. Isso é configuração do servidor — avise o suporte.";
+  }
+  if (/timeout|timed out|ETIMEDOUT|aborted/i.test(t)) {
+    return "A IA não respondeu a tempo nesta tentativa. Toque em Reanalisar daqui a pouco.";
+  }
+  if (/model.*(not found|does not exist|no access)/i.test(t)) {
+    return "O modelo de IA configurado não está liberado nesta conta da OpenAI. Avise o suporte.";
+  }
+  return "";
+}
+
 // v1309 — E POR QUE A NOVA NÃO SAIU.
 //
 // "as sugestões estão sendo as mesmas coisas já enviadas" (dono, 19/08/2026). Eram: a análise nova
@@ -5655,10 +5710,13 @@ function analiseUtilizavel(analise) {
 // mandado. Só que o motivo da falha (teto de análises do dia, Cérebro sem instruções, IA fora do
 // ar, tempo estourado) ficava só do lado do servidor — na tela sobrava "análise nova não
 // concluída", sem dizer o que fazer. Agora o motivo viaja junto e aparece.
-function motivoDaAnaliseNovaNaoTerValido(analiseNova) {
+export function motivoDaAnaliseNovaNaoTerValido(analiseNova) {
   const a = analiseNova && typeof analiseNova === "object" ? analiseNova : null;
   if (!a) return "A IA não devolveu nada nesta tentativa.";
   const validacao = Array.isArray(a.validacaoSugestoes) ? a.validacaoSugestoes.filter(Boolean) : [];
+  // v1310 — erro técnico do provedor de IA vira português antes de chegar na tela.
+  const traduzido = erroDaIAEmPortugues(a.error) || erroDaIAEmPortugues(validacao[0]);
+  if (traduzido) return traduzido;
   if (validacao.length) return String(validacao[0]);
   if (a.error) return String(a.error);
   const porModo = {
