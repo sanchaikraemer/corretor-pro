@@ -642,6 +642,9 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
         audioFilesRelevantes:prep.audioFilesRelevantes,
         audioFilesForaDaJanela:prep.audioFilesForaDaJanela,
         transcriptionMap,
+        // v1306 — o que a IA leu das imagens e dos PDFs desta conversa (feito na etapa de preparar,
+        // onde os arquivos já estavam descompactados). Vai junto pra virar texto na linha do tempo.
+        leiturasVisuais:prep.leiturasVisuais,
         janelaConversa:prep.janelaConversa,
         ignoredFilesCount:prep.ignoredFilesCount,
         ignoredFiles:prep.ignoredFiles,
@@ -882,7 +885,9 @@ async function renderProcessedResult(data, meta){
     `<div style="margin-top:14px">` +
     `<b>TXT:</b> ${escapeHtml(data.txtFile || meta.fileName)}<br>` +
     `<b>Áudios no histórico:</b> ${(data.audioFiles || []).length} · <b>transcritos:</b> ${data.audiosTranscritos || 0} · <b>com erro:</b> ${data.audiosComErro || 0}<br>` +
-    `<b>Arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
+    // v1306 — imagem e PDF passaram a ser lidos: a tela agora mostra quantos viraram texto, ao lado
+    // do que continua sendo ignorado (vídeo e o resto).
+    `<b>Imagens/PDFs lidos:</b> ${data.visuaisLidos || 0} · <b>arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
     janelaHtml + corteZipHtml + semMidiaHtml + audioSemTextoHtml + incrementalHtml +
     `</div>` +
