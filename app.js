@@ -5384,9 +5384,16 @@ function cp1225LinhaDeOndeVeio(a){
       ? ` · aprendizado aplicado: ${itens.join(", ")}`
       : " · aprendizado: nada entrou nesta análise";
   }
+  // v1305 — quando alguma das três sai com problema que o app CONHECE (endereço que a conversa não
+  // tem, pedido de licença, fecho de espera) e não conseguiu refazer, a linha DIZ. Antes isso ficava
+  // invisível e a sugestão furada parecia normal na tela.
+  const comProblema = Number(a.sugestoesComProblema) || 0;
+  const aviso = comProblema > 0
+    ? ` · <b style="color:var(--risco)">${comProblema} ${pl(comProblema, "sugestão saiu com problema", "sugestões saíram com problema")}</b> (confira antes de enviar)`
+    : "";
   // As porcentagens já vêm como HTML colorido de cp1304Pct (o resto do texto é gerado aqui, não
   // vem do usuário), então esta linha não passa por escapeHtml — senão a cor viraria texto na tela.
-  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}</div>`;
+  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${aviso}</div>`;
 }
 
 // v1304 — a porcentagem colorida da linha de prova: verde quando fechou 100%, vermelho quando

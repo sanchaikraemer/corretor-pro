@@ -1089,6 +1089,80 @@ export function calcularContextoTemporalMensagens(timeline, _cfg = {}, agora = n
 
 
 
+// v1305 — A IDADE DO PREÇO. Pedido do dono, 19/08/2026: "está pegando informações antigas, preços
+// antigos que não existem mais... está puxando dados velhos e deixando de lado o contexto."
+//
+// Caso real do print: em 30/10/2025 o corretor anunciou nessa conversa "De R$ 390.000 por
+// R$ 350.000". A cliente sumiu e voltou dez meses depois (18/08/2026) com "posso ter mais
+// informações sobre isso?". As três sugestões responderam repetindo os R$ 350.000 como se fosse o
+// preço de hoje — uma promoção de quase um ano atrás, oferecida por escrito a quem pode cobrar.
+//
+// A causa não é falta de regra: a IA lê a conversa como um bloco só. A mensagem de outubro de 2025
+// e a de ontem chegam nela com a mesma cara. Faltava o dado mais simples — QUANTOS DIAS TEM cada
+// valor citado. É o mesmo remédio de sempre neste projeto: dar o fato, em vez de escrever mais uma
+// regra genérica.
+//
+// Só olha o texto e as datas da própria conversa; não decide nada comercial.
+const _VALOR_NA_FRASE = /(?:R\$\s*)?(\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\d+(?:[.,]\d+)?\s*(?:mil|milh[õo]es|milh[ãa]o))/gi;
+
+// "350.000", "350 mil", "R$ 1,2 milhão" viram o mesmo número, pra poder comparar.
+function _valorNormalizado(bruto) {
+  const t = String(bruto || "").toLowerCase().trim();
+  const milhao = /milh/.test(t);
+  const mil = /\bmil\b/.test(t);
+  let n = t.replace(/r\$|\s|milh[õo]es|milh[ãa]o|mil/g, "");
+  if (mil || milhao) n = n.replace(",", ".");
+  else n = n.replace(/\./g, "").replace(",", ".");
+  let num = Number(n);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  if (milhao) num *= 1000000;
+  else if (mil) num *= 1000;
+  // Abaixo de mil reais não é preço de imóvel nem condição relevante ("2 dormitórios", "15h").
+  if (num < 1000) return null;
+  return Math.round(num);
+}
+
+// Devolve os valores citados na conversa que já passaram do prazo de validade combinado, com a
+// idade de cada um. Valor repetido numa mensagem recente NÃO entra (ele foi reconfirmado).
+export function valoresAntigosDaConversa(timeline, agora = new Date(), diasLimite = 60) {
+  const hoje = partesDataBR(agora);
+  const hojeDia = hoje ? numeroDiaCivil(hoje.y, hoje.m, hoje.d) : null;
+  if (hojeDia == null) return [];
+  const maisRecente = new Map();
+  for (const m of (Array.isArray(timeline) ? timeline : [])) {
+    const p = dataCivilDeMensagem(m);
+    if (p?.dia == null) continue;
+    const texto = String(m?.text || "");
+    _VALOR_NA_FRASE.lastIndex = 0;
+    let achado;
+    while ((achado = _VALOR_NA_FRASE.exec(texto)) !== null) {
+      const valor = _valorNormalizado(achado[1]);
+      if (valor == null) continue;
+      const anterior = maisRecente.get(valor);
+      if (anterior == null || p.dia > anterior) maisRecente.set(valor, p.dia);
+    }
+  }
+  const antigos = [];
+  for (const [valor, dia] of maisRecente) {
+    const dias = hojeDia - dia;
+    if (dias > diasLimite) antigos.push({ valor, dias });
+  }
+  return antigos.sort((a, b) => b.valor - a.valor);
+}
+
+// Os valores que a MENSAGEM afirma, já normalizados — pra cruzar com os antigos da conversa.
+export function valoresNaMensagem(texto) {
+  const t = String(texto || "");
+  const out = new Set();
+  _VALOR_NA_FRASE.lastIndex = 0;
+  let m;
+  while ((m = _VALOR_NA_FRASE.exec(t)) !== null) {
+    const v = _valorNormalizado(m[1]);
+    if (v != null) out.add(v);
+  }
+  return [...out];
+}
+
 // Validação exclusivamente técnica: confirma apenas o formato mínimo esperado pelo aplicativo.
 // O conteúdo comercial não é interpretado, corrigido ou substituído pelo código.
 export function validarFormatoMensagens(mensagens) {
@@ -1217,6 +1291,11 @@ const GATILHOS_DE_LUGAR = new RegExp(
     "edif[íi]cio", "empreendimento", "loteamento", "torre",
     "pr[óo]xim[oa]s? (?:a|ao|[àa]|de|da|do|dos|das)", "pert(?:o|inho) (?:de|da|do|dos|das)",
     "ao lado (?:de|da|do)", "em frente (?:a|[àa]|ao)",
+    // v1305 — "próximo ao hospital HCC" passava batido: o gatilho pegava "próximo ao" e o nome
+    // vinha depois de uma palavra minúscula ("hospital"), então a captura falhava. Agora o próprio
+    // ponto de referência é gatilho.
+    "hospital", "shopping", "col[ée]gio", "escola", "supermercado", "mercado", "posto",
+    "terminal", "rodovi[áa]ria", "universidade", "faculdade", "parque", "pra[çc]a", "igreja",
     "fica(?:m)? (?:em|no|na|nos|nas)", "localizad[oa]s? (?:em|no|na)", "situad[oa]s? (?:em|no|na)",
     "dispon[íi]ve(?:l|is) (?:em|no|na)", "regi[ãa]o d[oae]s?"
   ].join("|") + ")\\s+",
@@ -1270,6 +1349,19 @@ const CATALOGO_NA_CONVERSA = /(apartamentos?|unidades?|op[çc][õo]es|plantas?|t
 const CAMINHO_DO_CORRETOR = /\b(?:(?:eu )?te (?:envio|envie|mando|mande|passo|passe|explico|explique|detalho|detalhe|mostro|mostre)|todas as (?:op[çc][õo]es|possibilidades|unidades|informa[çc][õo]es))\b/i;
 const TEM_DIA_OU_HORA = /\b(?:segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|manh[ãa]|tarde|noite|hoje|amanh[ãa]|\d{1,2}\s?h|hor[áa]rio)\b/i;
 
+// v1305 — ENDEREÇO INVENTADO. Print do dono de 19/08/2026, 07h38: a cliente respondeu ao anúncio
+// perguntando "Onde fica? Endereço" — e as três sugestões responderam com uma rua e um número que
+// NÃO existem na conversa (o clássico "Rua das Flores, 123", que é como se escreve endereço de
+// mentira). É o pior caso possível: o cliente vai até o lugar errado.
+//
+// A checagem de nome próprio da v1301 não pegou porque a rua vinha com conectivo minúsculo no meio
+// ("Rua das Flores"): o gatilho comia "Rua" e a captura do nome parava no "das". Esta checagem aqui
+// não depende de maiúscula nenhuma — ela olha a PALAVRA DE ENDEREÇO (rua, avenida, bairro, número)
+// e cobra que aquilo esteja escrito na conversa. Endereço diz QUAL é o imóvel, então a única fonte
+// válida continua sendo a conversa e as observações deste lead (decisão da v1301).
+const PALAVRA_DE_ENDERECO = /\b(?:rua|avenida|av\.|travessa|estrada|rodovia|alameda|loteamento|bairro)\s+(?:d[aeo]s?\s+)?([\p{L}\d'’-]+(?:\s+(?:d[aeo]s?\s+)?[\p{L}\d'’-]+){0,2})/giu;
+const NUMERO_DE_ENDERECO = /\b(?:n[úu]mero|n[ºo°])\s*\d{1,6}\b/i;
+
 // Prometer mandar "as informações" e não perguntar nada: a mensagem não entrega e não pede
 // resposta. O cliente fica sem ter o que responder.
 const PROMESSA_VAZIA = /\b(?:vou (?:te |lhe )?(?:enviar|mandar|passar)|te (?:envio|mando|passo)|j[áa] te (?:mando|envio|passo)|te enviarei|encaminho)\b[^.?!]{0,40}\b(?:informa[çc][õo]es|detalhes|dados|resumo|material)\b/i;
@@ -1290,6 +1382,7 @@ export function fatosInventadosNaMensagem(texto, contextoConhecido = null) {
   //   descrição do empreendimento é texto que o próprio corretor escreveu e mantém.
   const conversa = typeof contextoConhecido === "string" ? contextoConhecido : String(contextoConhecido?.conversa || "");
   const cerebro = typeof contextoConhecido === "string" ? "" : String(contextoConhecido?.cerebro || "");
+  const valoresAntigos = (typeof contextoConhecido === "object" && Array.isArray(contextoConhecido?.valoresAntigos)) ? contextoConhecido.valoresAntigos : [];
   const base = " " + _semAcentoMinuscula(conversa).replace(/\s+/g, " ") + " ";
   const baseProduto = base + _semAcentoMinuscula(cerebro).replace(/\s+/g, " ") + " ";
   const achados = [];
@@ -1305,6 +1398,30 @@ export function fatosInventadosNaMensagem(texto, contextoConhecido = null) {
     if (base.includes(chave)) continue;
     achados.push("cita lugar que não está na conversa");
     break;
+  }
+
+  PALAVRA_DE_ENDERECO.lastIndex = 0;
+  let e;
+  while ((e = PALAVRA_DE_ENDERECO.exec(t)) !== null) {
+    const nome = _semAcentoMinuscula(e[1] || "").replace(/\s+/g, " ").trim();
+    const partes = nome.split(" ").filter(w => w.length >= 3);
+    if (!partes.length) continue;
+    // Basta UMA palavra do endereço não estar na conversa pra isso ser endereço que ninguém deu.
+    if (partes.every(w => base.includes(w))) continue;
+    achados.push("dá endereço que a conversa não tem");
+    break;
+  }
+  if (!achados.includes("dá endereço que a conversa não tem") && NUMERO_DE_ENDERECO.test(t)) {
+    const numero = _semAcentoMinuscula((NUMERO_DE_ENDERECO.exec(t) || [""])[0]).replace(/\s+/g, " ").trim();
+    if (!base.includes(numero.replace(/^n[uo°º]\w*\s*/, "").trim())) achados.push("dá endereço que a conversa não tem");
+  }
+
+  // v1305 — preço/condição que só foi dito há muito tempo não pode voltar como o preço de hoje.
+  if (valoresAntigos.length) {
+    const naMensagem = valoresNaMensagem(t);
+    if (naMensagem.some(v => valoresAntigos.some(a => Number(a?.valor) === v))) {
+      achados.push("repete preço antigo como se fosse o de hoje");
+    }
   }
 
   for (const re of ELOGIO_SEM_FONTE) {
@@ -1393,6 +1510,9 @@ passo. Só o problema apontado sai; o resto continua dizendo a mesma coisa.
   responder. Reescreva fazendo UMA pergunta concreta que permita ao corretor selecionar o que
   mandar (quantos dormitórios precisa, até quanto pretende investir, para morar ou investir),
   escolhendo a que mais destrava neste momento da conversa.
+- PREÇO ANTIGO: se o problema é a mensagem repetir um valor que só foi dito há muito tempo, tire o
+  número. Não invente outro e não prometa desconto: escreva que vai confirmar o valor atualizado —
+  e, se couber, aproveite para perguntar o que a pessoa procura hoje.
 - UM CAMINHO SÓ: se o problema é a mensagem oferecer ao cliente duas maneiras de continuar
   ("prefere que eu te envie os valores ou quer mais detalhes?", "quer ver todas as possibilidades?"),
   escolha VOCÊ o caminho mais forte e deixe um só. Pergunta sobre o que o CLIENTE precisa ("2 ou 3
@@ -3667,6 +3787,19 @@ ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
   // Sem esse fato, "não repita pergunta já respondida" era ordem sem material: a IA repetia a
   // pergunta reescrita e o corretor recebia de volta o que ele mesmo já tinha mandado.
   const perguntasJaFeitas = perguntasJaFeitasPeloCorretor(timelineArr, corretorNome, lead || {});
+  // v1305 — A IDADE DE CADA VALOR CITADO, como FATO no pedido (não como mais uma regra). Sem isso a
+  // IA lê a promoção de dez meses atrás com a mesma cara da mensagem de ontem — foi o que fez as
+  // três sugestões devolverem o preço da promoção pra uma cliente que voltou dez meses depois.
+  const valoresVelhos = valoresAntigosDaConversa(timelineArr);
+  const blocoValoresVelhos = valoresVelhos.length
+    ? `VALORES CITADOS HÁ MUITO TEMPO NESTA CONVERSA (idade contada até hoje):\n${valoresVelhos
+        .map(v => `- R$ ${v.valor.toLocaleString("pt-BR")} — dito há ${v.dias} dias`).join("\n")}
+Preço, desconto, promoção e condição de pagamento mudam. Nenhum desses valores pode ser repetido
+como se fosse o de hoje, nem servir de base para conta, comparação ou oferta. Se o assunto voltar,
+o caminho é confirmar o valor atualizado antes de afirmar qualquer coisa — sem prometer desconto
+que ninguém confirmou e sem fingir que a oferta antiga continua de pé.`
+    : "";
+
   const blocoPerguntasJaFeitas = perguntasJaFeitas.length
     ? `PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA (extraídas das mensagens dele):
 ${perguntasJaFeitas.map(p => `- "${p.texto}"${p.respondida ? " — o cliente JÁ FALOU depois desta pergunta" : " — ainda sem resposta"}`).join("\n")}
@@ -3771,6 +3904,7 @@ Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
+${blocoValoresVelhos ? `\n${blocoValoresVelhos}\n` : ""}
 ${blocoPerguntasJaFeitas}${blocoRespostaCurta ? `\n${blocoRespostaCurta}` : ""}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
@@ -3880,6 +4014,9 @@ REGRAS PARA AS TRÊS MENSAGENS
   depois?"): escolher é trabalho do corretor, e duas opções de caminho dão ao cliente uma chance a
   mais de adiar. Proponha o caminho mais forte, um só, e ele responde sim ou pede outra coisa. A
   ÚNICA exceção é marcar dia/hora, onde oferecer duas opções ajuda a fechar a agenda.
+- PREÇO, DESCONTO E CONDIÇÃO TÊM VALIDADE. Valor dito há meses não é o valor de hoje. Se o cliente
+  sumiu e voltou, o que ele viu pode não existir mais: a mensagem confirma antes de afirmar, em vez
+  de repetir o número antigo (e nunca promete de novo um desconto que ninguém confirmou).
 - VOCÊ NÃO CONHECE O IMÓVEL. Quem conhece é o corretor. Não descreva o empreendimento por conta
   própria: nada de "conta com apartamentos de X", "possui unidades de Y", "estrutura moderna",
   "perfil bem procurado", "ótima localização". Um anúncio que ofereceu UMA unidade com 3 suítes não
@@ -4035,15 +4172,18 @@ Antes de devolver o JSON, confirme:
     // nem costura texto (a cirurgia determinística saiu na v1247 e não volta) e nada é descartado:
     // sem tempo no orçamento, com erro, ou com reescrita não melhor, fica o texto original.
     let sugestoesReescritas = 0;
+    // v1305 — declarado FORA do try porque a contagem final (abaixo) precisa dele mesmo quando a
+    // reescrita nem chega a rodar.
+    const contextoConhecido = {
+      conversa: [timelineTextFull, observacoesManuaisTexto].filter(Boolean).join("\n"),
+      cerebro: instrucoesCerebroTexto,
+      valoresAntigos: valoresAntigosDaConversa(timelineArr)
+    };
     try {
-      // v1302 — o que se sabe DE VERDADE deste lead, separado por fonte: a conversa inteira (não o
+      // O que se sabe DE VERDADE deste lead, separado por fonte (v1302): a conversa inteira (não o
       // trecho incremental) mais as observações do corretor dizem QUAL é o imóvel; o Cérebro, que é
       // texto escrito pelo próprio corretor, descreve COMO o produto é. É contra isso que se confere
       // se a sugestão está afirmando coisa que ninguém disse.
-      const contextoConhecido = {
-        conversa: [timelineTextFull, observacoesManuaisTexto].filter(Boolean).join("\n"),
-        cerebro: instrucoesCerebroTexto
-      };
       const comFraseDeRobo = [["a", msgA], ["b", msgB], ["c", msgC]]
         .map(([chave, texto]) => ({ chave, texto, frases: problemasNaMensagem(texto, contextoConhecido) }))
         .filter(item => item.texto && item.frases.length);
@@ -4072,6 +4212,15 @@ Antes de devolver o JSON, confirme:
         if (cReescrita) await registrarUsoIA({ organizationId, kind: "chat", model: cReescrita?.model || modeloReescrita, rota: "analise", usage: cReescrita?.usage });
       }
     } catch (_) { /* reescrita é rede extra: falhou, valem as mensagens originais da IA */ }
+    // v1305 — QUANTAS DAS TRÊS AINDA SAEM COM PROBLEMA CONHECIDO.
+    //
+    // Print do dono de 19/08/2026, 07h38: duas sugestões chegaram na tela com coisa que a rede
+    // conhece (pedido de licença, fecho de espera, endereço inventado). Da tela não dava pra saber
+    // se a rede tinha rodado e falhado, se não tinha tido tempo, ou se o problema era outro. Agora
+    // a análise carrega esse número e a tela mostra — mesma ideia da linha de prova do Cérebro:
+    // quando o app não consegue entregar limpo, ele DIZ, em vez de deixar parecendo normal.
+    const sugestoesComProblema = [msgA, msgB, msgC]
+      .filter(m => String(m || "").trim() && problemasNaMensagem(m, contextoConhecido).length > 0).length;
     const validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
 
     // Nenhuma sugestão de mensagem é reinterpretada nem tem conteúdo comercial reescrito pelo
@@ -4097,6 +4246,8 @@ Antes de devolver o JSON, confirme:
       // v1295 — quantas das três sugestões precisaram ser reescritas pela IA por terem saído com
       // frase da lista proibida. Fica no registro pra dar pra medir se o pedido está segurando.
       ...(sugestoesReescritas ? { reescritaAntiRobo: sugestoesReescritas } : {}),
+      // v1305 — quantas das três ainda têm problema conhecido depois de tudo (0 = saiu limpo).
+      sugestoesComProblema,
       // v1145 — REGRA DO DONO: "se não aparece na tela, não precisa existir".
       //
       // O JSON pedido à IA tinha 12 campos de diagnóstico e a tela mostra CINCO. Os outros sete só

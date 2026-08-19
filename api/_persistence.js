@@ -1576,7 +1576,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       // v1239 — a prova de quanto do Cérebro foi enviado precisa viajar junto (a tela mostra).
       // v1296 — "aprendizadoEnviado" entra junto: é a outra metade da prova (o que o aprendizado
       // pôs no pedido), e sem ela a linha da tela pisca ao abrir o lead pela lista.
-      "cerebroAplicado", "cerebroEnviado", "aprendizadoEnviado", "conversaLidaPelaIA",
+      // v1305 — "sugestoesComProblema" viaja junto pelo mesmo motivo: é o aviso de que uma das três
+      // saiu com coisa que a rede conhece e não conseguiu limpar. Sem isso a tela mostraria o aviso
+      // ao reanalisar e o perderia ao reabrir o lead pela lista.
+      "cerebroAplicado", "cerebroEnviado", "aprendizadoEnviado", "conversaLidaPelaIA", "sugestoesComProblema",
       // v936 — carimbos de quando a análise foi gerada/reanalisada ("Última análise" no
       // cabeçalho do lead). Sem eles aqui, a lista carrega uma análise sem data e, ao reabrir
       // o lead a partir dela, "Última análise" some mesmo pra quem acabou de reanalisar.
