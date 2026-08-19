@@ -187,6 +187,7 @@ conversa inteira" virou "leu 100% da conversa". Verde só no 100% (`--green`); a
 
 =======
 >>>>>>> origin/main
+<<<<<<< HEAD
 _**v1305 — endereço inventado, preço vencido e aviso na tela.** Dois prints de 19/08/2026. (1) À
 pergunta "Onde fica? Endereço", as três sugestões responderam com rua, número e ponto de referência
 inexistentes na conversa; a checagem da v1301 falhava com conectivo no meio ("Rua **das** Flores") e
@@ -200,6 +201,8 @@ mostra em vermelho "N sugestões saíram com problema (confira antes de enviar)"
 conseguiu limpar. Guarda: `tests/v1305-endereco-inventado-e-aviso-na-tela.test.mjs`. Ver
 `NOTAS-v1305.md`._
 
+=======
+>>>>>>> origin/main
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
