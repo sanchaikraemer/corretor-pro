@@ -7,7 +7,7 @@ import { resolveOrganizationId, getSupabaseAdmin, getPlatformAdminUserId, confer
 // Unifica os antigos api/status.js, api/diagnostico-openai.js e api/configurar-bucket.js
 // (economiza vagas de Serverless Function no plano Hobby da Vercel).
 import { createClient } from "@supabase/supabase-js";
-import { getOpenAIRaw, getOpenAIConfigSummary, describeOpenAIError, verificarLimiteDiario } from "./_pipeline.js";
+import { getOpenAIRaw, getOpenAIConfigSummary, describeOpenAIError, verificarLimiteDiario, criarChatComLimite, limiteDeSaida } from "./_pipeline.js";
 import { registrarUsoIA } from "./_iaCusto.js";
 
 // v1013 — mode=openai faz uma chamada REAL (e paga) à OpenAI a cada clique no botão "Testar IA".
@@ -123,10 +123,13 @@ async function modoOpenAI(res, isAdmin, organizationId) {
     // Testa EXATAMENTE como o pipeline real chama (Chat Completions), não a
     // Responses API — gpt-4.1 não aceita reasoning.effort e o teste antigo dava
     // falso negativo, escondendo o erro de verdade (saldo/limite/rate).
-    testeAnalise = await timed(`OpenAI · análise e mensagens (${summary.analysisModel})`, () => oaRaw.chat.completions.create({
+    // v1311 — o teste precisa chamar do MESMO jeito que o pipeline real, inclusive no nome do
+    // parâmetro de tamanho (que mudou nos modelos novos): senão o diagnóstico acusa erro onde não
+    // há, ou passa onde a análise de verdade quebra.
+    testeAnalise = await timed(`OpenAI · análise e mensagens (${summary.analysisModel})`, () => criarChatComLimite(oaRaw, {
       model: summary.analysisModel,
       messages: [{ role: "user", content: "Responda apenas: ok" }],
-      max_tokens: 16
+      ...limiteDeSaida(summary.analysisModel, 16)
     }));
     testes.push(testeAnalise);
     if (testeAnalise.ok) {

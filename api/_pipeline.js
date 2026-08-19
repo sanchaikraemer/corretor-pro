@@ -94,6 +94,49 @@ export function modeloOrquestrador() {
   return envModel("OPENAI_ORQUESTRADOR_MODEL", modeloAnalise() || MODELOS_PADRAO.orquestrador);
 }
 
+// v1311 — O NOME DO PARÂMETRO QUE LIMITA A RESPOSTA MUDOU NOS MODELOS NOVOS.
+//
+// Print do dono (19/08/2026, 16h15, logo depois de recarregar os créditos da OpenAI):
+//   "[HTTP 400 · code=unsupported_parameter] Unsupported parameter: 'max_tokens' is not supported
+//    with this model. Use 'max_completion_tokens' instead."
+//
+// A v1308 subiu o modelo da análise para a linha atual (gpt-5.6-terra) e deixou o parâmetro
+// antigo. Nessa família a OpenAI recusa `max_tokens` e exige `max_completion_tokens` — ou seja,
+// TODA análise voltava erro 400, sem gastar um centavo e sem sair uma linha na tela.
+//
+// Duas redes, porque nome de modelo muda sozinho na hospedagem (DIRECIONA_MAIN_MODEL) e não dá pra
+// depender de manter uma lista em dia:
+//   1. `limiteDeSaida` escolhe o nome certo pelo modelo;
+//   2. `criarChatComLimite` refaz a chamada com o OUTRO nome quando a OpenAI reclama do parâmetro.
+export function limiteDeSaida(model, quantidade) {
+  const n = Number(quantidade);
+  if (!Number.isFinite(n) || n <= 0) return {};
+  // Famílias que só aceitam o nome novo: GPT-5 em diante e a linha "o" de raciocínio.
+  return /^(gpt-[5-9]|o[1-9])/i.test(String(model || "").trim())
+    ? { max_completion_tokens: Math.round(n) }
+    : { max_tokens: Math.round(n) };
+}
+
+export async function criarChatComLimite(openai, corpo, opcoes) {
+  try {
+    return await openai.chat.completions.create(corpo, opcoes);
+  } catch (erro) {
+    const texto = String(erro?.message || "");
+    if (!/unsupported[_ ]parameter/i.test(texto)) throw erro;
+    const alternativo = { ...corpo };
+    if (Object.prototype.hasOwnProperty.call(alternativo, "max_tokens") && /max_tokens/.test(texto)) {
+      alternativo.max_completion_tokens = alternativo.max_tokens;
+      delete alternativo.max_tokens;
+    } else if (Object.prototype.hasOwnProperty.call(alternativo, "max_completion_tokens") && /max_completion_tokens/.test(texto)) {
+      alternativo.max_tokens = alternativo.max_completion_tokens;
+      delete alternativo.max_completion_tokens;
+    } else {
+      throw erro;
+    }
+    return await openai.chat.completions.create(alternativo, opcoes);
+  }
+}
+
 
 
 
@@ -2239,12 +2282,12 @@ export async function lerPrintDaConversa(base64, mime, openai, organizationId = 
   if (!openai) throw new Error("Leitura de imagem indisponível agora.");
 
   const modeloUsado = modeloVisao();
-  const completion = await withRetries(() => openai.chat.completions.create({
+  const completion = await withRetries(() => criarChatComLimite(openai, {
     model: modeloUsado,
     // Sem "temperature" de propósito: o projeto proíbe fixar isso nas chamadas de IA desde a v855
     // (guarda em tests/v855-cerebro-prioridade-sem-temperatura.test.mjs). A instrução de copiar o
     // texto exatamente como está escrito é o que segura a leitura no lugar.
-    max_tokens: 900,
+    ...limiteDeSaida(modeloUsado, 900),
     messages: [{
       role: "user",
       content: [
@@ -3058,13 +3101,13 @@ ${falasDoCorretor.join("\n").slice(0, 5000)}
 ===== FIM DAS MENSAGENS DO CORRETOR =====`;
 
     const modeloUsado = modeloTarefasSimples();
-    const completion = await openai.chat.completions.create({
+    const completion = await criarChatComLimite(openai, {
       model: modeloUsado,
       messages: [
         { role: "system", content: instrucoes },
         { role: "user", content: dados }
       ],
-      max_tokens: 700
+      ...limiteDeSaida(modeloUsado, 700)
     });
     await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloUsado, rota: "conhecimento-corretor", usage: completion?.usage });
 
@@ -3722,13 +3765,14 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
     }, timeout);
   });
   try {
-    const apiPromise = openai.chat.completions.create({
+    const apiPromise = criarChatComLimite(openai, {
       model,
       messages: [
         ...(String(systemPrompt || "").trim() ? [{ role: "system", content: String(systemPrompt).trim() }] : []),
         { role: "user", content: prompt }
       ],
-      max_tokens: maxOutputTokens,
+      // v1311 — nome do parâmetro conforme o modelo (ver limiteDeSaida).
+      ...limiteDeSaida(model, maxOutputTokens),
       response_format: { type: "json_object" }
       // v1086 — maxRetries:0. O SDK da OpenAI tenta sozinho até 3 vezes por chamada em 429/5xx,
       // POR DENTRO da nossa janela de 26s: numa hora de fila na OpenAI, essas tentativas escondidas
@@ -5238,9 +5282,9 @@ async function lerUmArquivoVisual(nome, buffer, openai, organizationId) {
         { type: "image_url", image_url: { url: `data:${mimeDaImagem(nome)};base64,${base64}`, detail: "high" } }
       ];
   // Sem "temperature": o projeto proíbe fixar isso nas chamadas de IA desde a v855.
-  const completion = await withRetries(() => openai.chat.completions.create({
+  const completion = await withRetries(() => criarChatComLimite(openai, {
     model: modeloUsado,
-    max_tokens: ehPdf ? 900 : 500,
+    ...limiteDeSaida(modeloUsado, ehPdf ? 900 : 500),
     messages: [{ role: "user", content: conteudo }]
   }), { tries: 2 });
   await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloUsado, rota: "leitura-visual-import", usage: completion?.usage });
@@ -5401,9 +5445,9 @@ export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO
         continue;
       }
       if (!oa) { leituras[url] = { status: "api_nao_configurada", text: "" }; continue; }
-      const completion = await withRetries(() => oa.chat.completions.create({
+      const completion = await withRetries(() => criarChatComLimite(oa, {
         model: modeloTarefasSimples(),
-        max_tokens: 700,
+        ...limiteDeSaida(modeloTarefasSimples(), 700),
         messages: [{ role: "user", content: `${PEDIDO_LEITURA_LINK}\n\nENDEREÇO: ${url}\n\nTEXTO DA PÁGINA:\n${texto}` }]
       }), { tries: 2 });
       await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloTarefasSimples(), rota: "leitura-link-import", usage: completion?.usage });
