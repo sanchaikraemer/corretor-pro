@@ -4680,12 +4680,17 @@ export async function prepararConversaDoZip(buffer, options = {}) {
 
   // Nome do corretor vem do Cérebro da própria organização — nunca cravado no código.
   const corretorNomePreliminar = (await loadCerebroConfig(null, options.organizationId).catch(() => null))?.corretorNome || "";
+  const leadPreliminarCalculado = guessLeadData(messages, corretorNomePreliminar, txtName);
+  // v1307 — os links que o CORRETOR mandou nesta conversa (os mais recentes). Link de cliente não
+  // entra: o servidor não abre endereço mandado por desconhecido.
+  const linksParaLer = linksDoCorretorNaConversa(messages, corretorNomePreliminar, leadPreliminarCalculado);
   return {
     txtFile: txtName,
     messages,
     // v1179 — o nome do arquivo exportado entra no palpite: o WhatsApp sempre nomeia o arquivo com
     // o contato do outro lado, então ele diz quem é o cliente mesmo quando o corretor falou primeiro.
-    leadPreliminar: guessLeadData(messages, corretorNomePreliminar, txtName),
+    leadPreliminar: leadPreliminarCalculado,
+    linksParaLer,
     audioFilesRelevantes: audioFilesRelevantes.map(normalizeName),
     audiosParaTranscrever: audiosParaTranscrever.map(normalizeName),
     audioFilesForaDaJanela: audioFilesForaDaJanela.map(normalizeName),
@@ -4879,6 +4884,130 @@ export function maxVisuaisPorImportacao() {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 6;
 }
 
+// v1307 — O LINK QUE O CORRETOR MANDA PASSA A SER LIDO.
+//
+// Pergunta do dono (19/08/2026, com print de uma mensagem dele): "e um link enviado, como fica?".
+// Ficava como texto puro: a IA via o endereço, sabia que um link tinha sido enviado, e não abria a
+// página. No print dele o link levava à seleção de 8 apartamentos com fotos, plantas e VALORES —
+// nada disso existia para a análise. Mesmo buraco da imagem antes da v1306.
+//
+// Fronteiras, todas estreitas de propósito:
+// - só links que o CORRETOR mandou (link de cliente/desconhecido nunca é aberto pelo servidor);
+// - só https, e nunca endereço interno/privado (o servidor não pode ser usado pra bisbilhotar
+//   rede interna a partir de um link colado numa conversa);
+// - no máximo 2 por importação, os mais recentes, com tempo e tamanho limitados;
+// - página que não devolve texto útil (aquelas que montam tudo por JavaScript) vira "não deu pra
+//   ler" — e nada é inventado no lugar.
+const MAX_LINKS_POR_IMPORTACAO = 2;
+const MAX_BYTES_PAGINA = 700 * 1024;
+const MIN_CHARS_PAGINA_UTIL = 200;
+const _URL_NA_MENSAGEM = /https?:\/\/[^\s<>"')\]]+/gi;
+
+// Endereço que o servidor NÃO abre: sem https, host que é IP, localhost, domínio interno ou faixa
+// privada. É a proteção contra usar o app como ponte pra rede interna.
+export function linkPodeSerLido(url) {
+  let u;
+  try { u = new URL(String(url || "")); } catch (_) { return false; }
+  if (u.protocol !== "https:") return false;
+  const host = u.hostname.toLowerCase();
+  if (!host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;
+  if (/^\[?[0-9a-f:]+\]?$/i.test(host) && host.includes(":")) return false;
+  if (!host.includes(".")) return false;
+  return true;
+}
+
+// Os links mandados pelo corretor, do mais recente pro mais antigo, sem repetir.
+export function linksDoCorretorNaConversa(timeline, corretorNome = "", lead = {}, max = MAX_LINKS_POR_IMPORTACAO) {
+  const achados = [];
+  for (const m of (Array.isArray(timeline) ? timeline : [])) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
+    const texto = String(m?.text || "");
+    _URL_NA_MENSAGEM.lastIndex = 0;
+    let achado;
+    while ((achado = _URL_NA_MENSAGEM.exec(texto)) !== null) {
+      const url = achado[0].replace(/[.,;:]+$/, "");
+      if (!linkPodeSerLido(url)) continue;
+      if (!achados.includes(url)) achados.push(url);
+    }
+  }
+  return achados.slice(-max).reverse();
+}
+
+// Tira o texto visível de uma página HTML. Sem biblioteca: script/estilo fora, tags viram espaço.
+export function textoVisivelDaPagina(html) {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, d) => { const n = Number(d); return n > 31 && n < 65536 ? String.fromCharCode(n) : " "; })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const PEDIDO_LEITURA_LINK = [
+  "O texto abaixo foi tirado de uma página que um corretor de imóveis enviou por link para um cliente.",
+  "Liste SOMENTE o que está escrito nela, em português, em no máximo 12 linhas curtas:",
+  "unidades/apartamentos citados; valores e condições exatamente como aparecem (preço, entrada, parcela, desconto, prazo);",
+  "nome do empreendimento; endereço ou localização; tipologias (dormitórios, suítes, metragem, garagem).",
+  "Copie números e nomes exatamente como estão, sem arredondar nem completar.",
+  "Ignore menu, rodapé, aviso de cookie e texto de navegação.",
+  "Não interprete, não deduza e não invente nada que não esteja escrito.",
+  "Se não houver informação comercial, responda exatamente: SEM CONTEUDO COMERCIAL"
+].join(" ");
+
+// Lê os links escolhidos. Devolve { url: { status, text } }. Nunca lança: erro vira status e a
+// importação segue exatamente como seguia antes desta versão.
+export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO_PADRAO_LEGADA, { deadlineTs = 0, openai = null, fetchImpl = null } = {}) {
+  const oa = openai || getOpenAI();
+  const leituras = {};
+  const lista = (Array.isArray(urls) ? urls : []).filter(linkPodeSerLido);
+  if (!lista.length) return { leituras };
+  const buscar = fetchImpl || globalThis.fetch;
+  for (const url of lista) {
+    if (deadlineTs && Date.now() > deadlineTs) { leituras[url] = { status: "sem_tempo_nesta_importacao", text: "" }; continue; }
+    try {
+      const controller = new AbortController();
+      const corte = setTimeout(() => controller.abort(), 9000);
+      let resposta;
+      try {
+        resposta = await buscar(url, {
+          redirect: "follow",
+          signal: controller.signal,
+          headers: { "user-agent": "CorretorPro/1 (leitura de material enviado pelo corretor)", accept: "text/html,text/plain" }
+        });
+      } finally { clearTimeout(corte); }
+      if (!resposta?.ok) { leituras[url] = { status: `pagina_respondeu_${resposta?.status || "erro"}`, text: "" }; continue; }
+      const tipo = String(resposta.headers?.get?.("content-type") || "").toLowerCase();
+      if (tipo && !/text\/html|text\/plain|application\/xhtml/.test(tipo)) { leituras[url] = { status: "pagina_nao_e_texto", text: "" }; continue; }
+      const html = String(await resposta.text() || "").slice(0, MAX_BYTES_PAGINA);
+      const texto = textoVisivelDaPagina(html).slice(0, 6000);
+      if (texto.length < MIN_CHARS_PAGINA_UTIL) {
+        // Página montada por JavaScript: a leitura simples só enxerga a casca. Fica registrado
+        // como não lido — e nada é inventado no lugar.
+        leituras[url] = { status: "pagina_sem_texto_legivel", text: "" };
+        continue;
+      }
+      if (!oa) { leituras[url] = { status: "api_nao_configurada", text: "" }; continue; }
+      const completion = await withRetries(() => oa.chat.completions.create({
+        model: modeloTarefasSimples(),
+        max_tokens: 700,
+        messages: [{ role: "user", content: `${PEDIDO_LEITURA_LINK}\n\nENDEREÇO: ${url}\n\nTEXTO DA PÁGINA:\n${texto}` }]
+      }), { tries: 2 });
+      await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloTarefasSimples(), rota: "leitura-link-import", usage: completion?.usage });
+      const resumo = String(completion?.choices?.[0]?.message?.content || "").trim();
+      leituras[url] = (!resumo || /^SEM CONTEUDO COMERCIAL$/i.test(resumo))
+        ? { status: "sem_conteudo_comercial", text: "" }
+        : { status: "lido", text: resumo };
+    } catch (error) {
+      leituras[url] = { status: "erro_leitura", text: "", error: describeOpenAIError(error) };
+    }
+  }
+  return { leituras };
+}
+
 // Mesmo par do teto de transcrição (v1119), agora pra leitura de imagem/PDF: conferir quanto ainda
 // cabe hoje ANTES de gastar, e registrar depois só o que virou texto de verdade. Fail-open: erro na
 // checagem nunca bloqueia uma importação.
@@ -4942,13 +5071,16 @@ export async function transcreverArquivosExtraidos(arquivos = [], organizationId
 
 // Monta a timeline a partir de mensagens já filtradas + transcrições já prontas
 // (não chama OpenAI). transcriptionMap: { nomeBaseDoAudio: {status, text} }
-function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap, audioFilesForaDaJanela = [], leiturasVisuais = {}) {
+function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap, audioFilesForaDaJanela = [], leiturasVisuais = {}, leiturasLinks = {}) {
   const audioNames = (audioFilesRelevantes || []).map(normalizeName);
   const foraDaJanela = new Set((audioFilesForaDaJanela || []).map(normalizeName));
   // v1306 — o que a IA leu das imagens e dos PDFs entra AQUI, na mensagem que trouxe o anexo, e
   // vira texto normal da conversa daí pra frente (análise, histórico, reanálise).
   const leituras = (leiturasVisuais && typeof leiturasVisuais === "object") ? leiturasVisuais : {};
   const nomesVisuais = Object.keys(leituras);
+  // v1307 — o mesmo pro que estava atrás do link enviado pelo corretor.
+  const linksLidos = (leiturasLinks && typeof leiturasLinks === "object") ? leiturasLinks : {};
+  const urlsLidas = Object.entries(linksLidos).filter(([, v]) => v?.text).map(([url]) => url);
   const timeline = [];
   const usedAudio = new Set();
   for (const msg of messages) {
@@ -4990,7 +5122,19 @@ function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcrip
       });
       continue;
     }
-    timeline.push({ ...msg, type: msg.type || "text", text: stripEmojis(msg.text), source: "txt" });
+    const textoLimpo = stripEmojis(msg.text);
+    const urlLida = urlsLidas.find(u => String(msg.text || "").includes(u));
+    if (urlLida) {
+      timeline.push({
+        ...msg,
+        type: msg.type || "text",
+        text: `${textoLimpo}\n[Link lido pela IA] ${String(linksLidos[urlLida].text).replace(/\s*\n\s*/g, " · ").trim()}`,
+        linkLido: urlLida,
+        source: "txt"
+      });
+      continue;
+    }
+    timeline.push({ ...msg, type: msg.type || "text", text: textoLimpo, source: "txt" });
   }
   timeline.sort((a, b) => String(a.iso).localeCompare(String(b.iso)) || Number(a.order || 0) - Number(b.order || 0));
   return timeline;
@@ -5134,10 +5278,11 @@ export async function finalizarAnaliseDaConversa(payload) {
     metricsBase, existingTimeline, previousAnalysis, existingLeadId,
     audiosReaproveitados = 0, audiosNovosSolicitados = 0, cerebroConfig = null,
     leiturasVisuais = {},
+    leiturasLinks = {},
     organizationId = ORGANIZACAO_PADRAO_LEGADA
   } = payload;
 
-  const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || [], leiturasVisuais || {});
+  const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || [], leiturasVisuais || {}, leiturasLinks || {});
   const timelineAntiga = Array.isArray(existingTimeline) ? existingTimeline : [];
   const reimportacao = !!(existingLeadId && timelineAntiga.length);
   const chavesAntigas = new Set(timelineAntiga.map(assinaturaTimelineIncremental).filter(Boolean));
@@ -5234,6 +5379,8 @@ export async function finalizarAnaliseDaConversa(payload) {
     ignoredRule: "Vídeos, emojis e figurinhas não alimentam a análise. O Corretor Pro usa o texto, os áudios transcritos e o que está escrito nas imagens e nos PDFs da conversa.",
     // v1306 — quantos arquivos visuais viraram texto nesta importação (0 quando não havia nenhum).
     visuaisLidos: timeline.filter(m => m?.source === "visual").length,
+    // v1307 — quantos links enviados por você viraram texto nesta importação.
+    linksLidos: timeline.filter(m => m?.linkLido).length,
     audioFiles: (audioFilesRelevantes || []),
     audiosEncontrados: timeline.filter(m => m?.mediaFile).length,
     audiosTotalNoZip: audiosTotalNoZip || 0,
@@ -5287,6 +5434,14 @@ export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebro
   const lote = arquivos.length
     ? await transcreverArquivosExtraidos(arquivos, organizationId)
     : { transcriptions: {}, transcriptionEnabled: true };
+  // v1307 — e os links do corretor, pelo mesmo motivo.
+  let leiturasLinks = {};
+  if (Array.isArray(prep.linksParaLer) && prep.linksParaLer.length) {
+    try {
+      const r = await lerLinksDaConversa(prep.linksParaLer, organizationId, { deadlineTs: Date.now() + 20000 });
+      leiturasLinks = r.leituras || {};
+    } catch (_) { /* leitura de link é ganho extra */ }
+  }
   // v1306 — este caminho (atalho/compartilhar) lê imagem e PDF igual à importação normal, senão a
   // mesma conversa entra rica por um lado e cega pelo outro.
   const visuais = Object.entries(prep._extractedVisuals || {}).map(([name, buf]) => ({ name, buffer: buf }));
@@ -5310,6 +5465,7 @@ export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebro
     audioFilesForaDaJanela: prep.audioFilesForaDaJanela,
     transcriptionMap: lote.transcriptions,
     leiturasVisuais,
+    leiturasLinks,
     janelaConversa: prep.janelaConversa,
     ignoredFilesCount: prep.ignoredFilesCount,
     ignoredFiles: prep.ignoredFiles,

@@ -208,6 +208,18 @@ arquivo anexado passou a ser preservado (campo `anexos` da mensagem) — sem ele
 imagem lida à mensagem. Guarda: `tests/v1306-importacao-le-imagem-e-pdf.test.mjs`. Ver
 `NOTAS-v1306.md`._
 
+_**v1307 — link enviado pelo corretor passa a ser lido; "Última mensagem" volta ao cartão.** (1)
+`linksDoCorretorNaConversa` seleciona até 2 links https recentes enviados PELO CORRETOR (link de
+cliente nunca é aberto; IP, localhost, .local e domínio sem ponto são recusados por
+`linkPodeSerLido`); `lerLinksDaConversa` busca a página (timeout 9s, teto de 700 KB, só
+text/html|plain), extrai o texto visível e faz uma leitura factual pelo modelo simples; o resultado
+entra na própria mensagem do link como "[Link lido pela IA]". Página montada por JavaScript devolve
+`pagina_sem_texto_legivel` e nada é inventado. Mesmo teto diário da leitura visual (v1306) e
+fail-open em qualquer erro. (2) O cartão do cliente voltou a mostrar a data da última mensagem da
+conversa, numa linha própria abaixo de "Último atendimento" (a v1266 tinha trocado uma pela outra e a
+data da conversa sumia quando havia atendimento registrado). Guarda:
+`tests/v1307-link-do-corretor-e-ultima-mensagem.test.mjs`. Ver `NOTAS-v1307.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,

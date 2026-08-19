@@ -5455,6 +5455,16 @@ function renderLeadFoco(lead){
       ? cp705FormatDateTime(new Date(ultimoAtTs).toISOString())
       : ((ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || ''));
     const ultimaMsgRotulo=ultimoAtTs?'Último atendimento':'Última mensagem';
+    // v1307 — A ÚLTIMA MENSAGEM DA CONVERSA, SEMPRE (pedido do dono, com print marcando o lugar:
+    // "quero que coloque aqui — última mensagem (minha ou do cliente, tanto faz)").
+    //
+    // A linha acima virou "Último atendimento" na v1266 quando existe atendimento registrado, e aí
+    // a data da conversa sumia da tela: o corretor via quando ELE atendeu e não via quando a
+    // conversa parou de verdade. As duas informações são diferentes e as duas importam — agora
+    // aparecem as duas, uma embaixo da outra. Sem atendimento registrado, a linha de cima já é a
+    // da mensagem e esta não se repete.
+    const ultimaMsgConversaEm=(ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):'';
+    const mostrarLinhaMensagem=!!(ultimoAtTs && ultimaMsgConversaEm);
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
@@ -5510,6 +5520,7 @@ function renderLeadFoco(lead){
           <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
           ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`${ultimaMsgRotulo} — ${ultimaMsgEm}`)}</div>`:''}
+          ${mostrarLinhaMensagem?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgConversaEm}`)}</div>`:''}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
