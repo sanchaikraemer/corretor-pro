@@ -47,6 +47,14 @@ tempo da rota. Os outros dois níveis, se um dia fizer falta, são o **Sol** (o 
 mais lento) e o **Luna** (o mais barato). Trocar é uma linha na configuração da hospedagem, sem
 publicar nada.
 
+**E se o modelo novo não estiver liberado na sua conta da OpenAI?** O app percebe na hora (a OpenAI
+responde "esse modelo não existe para você"), roda a análise no modelo anterior e **escreve isso em
+vermelho na tela**: *"o modelo novo não está liberado na sua conta da OpenAI — esta análise saiu no
+modelo anterior; libere o modelo no painel da OpenAI ou avise o suporte"*. Sem essa rede, uma conta
+sem acesso ficaria com **todas** as análises falhando sem explicação. E isso não é o plano B
+silencioso que acabou logo acima: ali um modelo que funcionava era trocado por um pior, calado;
+aqui o modelo pedido simplesmente não existe para a conta, e a tela diz.
+
 ### A análise ganhou 41% mais tempo pra pensar
 
 Pergunta do dono: *"e se não couber em 34 segundos, por que não aumenta esse prazo?"*. Ele estava

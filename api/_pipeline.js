@@ -472,6 +472,28 @@ export function describeOpenAIError(error) {
   return header + apiMessage;
 }
 
+// v1308 — MODELO QUE A CONTA NÃO TEM. Não é lentidão nem erro passageiro: é configuração.
+// A OpenAI responde na hora (404/400 com model_not_found), e sem esta rede TODA análise da conta
+// morreria até alguém mexer no painel — o corretor ficaria sem o produto sem entender por quê.
+// Isto NÃO é o plano B silencioso que saiu nesta mesma versão: aquele trocava um modelo que
+// FUNCIONA por um pior, calado. Aqui o modelo pedido não existe para esta conta, e a tela DIZ,
+// em vermelho, qual modelo acabou sendo usado e o que fazer.
+export function modeloIndisponivelParaAConta(error) {
+  const status = error?.status || error?.statusCode || error?.response?.status;
+  const code = String(error?.code || error?.error?.code || "");
+  const msg = String(error?.error?.message || error?.message || "");
+  if (code === "model_not_found") return true;
+  if ((status === 404 || status === 400 || status === 403) &&
+      /(model|modelo)[^.]{0,60}(does not exist|not found|do not have access|n[ãa]o (existe|encontrado))/i.test(msg)) return true;
+  return false;
+}
+
+// O modelo que já rodava neste app antes da troca da v1308 — usado SÓ quando o configurado não
+// existe para a conta, e sempre com aviso na tela.
+export function modeloAnteriorConhecido() {
+  return envModel("DIRECIONA_MODELO_ANTERIOR", "gpt-4.1");
+}
+
 function isRetryableOpenAIError(error) {
   const status = error?.status || error?.statusCode || error?.response?.status;
   if (status === 429) return true;
@@ -4404,7 +4426,7 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
       Math.max(15000, orcamentoAnaliseMs - 4000)
     );
     const maxTokensAnalise = Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 3600);
-    let r = null, erroPrincipal = null;
+    let r = null, erroPrincipal = null, modeloTrocadoPorIndisponibilidade = "";
     try {
       r = await chamarGPT4Json({
         openai,
@@ -4420,7 +4442,22 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
       const sobraMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
       // Estourou o tempo? Não repete: repetir chamada lenta falha igual e ainda gasta dinheiro.
       const morreuDeTempo = String(erroPrincipal?.code || "") === "ETIMEDOUT";
-      if (!morreuDeTempo && sobraMs >= 10000) {
+      // Modelo que a conta não tem: repetir nele falharia igual. Aqui, e só aqui, vale usar o
+      // modelo anterior — com aviso em vermelho na tela dizendo exatamente isso.
+      const modeloNaoExiste = modeloIndisponivelParaAConta(erroPrincipal);
+      if (modeloNaoExiste && sobraMs >= 10000) {
+        try {
+          r = await chamarGPT4Json({
+            openai,
+            systemPrompt: systemPromptAnalise,
+            prompt,
+            model: modeloAnteriorConhecido(),
+            maxOutputTokens: maxTokensAnalise,
+            timeout: sobraMs
+          });
+          modeloTrocadoPorIndisponibilidade = `${modeloAnalise()} → ${modeloAnteriorConhecido()}`;
+        } catch (e2) { throw erroPrincipal || e2; }
+      } else if (!morreuDeTempo && sobraMs >= 10000) {
         try {
           r = await chamarGPT4Json({
             openai,
@@ -4563,6 +4600,9 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
       sugestoesComProblema,
       // v1308 — e QUAL delas, com o que há de errado em cada uma: { a: ["..."], c: ["..."] }.
       problemasPorSugestao,
+      // v1308 — o modelo configurado não existe para esta conta da OpenAI; a análise saiu no
+      // anterior e a tela precisa dizer isso em vermelho, com o que fazer.
+      ...(modeloTrocadoPorIndisponibilidade ? { modeloIndisponivel: modeloTrocadoPorIndisponibilidade } : {}),
       // v1145 — REGRA DO DONO: "se não aparece na tela, não precisa existir".
       //
       // O JSON pedido à IA tinha 12 campos de diagnóstico e a tela mostra CINCO. Os outros sete só

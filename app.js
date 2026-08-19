@@ -5410,6 +5410,13 @@ function cp1225LinhaDeOndeVeio(a){
   // v1305 — quando alguma das três sai com problema que o app CONHECE (endereço que a conversa não
   // tem, pedido de licença, fecho de espera) e não conseguiu refazer, a linha DIZ. Antes isso ficava
   // invisível e a sugestão furada parecia normal na tela.
+  // v1308 — o modelo configurado não existe nesta conta da OpenAI: a análise saiu no anterior e a
+  // tela avisa, com o que fazer. Sem isto, o corretor receberia uma leitura de qualidade diferente
+  // sem nenhuma pista — que é justamente o que esta versão veio acabar.
+  const trocaModelo = cp704Text(a.modeloIndisponivel);
+  const avisoModelo = trocaModelo
+    ? ` · <b style="color:var(--risco)">o modelo novo não está liberado na sua conta da OpenAI</b> (esta análise saiu no modelo anterior — libere o modelo no painel da OpenAI ou avise o suporte)`
+    : "";
   const comProblema = Number(a.sugestoesComProblema) || 0;
   // v1308 — e diz QUAIS, por número: "sugestão 3 saiu com problema" em vez de "1 sugestão saiu com
   // problema". O detalhe do que há de errado aparece dentro da própria sugestão.
@@ -5423,7 +5430,7 @@ function cp1225LinhaDeOndeVeio(a){
     : "";
   // As porcentagens já vêm como HTML colorido de cp1304Pct (o resto do texto é gerado aqui, não
   // vem do usuário), então esta linha não passa por escapeHtml — senão a cor viraria texto na tela.
-  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${aviso}</div>`;
+  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${avisoModelo}${aviso}</div>`;
 }
 
 // v1308 — EM QUE MODO ESTA ANÁLISE FOI FEITA (as três chaves da tela do Cérebro).

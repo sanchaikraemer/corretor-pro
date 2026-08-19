@@ -64,6 +64,25 @@ const HOJE = new Date('2026-08-19T12:00:00Z'); // quarta-feira da "semana que ve
   // O nome do modelo continua trocável por configuração, sem publicar código.
   assert.match(pipeline, /envModel\("DIRECIONA_MAIN_MODEL", MODELOS_PADRAO\.analise\)/,
     'o modelo principal continua vindo de configuração');
+  assert.match(pipeline, /analise: "gpt-5\.6-terra"/,
+    'o padrão passou pro nível equilibrado da linha atual da OpenAI');
+
+  // A ÚNICA troca de modelo que sobrou: quando a conta da OpenAI não tem o modelo configurado.
+  // Sem ela, uma linha errada no painel derrubaria TODAS as análises do corretor sem explicação —
+  // e ela não é o plano B silencioso, porque a tela diz em vermelho o que aconteceu.
+  assert.match(analise, /const modeloNaoExiste = modeloIndisponivelParaAConta\(erroPrincipal\);/);
+  assert.match(analise, /model: modeloAnteriorConhecido\(\),/);
+  assert.match(analise, /modeloIndisponivel: modeloTrocadoPorIndisponibilidade/);
+  assert.match(app, /o modelo novo não está liberado na sua conta da OpenAI/,
+    'e a tela avisa, com o que fazer');
+  assert.match(persistencia, /"modeloIndisponivel",/,
+    'o aviso viaja com a lista, senão some ao reabrir o lead');
+
+  // A conta continua cabendo no teto da hospedagem, com a janela maior que o dono pediu.
+  const budget = Number(analise.match(/DIRECIONA_ANALYSIS_BUDGET_MS \|\| (\d+)/)[1]);
+  const folga = Number(analise.match(/DIRECIONA_ANALYSIS_TIMEOUT_MS \|\| \(orcamentoAnaliseMs - (\d+)\)/)[1]);
+  assert.ok(budget - folga >= 48000,
+    'a análise precisa ter pelo menos 48s pra pensar (eram 34s, e o dono pediu mais)');
 }
 
 // ── B1. Despedida do corretor não é tentativa sem resposta ─────────────────────────────────────

@@ -1585,7 +1585,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       // em português de quando a IA não respondeu. Os três precisam viajar com a lista, senão a
       // marca aparece ao reanalisar e some ao reabrir o lead pela carteira.
       "cerebroAplicado", "cerebroEnviado", "aprendizadoEnviado", "conversaLidaPelaIA", "sugestoesComProblema",
-      "problemasPorSugestao", "modoAnalise", "falhaAmigavel",
+      "problemasPorSugestao", "modoAnalise", "falhaAmigavel", "modeloIndisponivel",
       // v936 — carimbos de quando a análise foi gerada/reanalisada ("Última análise" no
       // cabeçalho do lead). Sem eles aqui, a lista carrega uma análise sem data e, ao reabrir
       // o lead a partir dela, "Última análise" some mesmo pra quem acabou de reanalisar.

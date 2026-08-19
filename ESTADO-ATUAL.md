@@ -229,7 +229,11 @@ Reanalisar.") e a tela mostra isso no lugar do texto técnico. `modeloFallback` 
 Junto: `MODELOS_PADRAO.analise/mensagens/orquestrador` passaram de `gpt-4.1` para `gpt-5.6-terra`
 (trocável por `DIRECIONA_MAIN_MODEL`), e a janela da 1ª tentativa deixou de reservar ~16s ociosos —
 vale `orçamento - 4s` (48s por padrão, era 34s), com a 2ª tentativa só para erro PASSAGEIRO
-(timeout não é repetido: `morreuDeTempo`).
+(timeout não é repetido: `morreuDeTempo`). A única troca de modelo que sobrou é
+`modeloIndisponivelParaAConta` (404/400/403 com `model_not_found`): roda em
+`modeloAnteriorConhecido()` (`DIRECIONA_MODELO_ANTERIOR`, padrão `gpt-4.1`) e marca
+`modeloIndisponivel`, que a tela mostra em vermelho — sem isso uma conta sem acesso ao modelo
+configurado teria 100% das análises falhando sem explicação.
 (2) `mensagemEhSoCortesia` tira do cálculo de `tentativasSemRespostaDoCorretor` a mensagem do
 corretor que é só concordância/agradecimento/despedida — era ela que fazia "Certo, boa viagem e até
 semana que vem" chegar à IA como cobrança ignorada. (3) `prazoMarcadoPeloCliente` transforma o prazo
