@@ -174,6 +174,7 @@ horários continuam livres. Guarda: `tests/v1303-cerebro-na-reescrita-e-um-camin
 
 =======
 >>>>>>> origin/main
+<<<<<<< HEAD
 _**v1304 — a prova embaixo das sugestões virou porcentagem.** Pedido do dono: "mude esses números
 para percentual, verde 100% e quando não conclui vermelho". As seis contagens de caracteres do
 Cérebro ("método 6.577, tom 1.892…") viraram uma porcentagem só — quanto do Cérebro SALVO chegou na
@@ -184,6 +185,8 @@ conversa inteira" virou "leu 100% da conversa". Verde só no 100% (`--green`); a
 412 px sobre o CSS publicado. Guarda: `tests/v1304-cerebro-em-porcentagem.test.mjs`. Ver
 `NOTAS-v1304.md`._
 
+=======
+>>>>>>> origin/main
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
