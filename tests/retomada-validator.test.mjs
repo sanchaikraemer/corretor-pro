@@ -43,7 +43,10 @@ const cerebro = {
 const resultado = await analyzeWithBrain({
   lead: { clientName: "Daniele" }, timeline, openai: openaiMock, cerebroConfig: cerebro
 });
-assert.equal(chamadas.length, 1, "a análise deve usar uma única chamada à IA");
+// v1331 — a análise em duas etapas existe, mas entra DESLIGADA (só liga com etapas=2). No modo
+// padrão continua valendo o de sempre: uma chamada só, e nenhuma segunda chamada reescrevendo o
+// texto que a IA já escreveu. O modo novo tem teste próprio (v1331).
+assert.equal(chamadas.length, 1, "no modo padrão a análise usa uma única chamada à IA");
 const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
 // v1291 — o dono reescreveu o texto das instruções: o Cérebro passou de "única autoridade" para
 // "autoridade máxima sobre método, análise, estratégia, tom, objeções e condução". A garantia

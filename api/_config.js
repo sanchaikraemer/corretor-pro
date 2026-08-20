@@ -154,6 +154,16 @@ export const CATALOGO_ENV = [
     oQueFaz: "Tamanho máximo da resposta da IA." },
   { nome: "EVALS_MODELO_JUIZ", tipo: "texto", obrigatoria: false, grupo: "Ajuste fino",
     oQueFaz: "Modelo que confere as respostas na medição de qualidade da análise (padrão: o modelo de tarefas simples)." },
+  // v1331 — a análise em DUAS ETAPAS (ler primeiro, escrever depois) entrou desligada: só liga
+  // quando a medição da bateria mostrar que ela é melhor que o pedido único.
+  { nome: "DIRECIONA_ANALISE_ETAPAS", tipo: "texto", obrigatoria: false, grupo: "Ajuste fino",
+    oQueFaz: "2 liga a análise em duas etapas (a IA entende primeiro, escreve as três mensagens depois). Vazio ou 1 mantém o pedido único de sempre." },
+  { nome: "DIRECIONA_MENSAGENS_TIMEOUT_MS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
+    oQueFaz: "Tempo máximo da etapa que escreve as três mensagens (padrão 60000 = 1min)." },
+  { nome: "DIRECIONA_MENSAGENS_MAX_TOKENS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
+    oQueFaz: "Tamanho máximo da resposta da etapa que escreve as três mensagens (padrão 2000)." },
+  { nome: "DIRECIONA_CAUDA_MENSAGENS_CHARS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
+    oQueFaz: "Quanto do fim da conversa vai junto na etapa que escreve, para pegar o fio e o tom (padrão 14000 caracteres)." },
   { nome: "DIRECIONA_MAX_CONTEXT_CHARS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
     oQueFaz: "Quanto texto de conversa cabe num pedido (padrão 120000 caracteres)." },
   { nome: "DIRECIONA_MAX_VISUAIS_IMPORT", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",

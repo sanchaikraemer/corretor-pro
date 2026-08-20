@@ -1,12 +1,12 @@
 {
   "_leia": "Registro da última vez que a bateria de conversas comerciais (evals/) foi rodada contra o miolo do prompt. Quem confere é tests/v1327-porteiro-do-prompt.test.mjs: se o miolo mudar e este arquivo não for atualizado, a suíte fica vermelha e a publicação para.",
-  "assinatura": "47b3cfb25eb5b3968764cb8a54f6e54f",
+  "assinatura": "8f232261720d3b2d1d7d94ca51e51df3",
   "medidoEm": "20/08/2026",
-  "versao": "1330",
+  "versao": "1331",
   "casos": 32,
-  "resultado": "PRIMEIRA MEDIÇÃO COM IA DE VERDADE, feita pelo DONO no painel administrativo (botão Medir agora, v1330), às 18h50 de 20/08/2026: 156 de 191 pontos da régua cumpridos (82%), 17 das 32 conversas sem nenhuma falha. Pior caso: 2/6 em 'O corretor prometeu retorno e não voltou'. Padrão das falhas: as três mensagens não mudam de abordagem depois de tentativas sem resposta, não propõem passo concreto com dia e horário, não reconhecem o atraso do próprio corretor e não perguntam faixa de valor quando o cliente diz que está caro. É este o número a bater na próxima mudança do miolo.",
+  "resultado": "MEDIDO: 156 de 191 pontos da régua (82%), 17 das 32 conversas sem nenhuma falha — medição feita pelo DONO no painel administrativo às 18h50 de 20/08/2026, no MODO PADRÃO (pedido único). Pior caso: 2/6 em 'O corretor prometeu retorno e não voltou'. Padrão das falhas: as três mensagens não mudam de abordagem depois de tentativas sem resposta, não propõem passo concreto com dia e horário, não reconhecem o atraso do próprio corretor e não perguntam faixa de valor quando o cliente diz que está caro. A assinatura mudou na v1331 porque o código da ANÁLISE EM DUAS ETAPAS entrou no repositório — mas ele entrou DESLIGADO: o modo padrão continua sendo o pedido único, que é o modo medido acima, e é o que todo corretor usa hoje. O modo de duas etapas AINDA NÃO FOI MEDIDO; ele só roda quando alguém pede (botão 'Medir o modo novo' do painel, ou DIRECIONA_ANALISE_ETAPAS=2 na hospedagem). Antes de ligar pra valer, medir e comparar com os 156/191 acima.",
   "comoMedir": [
-    "JEITO DO DONO: painel administrativo → cartão 'Qualidade da análise' → botão 'Medir agora' (v1330).",
+    "JEITO DO DONO: painel administrativo → cartão 'Qualidade da análise' → 'Medir agora' (modo de hoje) ou 'Medir o modo novo' (duas etapas).",
     "JEITO DA LINHA DE COMANDO: node evals/executar.mjs --salvar=antes / --comparar=antes",
     "Depois, atualize assinatura, medidoEm, versao, casos e resultado neste arquivo."
   ]

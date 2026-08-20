@@ -135,9 +135,12 @@
     <div class="cartao painel-largo" id="areaBateria" style="display:none">
       <div class="rodape-conta">
         <div><b>Qualidade da análise</b><div class="tag-empresa">Roda conversas de teste na IA de verdade e confere, uma a uma, se a análise entendeu e conduziu direito.</div></div>
-        <button class="secundario pequeno" id="btnBateria" onclick="rodarBateria()">Medir agora</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="secundario pequeno" id="btnBateria" onclick="rodarBateria()">Medir agora</button>
+          <button class="secundario pequeno" id="btnBateriaNova" onclick="rodarBateria('2')">Medir o modo novo</button>
+        </div>
       </div>
-      <div id="bateriaResumo" class="banco-resumo">Ainda não medido nesta sessão. Uma rodada completa leva alguns minutos e gasta em torno de R$ 3 a R$ 5 de IA.</div>
+      <div id="bateriaResumo" class="banco-resumo">Ainda não medido nesta sessão. Uma rodada completa leva alguns minutos e gasta em torno de R$ 3 a R$ 5 de IA.<br><b>Medir agora</b> = a análise como está hoje. <b>Medir o modo novo</b> = a análise em duas etapas (entender primeiro, escrever depois), que só é usada nesta medição — o app segue como está até a comparação decidir.</div>
       <div id="bateriaDetalhe"></div>
       <div id="msgBateria"></div>
     </div>
@@ -621,28 +624,35 @@ async function carregarBanco() {
 // v1330 — a bateria roda em pedaços (a análise de uma conversa leva perto de um minuto e a função
 // do servidor tem teto de tempo). A tela vai pedindo pedaço por pedaço e mostrando o placar andar.
 let bateriaRodando = false;
-async function rodarBateria() {
+async function rodarBateria(etapas) {
   if (bateriaRodando) return;
+  const modoNovo = String(etapas || '') === '2';
   const resumo = document.getElementById('bateriaResumo');
   const detalhe = document.getElementById('bateriaDetalhe');
   const msg = document.getElementById('msgBateria');
-  const botao = document.getElementById('btnBateria');
+  const botao = document.getElementById(modoNovo ? 'btnBateriaNova' : 'btnBateria');
+  const outroBotao = document.getElementById(modoNovo ? 'btnBateria' : 'btnBateriaNova');
   if (!resumo) return;
-  if (!confirm('Medir a qualidade da análise roda conversas de teste na IA de verdade.\n\nLeva alguns minutos e gasta em torno de R$ 3 a R$ 5. Pode ir?')) return;
+  const aviso = modoNovo
+    ? 'Medir O MODO NOVO (análise em duas etapas) roda conversas de teste na IA de verdade.\n\nO modo novo vale só nesta medição — o app continua como está.\n\nLeva alguns minutos e gasta em torno de R$ 3 a R$ 5. Pode ir?'
+    : 'Medir a qualidade da análise roda conversas de teste na IA de verdade.\n\nLeva alguns minutos e gasta em torno de R$ 3 a R$ 5. Pode ir?';
+  if (!confirm(aviso)) return;
   bateriaRodando = true;
   botao.disabled = true;
+  if (outroBotao) outroBotao.disabled = true;
   botao.textContent = 'Medindo…';
   msg.className = ''; msg.textContent = '';
   detalhe.innerHTML = '';
   resumo.className = 'banco-resumo';
-  resumo.textContent = 'Começando…';
+  resumo.textContent = 'Começando pela conversa 1 — a primeira dupla leva uns 2 minutos, é análise de verdade.';
 
   const { data } = await supabaseClient.auth.getSession();
   const token = data?.session?.access_token;
   if (!token) {
     resumo.className = 'banco-resumo falta-banco';
     resumo.textContent = 'Sua sessão de administrador venceu. Entre de novo pra medir.';
-    bateriaRodando = false; botao.disabled = false; botao.textContent = 'Medir agora';
+    bateriaRodando = false; botao.disabled = false; if (outroBotao) outroBotao.disabled = false;
+    botao.textContent = modoNovo ? 'Medir o modo novo' : 'Medir agora';
     return;
   }
 
@@ -651,7 +661,7 @@ async function rodarBateria() {
   while (!fim) {
     let r = null;
     try {
-      const resp = await fetch(`/api/diagnostico?mode=bateria&de=${de}&quantos=2`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const resp = await fetch(`/api/diagnostico?mode=bateria&de=${de}&quantos=2${modoNovo ? '&etapas=2' : ''}`, { headers: { 'Authorization': `Bearer ${token}` } });
       r = await resp.json().catch(() => ({}));
       if (!resp.ok) { falhouRede = r.error || `Código ${resp.status}.`; break; }
     } catch (e) {
@@ -664,7 +674,7 @@ async function rodarBateria() {
     fim = !!r.fim;
     const itensOk = todos.reduce((s, x) => s + (x.ok || 0), 0);
     const itensTotal = todos.reduce((s, x) => s + (x.total || 0), 0);
-    resumo.textContent = `Medindo… ${todos.length} de ${total} conversas — ${itensOk} de ${itensTotal} pontos da régua cumpridos.`;
+    resumo.textContent = `Medindo${modoNovo ? ' o MODO NOVO' : ''}… ${todos.length} de ${total} conversas — ${itensOk} de ${itensTotal} pontos da régua cumpridos.`;
     detalhe.innerHTML = todos.map(linhaDaBateria).join('');
   }
 
@@ -675,7 +685,7 @@ async function rodarBateria() {
   resumo.className = 'banco-resumo ' + (itensTotal && itensOk === itensTotal ? 'ok-banco' : 'falta-banco');
   resumo.textContent = falhouRede
     ? `Medição interrompida em ${todos.length} de ${total || '?'} conversas. ${falhouRede}`
-    : `${todos.length} conversas medidas — ${itensOk} de ${itensTotal} pontos da régua cumpridos, ${perfeitas} conversa(s) sem nenhuma falha${comErro ? `, ${comErro} com erro` : ''}.`;
+    : `${modoNovo ? 'MODO NOVO (duas etapas) — ' : 'Como está hoje — '}${todos.length} conversas medidas: ${itensOk} de ${itensTotal} pontos da régua cumpridos, ${perfeitas} conversa(s) sem nenhuma falha${comErro ? `, ${comErro} com erro` : ''}.`;
   detalhe.innerHTML = todos.map(linhaDaBateria).join('');
   if (!falhouRede) {
     msg.className = '';
@@ -684,7 +694,8 @@ async function rodarBateria() {
     msg.className = 'erro';
     msg.textContent = falhouRede;
   }
-  bateriaRodando = false; botao.disabled = false; botao.textContent = 'Medir de novo';
+  bateriaRodando = false; botao.disabled = false; if (outroBotao) outroBotao.disabled = false;
+  botao.textContent = modoNovo ? 'Medir o modo novo' : 'Medir de novo';
 }
 
 function linhaDaBateria(r) {

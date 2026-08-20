@@ -68,7 +68,7 @@ const ler = (f) => fs.readFileSync(path.join(raiz, f), "utf8");
   assert.match(rota, /if \(!admin\) return json\(res, 403[\s\S]{0,200}Medir a qualidade da análise/,
     "medir gasta IA de verdade: exclusivo do administrador da plataforma");
   assert.match(rota, /MAX_CASOS_POR_CHAMADA = 3/, "cada chamada roda poucos casos — o resto é a tela que varre");
-  assert.match(rota, /rodarCaso\(\{ openai, caso, organizationId \}\)/, "usa o mesmo motor da linha de comando");
+  assert.match(rota, /rodarCaso\(\{ openai, caso, organizationId, etapas \}\)/, "usa o mesmo motor da linha de comando");
 
   const vercel = JSON.parse(ler("vercel.json"));
   assert.equal(vercel.functions["api/diagnostico.js"].maxDuration, 300,
@@ -81,7 +81,9 @@ const ler = (f) => fs.readFileSync(path.join(raiz, f), "utf8");
   assert.match(painel, /id="areaBateria"/, "o cartão da bateria precisa existir no painel");
   assert.match(painel, /Qualidade da análise/, "com nome que o dono entenda");
   assert.match(painel, /onclick="rodarBateria\(\)"/, "e um botão que roda a medição");
-  assert.match(painel, /confirm\('Medir a qualidade da análise/, "precisa avisar antes: isso gasta IA de verdade");
+  assert.match(painel, /Medir a qualidade da análise roda conversas de teste na IA de verdade/,
+    "precisa avisar antes: isso gasta IA de verdade");
+  assert.match(painel, /if \(!confirm\(aviso\)\) return;/, "e o aviso precisa ser uma pergunta que segura a rodada");
   assert.match(painel, /R\$ 3 a R\$ 5/, "e dizer quanto custa, em reais");
   assert.match(painel, /mode=bateria&de=\$\{de\}&quantos=2/, "a tela varre a bateria em pedaços");
   assert.ok(!/carregarBateria\(\);/.test(painel), "a bateria NÃO pode rodar sozinha ao abrir o painel — cada rodada é dinheiro");

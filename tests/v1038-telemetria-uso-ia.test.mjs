@@ -111,7 +111,9 @@ try {
     res.setHeader("Content-Type", "application/json");
     if (url.pathname === "/rest/v1/direciona_config") { res.end("null"); return; } // limite diário: sem contagem ainda
     if (url.pathname === "/rest/v1/ai_usage_events" && req.method === "POST") {
-      global.__eventoAnalise = JSON.parse(body || "{}");
+      const evento = JSON.parse(body || "{}");
+      global.__eventoAnalise = evento;
+      global.__eventosAnalise = [...(global.__eventosAnalise || []), evento];
       res.statusCode = 201; res.end("{}"); return;
     }
     res.statusCode = 500;
@@ -136,14 +138,21 @@ try {
       cerebroConfig: { metodo: "método do corretor" }, organizationId: "org-analise-teste"
     });
     assert.equal(resultado.mode, "openai", "a análise precisa ter dado certo pro evento fazer sentido");
-    const evento = global.__eventoAnalise;
-    assert.ok(evento, "analyzeWithBrain precisa ter registrado um evento de uso de IA");
-    assert.equal(evento.organization_id, "org-analise-teste");
-    assert.equal(evento.kind, "chat");
-    assert.equal(evento.model, "gpt-4.1-mock", "precisa gravar o modelo que a OpenAI de fato usou, não só o configurado");
-    assert.equal(evento.rota, "analise");
-    assert.equal(evento.prompt_tokens, 5000);
-    assert.equal(evento.completion_tokens, 800);
+    // v1331 — no modo padrão a análise é uma chamada só, e registra um evento só. Quando o modo de
+    // duas etapas for ligado, a etapa que escreve registra o dela na rota "analise-mensagens" (o
+    // código está em api/_pipeline.js e é conferido em tests/v1331-analise-em-duas-etapas).
+    const eventos = global.__eventosAnalise || [];
+    assert.equal(eventos.length, 1, "a análise precisa aparecer no custo");
+    const porRota = Object.fromEntries(eventos.map(e => [e.rota, e]));
+    const evento = porRota["analise"];
+    assert.ok(evento, "a etapa de leitura precisa registrar uso de IA na rota 'analise'");
+    for (const e of eventos) {
+      assert.equal(e.organization_id, "org-analise-teste");
+      assert.equal(e.kind, "chat");
+      assert.equal(e.model, "gpt-4.1-mock", "precisa gravar o modelo que a OpenAI de fato usou, não só o configurado");
+      assert.equal(e.prompt_tokens, 5000);
+      assert.equal(e.completion_tokens, 800);
+    }
     console.log("v1038 (analyzeWithBrain registra uso real): ok");
   });
 

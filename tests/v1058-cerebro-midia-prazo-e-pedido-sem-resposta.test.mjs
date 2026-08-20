@@ -58,6 +58,12 @@ assert.match(timelineAudio[0].text, /audio-teste\.opus \(arquivo anexado\)/, "á
 //    pedidoSemResposta é pedido à IA, mapeado no resultado e cai em "Nenhum" quando ausente.
 // ---------------------------------------------------------------------------
 const chamadas = [];
+// v1330 — a análise virou duas chamadas: a LEITURA (que carrega o formato JSON, o prazo e a
+// conversa) e a REDAÇÃO das três mensagens. Este teste mede a leitura, e como ele roda várias
+// análises seguidas na mesma lista, pega sempre a leitura mais recente.
+const ultimaLeitura = () => chamadas
+  .filter(c => (c.messages.find(m => m.role === "user")?.content || "").includes("LEITURA OBRIGATÓRIA"))
+  .at(-1);
 function mockComCampo(diagnosticoExtra) {
   return {
     chat: { completions: { create: async payload => {
@@ -82,8 +88,8 @@ const resultado = await analyzeWithBrain({
   openai: mockComCampo({ pedidoSemResposta: "Cliente pediu 2 quartos prontos; a resposta ofereceu produto na planta." }),
   cerebroConfig: { metodo: "método do corretor", diasDescansoPosAtendimento: 7 }
 });
-const systemVivo = chamadas.at(-1).messages.find(m => m.role === "system")?.content || "";
-const userVivo = chamadas.at(-1).messages.find(m => m.role === "user")?.content || "";
+const systemVivo = ultimaLeitura().messages.find(m => m.role === "system")?.content || "";
+const userVivo = ultimaLeitura().messages.find(m => m.role === "user")?.content || "";
 
 // v1240 — este aviso é MÉTODO comercial, e método virou assunto do Cérebro do corretor. Ele
 // continua existindo como ponto de partida pra quem ainda não escreveu o dele (METODO_BASE_PREVIA);
@@ -106,14 +112,14 @@ await analyzeWithBrain({
   lead: { clientName: "Karine-sem-config" }, timeline,
   openai: mockComCampo({}), cerebroConfig: { metodo: "método do corretor" }
 });
-assert.match(chamadas.at(-1).messages.find(m => m.role === "user")?.content || "", /: 5 dias corridos/, "sem configuração, o prazo padrão precisa ser 5 dias");
+assert.match(ultimaLeitura().messages.find(m => m.role === "user")?.content || "", /: 5 dias corridos/, "sem configuração, o prazo padrão precisa ser 5 dias");
 
 // Valor fora do teto (1–60) também cai no padrão 5.
 await analyzeWithBrain({
   lead: { clientName: "Karine-fora-do-teto" }, timeline,
   openai: mockComCampo({}), cerebroConfig: { metodo: "método do corretor", diasDescansoPosAtendimento: 90 }
 });
-assert.match(chamadas.at(-1).messages.find(m => m.role === "user")?.content || "", /: 5 dias corridos/, "valor fora do teto (60) precisa cair no padrão 5");
+assert.match(ultimaLeitura().messages.find(m => m.role === "user")?.content || "", /: 5 dias corridos/, "valor fora do teto (60) precisa cair no padrão 5");
 
 // Quando a IA não devolve pedidoSemResposta, o padrão precisa ser "Nenhum" (confirma que não há
 // pedido pendente), não "Não identificado" (que significa "não deu pra saber").
