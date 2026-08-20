@@ -63,7 +63,9 @@ const semCerebro = await analyzeWithBrain({
 });
 
 // 1. A prévia acontece de verdade — é o que o cliente novo precisa ver no primeiro uso.
-assert.equal(chamadas, 1, "sem Cérebro, a análise precisa ACONTECER (modo prévia) — era aqui que o cliente novo travava");
+// v1332 — duas etapas (entender, depois escrever) viraram o padrão: são duas chamadas. O que
+// importa aqui é o mesmo de sempre: sem Cérebro a análise ACONTECE, em modo prévia.
+assert.equal(chamadas, 2, "sem Cérebro, a análise precisa ACONTECER (modo prévia) — era aqui que o cliente novo travava");
 assert.equal(semCerebro.mode, "openai");
 assert.equal(semCerebro.modoPrevia, true, "o resultado precisa se identificar como prévia, pra a tela convidar a configurar");
 assert.equal(semCerebro.sugestoesPendentes, false, "a prévia é utilizável: não pode voltar marcada como pendente");

@@ -42,8 +42,8 @@ await analyzeWithBrain({
   cerebroConfig: { metodo: "Regra de teste do corretor.", tom: "Tom do corretor." }
 });
 
-// v1331 — no modo padrão (o que o corretor usa) a análise continua sendo uma chamada só.
-assert.equal(chamadas.length, 1, "a análise deve usar uma única chamada à IA no modo padrão");
+// v1332 — duas etapas viraram o padrão: leitura e depois redação das três.
+assert.equal(chamadas.length, 2, "a análise usa duas chamadas: a leitura e a redação das três");
 // v1291 — parte das regras das três mensagens mora nas instruções (system) e parte no pedido
 // (user). O que importa é que a IA receba tudo isso na mesma execução, então a checagem é feita
 // sobre os dois juntos.

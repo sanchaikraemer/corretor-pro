@@ -2261,6 +2261,10 @@ const _ABERTURA_CONTANDO_DIAS = /\b(?:faz|fazem|j[áa] se passaram|passaram-se|h
 function _perguntaFinal(texto) {
   const frases = String(texto || "").split(/(?<=[.!?])\s+/).map(f => f.trim()).filter(Boolean);
   for (let i = frases.length - 1; i >= 0; i--) if (frases[i].endsWith("?")) return frases[i];
+  // Pedido sem ponto de interrogação ("me diz um teto de investimento e eu separo") é pedido do
+  // mesmo jeito — e foi assim que duas sugestões iguais passaram batido no print do dono.
+  const PEDIDO = /\b(me (diz|diga|passa|manda|informa)|qual|quanto|at[ée] quanto|prefere|consegue|poderia)\b/i;
+  for (let i = frases.length - 1; i >= 0; i--) if (PEDIDO.test(frases[i])) return frases[i];
   return "";
 }
 
@@ -4815,7 +4819,12 @@ Responda somente com JSON válido no formato solicitado.`;
   //   • o botão "Medir o modo novo" do painel manda etapas=2 só naquela medição;
   //   • DIRECIONA_ANALISE_ETAPAS=2 na hospedagem liga pra valer, sem publicar código, quando a
   //     medição mostrar que o modo novo é melhor.
-  const duasEtapas = String(etapas ?? process.env.DIRECIONA_ANALISE_ETAPAS ?? "1").trim() === "2";
+  // v1332 — LIGADO. Entrou desligado na v1331 esperando medição; o dono viu na tela, no mesmo dia,
+  // sugestão citando empreendimento de outra conversa, abertura cobrando dias e duas das três
+  // pedindo a mesma coisa — o estado atual já é ruim, e esperar medição virou desculpa pra não
+  // mexer. Entender primeiro e escrever depois passa a ser o padrão. Desligar é imediato e sem
+  // publicar código: DIRECIONA_ANALISE_ETAPAS=1 na hospedagem.
+  const duasEtapas = String(etapas ?? process.env.DIRECIONA_ANALISE_ETAPAS ?? "2").trim() === "2";
 
   const blocoPisoDeForma = `PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE. O Cérebro decide o QUE dizer, o TOM e QUAL
 saudação usar em cada faixa de horário; se ele definir faixas próprias, são as dele que valem, não
@@ -5166,6 +5175,9 @@ ${leituraParaEscrever}
 
 OBSERVAÇÕES MANUAIS DO CORRETOR
 ${observacoesManuaisTexto || "Nenhuma observação manual registrada."}
+Fatos e ações que o corretor registrou como realizados têm peso alto. Já interpretações sobre intenção,
+motivação, objeção ou estado do cliente continuam sendo interpretação e não podem superar fala explícita
+do próprio cliente.
 
 ${blocoPisoDeForma}
 

@@ -142,7 +142,8 @@ try {
     // duas etapas for ligado, a etapa que escreve registra o dela na rota "analise-mensagens" (o
     // código está em api/_pipeline.js e é conferido em tests/v1331-analise-em-duas-etapas).
     const eventos = global.__eventosAnalise || [];
-    assert.equal(eventos.length, 1, "a análise precisa aparecer no custo");
+    assert.equal(eventos.length, 2, "as duas etapas da análise precisam aparecer no custo");
+    assert.ok(eventos.some(e => e.rota === "analise-mensagens"), "a etapa que escreve registra o dela");
     const porRota = Object.fromEntries(eventos.map(e => [e.rota, e]));
     const evento = porRota["analise"];
     assert.ok(evento, "a etapa de leitura precisa registrar uso de IA na rota 'analise'");

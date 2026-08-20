@@ -2779,17 +2779,27 @@ function cpHomeLeadRow(l, maxMsgs){
   // atendimento marcado, o número mostrado é dele — nunca mais da mensagem — pra bater com o
   // que a regra de descanso realmente usa. Sem NENHUM atendimento registrado (lead nunca
   // atendido), aí sim mostra a última interação, que é a única data que existe.
+  // v1332 — O NÚMERO PARA DE MENTIR. A regra da v1053 mandava usar SEMPRE o atendimento quando ele
+  // existe. Resultado que o dono viu na tela (print de 20/08, 20h09): um cliente que tinha acabado
+  // de escrever pra ele às 17h55 aparecia como "há 8d" — e, ao mesmo tempo, no topo da fila de
+  // "Fazer agora". "Tu tem noção do quanto isso é ridículo", e ele está certo: número velho ao lado
+  // de um cliente que falou hoje faz o corretor despriorizar quem está esperando resposta AGORA.
+  //
+  // Agora vale o EVENTO MAIS RECENTE — atendimento ou mensagem, o que tiver acontecido por último.
+  // A regra de descanso (v1052) continua contando do atendimento; o que muda é só o que a tela
+  // mostra, que passa a bater com a realidade. O title continua dizendo qual dos dois é.
   let diasNum = null;
   let diasEhAtendimento = false;
   try{
     const atTs = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
-    if(atTs){
-      const diasAt = diasCalendarioBR(atTs);
-      if(diasAt != null){ diasNum = diasAt; diasEhAtendimento = true; }
-    }
+    const diasAt = atTs ? diasCalendarioBR(atTs) : null;
+    const diasMsg = Number.isFinite(Number(l.daysSinceLastInteraction)) ? Number(l.daysSinceLastInteraction) : null;
+    if(diasAt != null && (diasMsg == null || diasAt <= diasMsg)){ diasNum = diasAt; diasEhAtendimento = true; }
+    else if(diasMsg != null){ diasNum = diasMsg; diasEhAtendimento = false; }
+    else if(diasAt != null){ diasNum = diasAt; diasEhAtendimento = true; }
   }catch(_){}
   if(diasNum == null) diasNum = l.daysSinceLastInteraction;
-  const dias = diasNum != null ? `${diasNum}d` : '';
+  const dias = diasNum != null ? (Number(diasNum) <= 0 ? 'hoje' : `${diasNum}d`) : '';
   // v972 — achado do dono: "78d"/"109d" solto do lado de "cliente esperando sua resposta" parecia
   // dizer "o cliente espera há 78/109 dias", mas o campo é dias desde a ÚLTIMA interação de
   // QUALQUER lado (nem sempre é a mesma coisa). Rótulo "há" + title explicam o que é de fato,
@@ -2806,7 +2816,14 @@ function cpHomeLeadRow(l, maxMsgs){
   // atendimento quando ele existe (regra da v1053, essa continua valendo); só o rótulo que virou
   // uniforme de novo. Quem quiser saber se é atendimento ou só mensagem, o title (passar o mouse)
   // ainda diferencia isso, como sempre foi.
-  const diasRotulo = "há";
+  // v1332 — a palavra volta a existir, e é ela que evita as DUAS reclamações. Sem rótulo, o número
+  // sozinho enganava dos dois lados: a v1053 nasceu de "parece que a regra dos 7 dias foi ignorada"
+  // (mostrava a mensagem quando a regra usa o atendimento) e a v1332 nasceu do contrário (mostrava
+  // o atendimento de 8 dias num cliente que tinha escrito naquela tarde). Dizendo QUAL evento é, o
+  // número mais recente pode aparecer sem enganar ninguém.
+  const diasRotulo = diasEhAtendimento
+    ? (Number(diasNum) <= 0 ? "atendido" : "atendido há")
+    : (Number(diasNum) <= 0 ? "falou" : "falou há");
   // v978 — pedido do dono: aqui na Home só o nome do empreendimento (produtosLabelCurto), sem
   // dormitório/condição/preço — detalhe completo (produtosLabel) fica só pra dentro do lead.
   const prod = (typeof produtosLabelCurto === 'function') ? produtosLabelCurto(l) : ((typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || ''));
@@ -3364,7 +3381,7 @@ function cp1251RenderResumo(){
     const d = cp1251Dados();
     el.innerHTML = `<button type="button" class="cp1251-resumo" onclick="cp1251AbrirPainel()">
       <span class="cp1251-resumo-txt">
-        <b>${cp1251Num(d.atendidosMes)} atendidos · ${cp1251Num(d.total)} mensagens</b>
+        <b>${cp1251Num(d.atendidosMes)} atendimentos · ${cp1251Num(d.total)} mensagens</b>
         <small>${escapeHtml(d.mesNome.charAt(0).toUpperCase() + d.mesNome.slice(1))}, do dia 1 até hoje · toque pra ver tudo</small>
       </span>
       <span class="cp1251-resumo-seta" aria-hidden="true">›</span>
@@ -4918,7 +4935,16 @@ function cp704Css(){
     const pronto = !!(lead && lead.historyLoaded);
     const n = (pronto && typeof mensagensDoCliente==='function') ? mensagensDoCliente(lead) : 0;
     const pct = pronto ? Math.max(0, Math.min(100, Math.round(n/teto*100))) : 0;
-    const label = pronto ? (n===1 ? '1 mensagem do cliente' : `${n} mensagens do cliente`) : 'contando mensagens…';
+    // v1332 — DOIS NÚMEROS COM O MESMO NOME confundem: a lista Hoje mostra as mensagens do cliente
+    // nos ÚLTIMOS 90 DIAS (regra da v1017) e aqui aparecia o total do histórico. No print do dono,
+    // o mesmo cliente marcava 40 na lista e 68 aqui, sem nada explicando a diferença. Agora, quando
+    // os dois números são diferentes, os dois aparecem — o total e o recente, cada um com o seu
+    // nome.
+    const recentes = (pronto && typeof mensagensDoClienteRecente==='function') ? mensagensDoClienteRecente(lead) : n;
+    const label = pronto
+      ? (n===1 ? '1 mensagem do cliente'
+        : (recentes !== n ? `${n} mensagens do cliente · ${recentes} nos últimos 90 dias` : `${n} mensagens do cliente`))
+      : 'contando mensagens…';
     return `<div class="cp704-interesse" style="width:100%;margin:2px 0 6px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px">
           <span style="font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Interesse do cliente</span>
@@ -5440,15 +5466,18 @@ function cp1225LinhaDeOndeVeio(a){
   // v1314 — o texto técnico em inglês vira português AQUI também: análise que falhou antes da
   // v1310 guardou o erro cru, e era ele que estava aparecendo na tela (print de 19/08, 17h38).
   const motivoReuso = cpErroDaIAEmPortugues(motivoBruto) || motivoBruto;
+  // v1332 — o aviso continua, o alarme não. Ele era um bloco vermelho de cinco linhas em cima das
+  // sugestões; virou uma linha discreta com a mesma informação e o mesmo botão. Motivo do dono, com
+  // print de duas tarjas na mesma tela: "que monte de msg vermelha de erro são essas".
   const reuso = a.analiseReutilizadaDeImportacaoAnterior === true
-    ? `<div class="notice error" style="margin:0 0 10px"><b>Estas três mensagens são da análise ANTERIOR deste cliente</b> — a nova não foi concluída, então provavelmente você já enviou essas mensagens.` +
-      (motivoReuso ? `<br><br><b>Motivo:</b> ${escapeHtml(motivoReuso)}` : "") +
+    ? `<div class="cp704-msg-alerta" style="margin:0 0 10px"><b>Sugestões da análise anterior</b> — a nova não foi concluída; estas você provavelmente já enviou.` +
+      (motivoReuso ? ` <b>Motivo:</b> ${escapeHtml(motivoReuso)}.` : "") +
       // v1310 — quando o motivo é falta de crédito na OpenAI, o botão leva direto pra página que
       // resolve. Sem ele, sobrava um endereço escrito no meio do texto pra digitar na mão.
       (/sem cr[ée]ditos/i.test(motivoReuso)
         ? `<div style="margin-top:10px"><a href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener" class="btn" style="display:inline-block;text-decoration:none;padding:10px 16px;font-size:13px">Página de créditos da OpenAI</a></div>`
         : "") +
-      `<br>Toque em <b>↻ Reanalisar</b> pra gerar as novas.</div>`
+      ` Toque em <b>↻ Reanalisar</b> pra gerar as novas.</div>`
     : "";
   const lida = a.conversaLidaPelaIA;
   if(a.cerebroAplicado == null && !lida) return reuso; // análise antiga, de antes deste registro
@@ -5562,7 +5591,12 @@ function cp1323MaterialNaoLido(a){
   if(docs) partes.push(`${docs} ${pl(docs, "PDF", "PDFs")}`);
   if(audios) partes.push(`${audios} ${pl(audios, "áudio", "áudios")}`);
   const lista = partes.length === 1 ? partes[0] : partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1];
-  return ` · <b style="color:var(--risco)">a IA não leu ${lista} desta conversa</b> (exporte a conversa no WhatsApp com <b>“Incluir mídia”</b> e importe de novo pra ela ler o material)`;
+  // v1332 — A FRASE ANTIGA MENTIA. Ela mandava reexportar "com Incluir mídia" mesmo quando a mídia
+  // TINHA vindo: o dono sempre exporta com mídia. O que acontece de verdade é outra coisa — o app
+  // lê no máximo alguns arquivos por importação (os mais recentes), e o que passou disso, ou o que
+  // entrou antes de o app aprender a ler imagem e PDF (v1306), fica sem leitura. Mandar o corretor
+  // refazer a exportação era empurrar pra ele um trabalho que não resolve nada.
+  return ` · <b style="color:var(--risco)">a IA ainda não leu ${lista} desta conversa</b> (o app lê alguns arquivos por importação, os mais recentes — reimporte a conversa pra ele seguir lendo o que ficou)`;
 }
 
 // v1304 — a porcentagem colorida da linha de prova: verde quando fechou 100%, vermelho quando

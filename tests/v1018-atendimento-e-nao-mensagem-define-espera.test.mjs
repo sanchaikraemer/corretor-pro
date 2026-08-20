@@ -135,13 +135,15 @@ const adaoParaExibicao = {
   ] } }
 };
 const htmlAdao = cpHomeLeadRow(adaoParaExibicao, 100);
-assert.match(htmlAdao, />há 5d</, 'com atendimento mais recente (5 dias) que a última interação (26 dias), o card mostra 5, não 26');
+// v1332 — o número continua sendo o do evento mais recente (aqui, o atendimento de 5 dias); o que
+// mudou é que a linha agora diz QUAL evento é, pra não enganar nos dois sentidos (ver v1053/v1332).
+assert.match(htmlAdao, />atendido há 5d</, 'com atendimento mais recente (5 dias) que a última interação (26 dias), o card mostra 5, não 26');
 assert.match(htmlAdao, /desde o último atendimento marcado/, 'o title explica que o número vem do atendimento marcado, não da conversa');
 
 // Sem atendimento registrado: continua mostrando a última interação normalmente (nada mudou).
 const semAtendimentoExibicao = { __msgs: 0, daysSinceLastInteraction: 12, analysis: {} };
 const htmlSemAtendimento = cpHomeLeadRow(semAtendimentoExibicao, 100);
-assert.match(htmlSemAtendimento, />há 12d</, 'sem atendimento marcado, mostra a última interação normalmente (comportamento de antes)');
+assert.match(htmlSemAtendimento, />falou há 12d</, 'sem atendimento marcado, mostra a última interação normalmente (comportamento de antes)');
 assert.match(htmlSemAtendimento, /desde a última interação \(sua ou do cliente\)/, 'title genérico continua igual quando não há atendimento mais recente');
 
 console.log('v1018-atendimento-e-nao-mensagem-define-espera: ok');

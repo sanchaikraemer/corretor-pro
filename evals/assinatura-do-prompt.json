@@ -1,10 +1,10 @@
 {
   "_leia": "Registro da última vez que a bateria de conversas comerciais (evals/) foi rodada contra o miolo do prompt. Quem confere é tests/v1327-porteiro-do-prompt.test.mjs: se o miolo mudar e este arquivo não for atualizado, a suíte fica vermelha e a publicação para.",
-  "assinatura": "8f232261720d3b2d1d7d94ca51e51df3",
+  "assinatura": "8f3f9c32b51ed42b2eb3d59760981e4e",
   "medidoEm": "20/08/2026",
-  "versao": "1331",
+  "versao": "1332",
   "casos": 32,
-  "resultado": "MEDIDO: 156 de 191 pontos da régua (82%), 17 das 32 conversas sem nenhuma falha — medição feita pelo DONO no painel administrativo às 18h50 de 20/08/2026, no MODO PADRÃO (pedido único). Pior caso: 2/6 em 'O corretor prometeu retorno e não voltou'. Padrão das falhas: as três mensagens não mudam de abordagem depois de tentativas sem resposta, não propõem passo concreto com dia e horário, não reconhecem o atraso do próprio corretor e não perguntam faixa de valor quando o cliente diz que está caro. A assinatura mudou na v1331 porque o código da ANÁLISE EM DUAS ETAPAS entrou no repositório — mas ele entrou DESLIGADO: o modo padrão continua sendo o pedido único, que é o modo medido acima, e é o que todo corretor usa hoje. O modo de duas etapas AINDA NÃO FOI MEDIDO; ele só roda quando alguém pede (botão 'Medir o modo novo' do painel, ou DIRECIONA_ANALISE_ETAPAS=2 na hospedagem). Antes de ligar pra valer, medir e comparar com os 156/191 acima.",
+  "resultado": "MEDIDO em 20/08/2026 pelo DONO, no painel: 156 de 191 pontos da régua (82%), 17 das 32 conversas sem nenhuma falha — no PEDIDO ÚNICO, que era o padrão até a v1331. Padrão das falhas: as três mensagens não mudam de abordagem depois de tentativas sem resposta, não propõem passo concreto com dia e horário, não reconhecem o atraso do próprio corretor e não perguntam faixa de valor quando o cliente diz que está caro. ATENÇÃO — A v1332 LIGOU O MODO DE DUAS ETAPAS COMO PADRÃO SEM MEDIÇÃO PRÉVIA, por decisão do dono ('ou tu resolve essa porra ou nós vamos parar agora'), depois de ele ver na tela, no mesmo dia: sugestão citando empreendimento de outra conversa, abertura cobrando dias e duas das três pedindo a mesma coisa. O estado medido já era ruim e esperar a medição virou desculpa pra não mexer. A comparação continua devendo: rodar 'Medir agora' no painel e comparar com os 156/191. Se piorar, DIRECIONA_ANALISE_ETAPAS=1 desliga na hora, sem publicar código.",
   "comoMedir": [
     "JEITO DO DONO: painel administrativo → cartão 'Qualidade da análise' → 'Medir agora' (modo de hoje) ou 'Medir o modo novo' (duas etapas).",
     "JEITO DA LINHA DE COMANDO: node evals/executar.mjs --salvar=antes / --comparar=antes",

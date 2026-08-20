@@ -46,7 +46,15 @@ const resultado = await analyzeWithBrain({
 // v1331 — a análise em duas etapas existe, mas entra DESLIGADA (só liga com etapas=2). No modo
 // padrão continua valendo o de sempre: uma chamada só, e nenhuma segunda chamada reescrevendo o
 // texto que a IA já escreveu. O modo novo tem teste próprio (v1331).
-assert.equal(chamadas.length, 1, "no modo padrão a análise usa uma única chamada à IA");
+// v1332 — o modo de duas etapas passou a ser o PADRÃO: a IA entende primeiro (chamada 1) e
+// escreve as três depois (chamada 2). O que este teste sempre guardou continua: nenhuma chamada
+// REESCREVE texto já escrito — a segunda recebe o diagnóstico, nunca as mensagens da primeira.
+assert.equal(chamadas.length, 2, "a análise usa duas chamadas: a leitura e a redação das três");
+const pedidoDaRedacao = chamadas[1].messages.find(m => m.role === "user")?.content || "";
+for (const jaEscrita of [resposta.mensagens.recomendada, resposta.mensagens.maisSuave, resposta.mensagens.maisDireta]) {
+  assert.ok(!pedidoDaRedacao.includes(jaEscrita),
+    "a etapa de redação não pode receber mensagem pronta pra reescrever");
+}
 const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
 // v1291 — o dono reescreveu o texto das instruções: o Cérebro passou de "única autoridade" para
 // "autoridade máxima sobre método, análise, estratégia, tom, objeções e condução". A garantia

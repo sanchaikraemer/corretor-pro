@@ -32,7 +32,10 @@ const resultado = await analyzeWithBrain({
   cerebroConfig: { metodo: "Responda conforme minhas regras." }
 });
 
-assert.equal(chamadas, 1);
+// v1332 — a análise passou a ser feita em duas etapas (entender, depois escrever as três), então
+// são duas chamadas. O que este teste guarda continua igual: a etapa comercial que a IA devolveu
+// chega inteira ao resultado, sem o código reinterpretar.
+assert.equal(chamadas, 2);
 assert.equal(resultado.etapaSugerida, "Negociação");
 assert.equal(resultado.diagnostico.etapaFunil, "Negociação");
 console.log("v826-negociando-guard: ok");
