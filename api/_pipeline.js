@@ -2237,6 +2237,115 @@ export function fatosInventadosNaMensagem(texto, contextoConhecido = null) {
 // v1315 — a rede que REESCREVIA a sugestão por fora do pedido saiu junto com a volta da análise
 // ao estado de 17/08: quem segura clichê agora é a lista de frases proibidas dentro do prompt.
 
+// ─── v1332 — A CONFERÊNCIA QUE JÁ EXISTIA E NINGUÉM CHAMAVA ──────────────────────────────────
+//
+// `fatosInventadosNaMensagem` estava no arquivo desde a v1305 e não tinha UM chamador: saiu junto
+// com a rede de reescrita da v1315 e ninguém percebeu que a CONFERÊNCIA morreu junto. Resultado
+// que o dono viu na tela em 20/08/2026, numa cliente com quem ele nunca falou daquele
+// empreendimento: *"você tinha me pedido a metragem e os valores do [empreendimento] no início"* —
+// a IA afirmou que a CLIENTE pediu algo que ela nunca pediu, com nome vindo de outra conversa.
+//
+// Isto aqui NÃO reescreve nada e NÃO pede correção à IA (as duas regras da v1315 continuam de pé):
+// confere e avisa. O aviso vai para a tela, discreto, ao lado da sugestão — e quem decide se manda
+// é o corretor, que agora enxerga o problema antes de copiar.
+//
+// As três conferências, todas em cima do texto da própria conversa:
+//   1. FATO INVENTADO — nome de lugar/empreendimento, endereço, elogio ou descrição de catálogo que
+//      não está na conversa nem no Cérebro (fatosInventadosNaMensagem, v1305).
+//   2. ABERTURA COBRANDO TEMPO — "faz 9 dias que te mandei", "já se passaram 12 dias". O piso manda
+//      reconhecer o intervalo; reconhecer não é numerar. Ninguém abre conversa contando dias.
+//   3. AS TRÊS PEDINDO A MESMA COISA — quando duas das três terminam pedindo o mesmo dado, o
+//      corretor recebeu uma mensagem escrita três vezes (foi o caso: duas perguntavam o teto).
+const _ABERTURA_CONTANDO_DIAS = /\b(?:faz|fazem|j[áa] se passaram|passaram-se|h[áa])\s+\d{1,3}\s+dias?\b/i;
+
+function _perguntaFinal(texto) {
+  const frases = String(texto || "").split(/(?<=[.!?])\s+/).map(f => f.trim()).filter(Boolean);
+  for (let i = frases.length - 1; i >= 0; i--) if (frases[i].endsWith("?")) return frases[i];
+  // Pedido sem ponto de interrogação ("me diz um teto de investimento e eu separo") é pedido do
+  // mesmo jeito — e foi assim que duas sugestões iguais passaram batido no print do dono.
+  const PEDIDO = /\b(me (diz|diga|passa|manda|informa)|qual|quanto|at[ée] quanto|prefere|consegue|poderia)\b/i;
+  for (let i = frases.length - 1; i >= 0; i--) if (PEDIDO.test(frases[i])) return frases[i];
+  return "";
+}
+
+// Nome próprio no meio da frase que NÃO existe na conversa nem no Cérebro: é nome que a IA trouxe
+// de fora (foi assim que um empreendimento de outro cliente apareceu numa cliente que nunca tinha
+// falado dele). Palavra que abre frase fica de fora — lá a maiúscula é da gramática, não do nome.
+const _PALAVRA_MAIUSCULA = /(?<![.!?]\s|^)\b([A-ZÁÉÍÓÚÂÊÔÃÕÀÇ][\p{L}'’-]{3,})\b/gu;
+const _MAIUSCULA_COMUM = new Set([
+  "boa", "bom", "ola", "voce", "voces", "hoje", "amanha", "ontem", "obrigado", "obrigada",
+  "senhor", "senhora", "janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho",
+  "agosto", "setembro", "outubro", "novembro", "dezembro", "segunda", "terca", "quarta",
+  "quinta", "sexta", "sabado", "domingo", "whatsapp", "sim", "nao", "certo", "perfeito"
+]);
+
+function _nomesForaDaConversa(texto, contextoConhecido) {
+  const conversa = typeof contextoConhecido === "string" ? contextoConhecido : String(contextoConhecido?.conversa || "");
+  const cerebro = typeof contextoConhecido === "string" ? "" : String(contextoConhecido?.cerebro || "");
+  if (!conversa.trim()) return [];
+  const base = " " + _semAcentoMinuscula(`${conversa} ${cerebro}`).replace(/\s+/g, " ") + " ";
+  const fora = [];
+  _PALAVRA_MAIUSCULA.lastIndex = 0;
+  let m;
+  while ((m = _PALAVRA_MAIUSCULA.exec(String(texto || ""))) !== null) {
+    const nome = m[1];
+    const chave = _semAcentoMinuscula(nome);
+    if (_MAIUSCULA_COMUM.has(chave)) continue;
+    if (base.includes(` ${chave}`)) continue;
+    if (!fora.includes(nome)) fora.push(nome);
+  }
+  return fora;
+}
+
+// "investir" e "investimento" são a mesma pergunta com outra terminação — por isso a comparação é
+// pelo começo da palavra, não pela palavra inteira.
+function _raizes(palavras) {
+  const fora = new Set();
+  for (const p of palavras) fora.add(p.slice(0, 5));
+  return fora;
+}
+
+export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido = null) {
+  const lista = (Array.isArray(mensagens) ? mensagens : []).filter(m => m && String(m.texto || "").trim());
+  const avisos = [];
+  const perguntas = [];
+
+  for (const m of lista) {
+    const texto = String(m.texto || "");
+    const motivos = [];
+    for (const motivo of fatosInventadosNaMensagem(texto, contextoConhecido)) motivos.push(motivo);
+    // A abertura são as duas primeiras frases — é ali que a contagem de dias vira cobrança.
+    const abertura = texto.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
+    if (_ABERTURA_CONTANDO_DIAS.test(abertura)) motivos.push("abre contando os dias parados");
+    if (PROMESSA_VAZIA.test(texto) && !texto.includes("?")) motivos.push("promete enviar e não pergunta nada");
+    const forasteiros = _nomesForaDaConversa(texto, contextoConhecido);
+    if (forasteiros.length) motivos.push(`cita "${forasteiros.slice(0, 2).join('", "')}", que não aparece nesta conversa`);
+    if (motivos.length) avisos.push({ qual: m.qual, motivos: [...new Set(motivos)] });
+    perguntas.push({ qual: m.qual, pergunta: _perguntaFinal(texto) });
+  }
+
+  // Duas das três pedindo a mesma coisa: compara as PALAVRAS DE CONTEÚDO da última pergunta.
+  for (let i = 0; i < perguntas.length; i++) {
+    for (let j = i + 1; j < perguntas.length; j++) {
+      // O que a pergunta PEDE, não as palavras em volta: duas mensagens podem citar as mesmas
+      // cidades e ainda assim perguntar coisas diferentes. Só as palavras que decidem uma venda
+      // (valor, faixa, prazo, tamanho, financiamento…) contam pra dizer que é a mesma pergunta.
+      const a = _raizes([..._palavrasDeConteudo(perguntas[i].pergunta)].filter(p => _PALAVRA_QUE_DECIDE.has(p)));
+      const b = _raizes([..._palavrasDeConteudo(perguntas[j].pergunta)].filter(p => _PALAVRA_QUE_DECIDE.has(p)));
+      if (!a.size || !b.size) continue;
+      let iguais = 0;
+      for (const palavra of a) if (b.has(palavra)) iguais += 1;
+      const menor = Math.min(a.size, b.size);
+      if (iguais / menor < 0.5) continue;
+      const alvo = avisos.find(x => x.qual === perguntas[j].qual);
+      const motivo = `pede a mesma coisa que a sugestão ${perguntas[i].qual.toUpperCase()}`;
+      if (alvo) { if (!alvo.motivos.includes(motivo)) alvo.motivos.push(motivo); }
+      else avisos.push({ qual: perguntas[j].qual, motivos: [motivo] });
+    }
+  }
+  return avisos;
+}
+
 
 async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   // O banco é a fonte principal do Cérebro salvo. Um payload parcial ou um
@@ -4710,7 +4819,12 @@ Responda somente com JSON válido no formato solicitado.`;
   //   • o botão "Medir o modo novo" do painel manda etapas=2 só naquela medição;
   //   • DIRECIONA_ANALISE_ETAPAS=2 na hospedagem liga pra valer, sem publicar código, quando a
   //     medição mostrar que o modo novo é melhor.
-  const duasEtapas = String(etapas ?? process.env.DIRECIONA_ANALISE_ETAPAS ?? "1").trim() === "2";
+  // v1332 — LIGADO. Entrou desligado na v1331 esperando medição; o dono viu na tela, no mesmo dia,
+  // sugestão citando empreendimento de outra conversa, abertura cobrando dias e duas das três
+  // pedindo a mesma coisa — o estado atual já é ruim, e esperar medição virou desculpa pra não
+  // mexer. Entender primeiro e escrever depois passa a ser o padrão. Desligar é imediato e sem
+  // publicar código: DIRECIONA_ANALISE_ETAPAS=1 na hospedagem.
+  const duasEtapas = String(etapas ?? process.env.DIRECIONA_ANALISE_ETAPAS ?? "2").trim() === "2";
 
   const blocoPisoDeForma = `PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE. O Cérebro decide o QUE dizer, o TOM e QUAL
 saudação usar em cada faixa de horário; se ele definir faixas próprias, são as dele que valem, não
@@ -5061,6 +5175,9 @@ ${leituraParaEscrever}
 
 OBSERVAÇÕES MANUAIS DO CORRETOR
 ${observacoesManuaisTexto || "Nenhuma observação manual registrada."}
+Fatos e ações que o corretor registrou como realizados têm peso alto. Já interpretações sobre intenção,
+motivação, objeção ou estado do cliente continuam sendo interpretação e não podem superar fala explícita
+do próprio cliente.
 
 ${blocoPisoDeForma}
 
@@ -5130,6 +5247,17 @@ ${revisaoSoDasMensagens}`;
     const msgB = msgBRaw;
     const msgC = msgCRaw;
     const validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
+    // v1332 — a conferência volta a ser CHAMADA (ver avisosDeQualidadeDasMensagens). O contexto é
+    // tudo o que se sabe deste lead: a conversa inteira, as observações do corretor e o Cérebro.
+    let avisosMensagens = [];
+    try {
+      avisosMensagens = avisosDeQualidadeDasMensagens(
+        [{ qual: "a", texto: msgA }, { qual: "b", texto: msgB }, { qual: "c", texto: msgC }],
+        { conversa: `${timelineTextFull}\n${observacoesManuaisTexto}`, cerebro: instrucoesCerebroTexto }
+      );
+    } catch (erroAviso) {
+      console.warn("[direciona] conferência das três mensagens falhou:", erroAviso?.message || erroAviso);
+    }
 
     // Nenhuma sugestão de mensagem é reinterpretada nem tem conteúdo comercial reescrito pelo
     // código. A única validação local é técnica: presença das três sugestões.
@@ -5261,6 +5389,10 @@ ${revisaoSoDasMensagens}`;
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
+      // v1332 — o que a conferência achou em cada sugestão (vazio quando está tudo certo). A tela
+      // mostra ao lado da mensagem, no mesmo lugar que a v1308 já usava; nada é reescrito.
+      avisosMensagens,
+      problemasPorSugestao: Object.fromEntries(avisosMensagens.map(x => [x.qual, x.motivos])),
       sugestoesPendentes: !trioOk,
       validacaoSugestoes: trioOk ? [] : validacaoMensagens.motivos,
       mensagensValidadasEm: nowIso,

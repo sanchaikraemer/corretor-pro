@@ -39,12 +39,17 @@ function mock(chamadas) {
 
 const cerebro = { corretorNome: "Corretor Sanchai", metodo: "Método do corretor.", tom: "Tom do corretor." };
 
-// ── 1. Desligado é o padrão: uma chamada só ─────────────────────────────────────────────────
+// ── 1. v1332: LIGADO virou o padrão; desligar continua sendo um comando só ──────────────────
 {
   const chamadas = [];
   const r = await analyzeWithBrain({ lead: { clientName: "Cliente" }, timeline, openai: mock(chamadas), cerebroConfig: cerebro });
-  assert.equal(chamadas.length, 1, "sem pedir nada, a análise continua exatamente como sempre foi");
+  assert.equal(chamadas.length, 2, "o padrão passou a ser entender primeiro, escrever depois");
   assert.equal(r.messages.a, RESPOSTA.mensagens.recomendada);
+
+  const chamadasDesligado = [];
+  const rUm = await analyzeWithBrain({ lead: { clientName: "Cliente" }, timeline, openai: mock(chamadasDesligado), cerebroConfig: cerebro, etapas: "1" });
+  assert.equal(chamadasDesligado.length, 1, "etapas=1 (ou DIRECIONA_ANALISE_ETAPAS=1) volta ao pedido único na hora");
+  assert.equal(rUm.messages.a, RESPOSTA.mensagens.recomendada);
 }
 
 // ── 2. Ligado: uma chamada para entender, outra para escrever ───────────────────────────────
@@ -110,8 +115,8 @@ const cerebro = { corretorNome: "Corretor Sanchai", metodo: "Método do corretor
 // ── 5. O modo novo é ligável sem publicar código, e o painel sabe pedir ─────────────────────
 {
   const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
-  assert.match(pipeline, /String\(etapas \?\? process\.env\.DIRECIONA_ANALISE_ETAPAS \?\? "1"\)\.trim\(\) === "2"/,
-    "desligado por padrão; liga por parâmetro ou por variável de ambiente");
+  assert.match(pipeline, /String\(etapas \?\? process\.env\.DIRECIONA_ANALISE_ETAPAS \?\? "2"\)\.trim\(\) === "2"/,
+    "ligado por padrão na v1332; desliga por parâmetro ou por variável de ambiente");
   assert.match(pipeline, /rota: "analise-mensagens"/, "a etapa que escreve registra o próprio custo");
 
   const rota = fs.readFileSync(new URL("../api/diagnostico.js", import.meta.url), "utf8");

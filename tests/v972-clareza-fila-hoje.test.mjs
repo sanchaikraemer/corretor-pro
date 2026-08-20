@@ -108,7 +108,9 @@ assert.ok(htmlProdutoLongo.includes(`title="${produtoLongo}"`), 'title do produt
 // exportado do WhatsApp, não sabe se o corretor já respondeu. Agora o title é sempre factual —
 // desde o atendimento marcado, quando existe; senão, desde a última interação.
 const semNivel = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78 }, 218);
-assert.match(semNivel, />há 78d</, 'texto visível vem com o prefixo "há"');
+// v1332 — o prefixo passou a dizer QUAL data é ("falou há" / "atendido há"), pra o número parar
+// de enganar dos dois lados (ver v1053/v1055/v1332).
+assert.match(semNivel, />falou há 78d</, 'texto visível vem com o prefixo que diz qual data é');
 assert.match(semNivel, /desde a última intera[çc][ãa]o \(sua ou do cliente\)/, 'title explica que é desde a última interação de qualquer lado');
 const comNivel1 = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78, __nivel: 1 }, 218);
 assert.doesNotMatch(comNivel1, /esperando sua resposta/, 'nenhum lead ganha mais o title de "cliente esperando resposta" (v1190)');

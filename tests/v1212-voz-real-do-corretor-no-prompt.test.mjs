@@ -64,8 +64,8 @@ await analyzeWithBrain({
   cerebroConfig: { corretorNome: "Corretor Sanchai", metodo: "Regra do corretor.", tom: "Tom do corretor." }
 });
 
-// v1331 — no modo padrão a análise é uma chamada só; a voz do corretor precisa chegar nela.
-assert.equal(chamadas.length, 1);
+// v1332 — duas etapas viraram o padrão; a voz do corretor precisa chegar na que ESCREVE.
+assert.equal(chamadas.length, 2);
 const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
 const pedido = chamadas.map(c => c.messages.find(m => m.role === "user")?.content || "").join("\n");
 

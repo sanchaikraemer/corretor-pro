@@ -31,6 +31,8 @@ const html = cpHomeLeadRow({ name: "Dra. Diene", daysSinceLastInteraction: 141, 
 assert.doesNotMatch(html, /\d+º/, "a linha não mostra nenhum número de posição (Xº)");
 assert.doesNotMatch(html, /class="chr-rank"/, "a linha não tem o elemento de badge de posição");
 assert.match(html, /Dra\. Diene/, "a linha continua mostrando o nome do lead normalmente");
-assert.match(html, />há 141d</, "a linha continua mostrando os dias parado normalmente, só sem numeração");
+// v1332 — o número ganhou o nome do evento ("falou há" / "atendido há"), pra não enganar quem
+// olha a fila: cliente que escreveu hoje aparecia com o número do atendimento de dias atrás.
+assert.match(html, />falou há 141d</, "a linha continua mostrando os dias parado normalmente, só sem numeração");
 
 console.log("v1046-2-sem-numero-posicao-fila-hoje: ok");

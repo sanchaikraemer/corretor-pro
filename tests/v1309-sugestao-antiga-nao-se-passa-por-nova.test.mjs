@@ -40,7 +40,9 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
   assert.match(motivo({ mode: 'erro_api' }), /não respondeu/i);
   assert.ok(motivo(null).length > 0, 'sem nada em mãos, ainda sai uma frase em português');
 
-  assert.match(app, /Estas três mensagens são da análise ANTERIOR deste cliente<\/b>/,
+  // v1332 — o aviso continua colado nas sugestões; o que mudou é o tamanho. Era um bloco vermelho
+  // de cinco linhas e virou uma linha ("que monte de msg vermelha de erro são essas", dono, 20/08).
+  assert.match(app, /Sugestões da análise anterior<\/b> — a nova não foi concluída/,
     'o aviso precisa vir colado nas sugestões, não num quadro pequeno longe delas');
   assert.match(app, /<b>Motivo:<\/b>/, 'com o motivo real do servidor');
   assert.match(app, /const motivoBruto = cp704Text\(a\.analiseReutilizadaMotivo\);/,
