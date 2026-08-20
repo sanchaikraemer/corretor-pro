@@ -2,12 +2,12 @@
   "_leia": "Registro da última vez que a bateria de conversas comerciais (evals/) foi rodada contra o miolo do prompt. Quem confere é tests/v1327-porteiro-do-prompt.test.mjs: se o miolo mudar e este arquivo não for atualizado, a suíte fica vermelha e a publicação para.",
   "assinatura": "47b3cfb25eb5b3968764cb8a54f6e54f",
   "medidoEm": "20/08/2026",
-  "versao": "1327",
+  "versao": "1330",
   "casos": 32,
-  "resultado": "Camada 1 (sem IA) verde nas 32 conversas: cliente, quem falou por último, tentativas sem resposta e voz do corretor conferidos em cada uma. Camada 2 (com IA de verdade) NÃO foi rodada nesta sessão — ela precisa da chave da OpenAI do dono, que esta sessão não tem. Esta assinatura marca o miolo do prompt como ele estava ao criar o porteiro; a primeira medição completa com IA é a próxima vez que o dono rodar `node evals/executar.mjs`.",
+  "resultado": "PRIMEIRA MEDIÇÃO COM IA DE VERDADE, feita pelo DONO no painel administrativo (botão Medir agora, v1330), às 18h50 de 20/08/2026: 156 de 191 pontos da régua cumpridos (82%), 17 das 32 conversas sem nenhuma falha. Pior caso: 2/6 em 'O corretor prometeu retorno e não voltou'. Padrão das falhas: as três mensagens não mudam de abordagem depois de tentativas sem resposta, não propõem passo concreto com dia e horário, não reconhecem o atraso do próprio corretor e não perguntam faixa de valor quando o cliente diz que está caro. É este o número a bater na próxima mudança do miolo.",
   "comoMedir": [
-    "node evals/executar.mjs --salvar=antes   (antes de mexer no prompt)",
-    "node evals/executar.mjs --comparar=antes (depois de mexer)",
-    "atualize assinatura, medidoEm, versao, casos e resultado neste arquivo"
+    "JEITO DO DONO: painel administrativo → cartão 'Qualidade da análise' → botão 'Medir agora' (v1330).",
+    "JEITO DA LINHA DE COMANDO: node evals/executar.mjs --salvar=antes / --comparar=antes",
+    "Depois, atualize assinatura, medidoEm, versao, casos e resultado neste arquivo."
   ]
 }
