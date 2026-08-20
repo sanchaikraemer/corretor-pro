@@ -928,6 +928,323 @@ export function tentativasSemRespostaDoCorretor(timeline, corretorNome = "", lea
   return { tentativas, textos: encontradas.map(e => e.texto) };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// v1317 — O FICHÁRIO DA CONVERSA
+//
+// Pedido do dono (20/08/2026), depois de comparar a análise do app com a leitura da MESMA conversa
+// feita à mão: *"eu quero q o sistema funcione igual a sua analise"*.
+//
+// A diferença não era esperteza da IA — era MATERIAL. A leitura à mão tinha quatro coisas na mão
+// que o app nunca entregou:
+//   1. quanto vale cada valor JÁ citado na conversa, por quem, e HÁ QUANTOS DIAS;
+//   2. o que o corretor JÁ perguntou (e continuava perguntando de novo);
+//   3. que próximo passo ele JÁ propôs, e quantas vezes;
+//   4. o que o cliente ofereceu como entrada que NÃO É DINHEIRO (permuta) — e que faixa de compra
+//      isso abre, pela regra de porcentagem dita na própria conversa.
+//
+// Sem esses fatos a IA chutava. Nos três prints do dono (20/08): as três sugestões perguntando
+// "morar ou investir?", que o corretor tinha perguntado SETE MESES antes na mesma conversa; e as
+// três presas ao apartamento do anúncio, ignorando que a entrada oferecida pela cliente mudava a
+// faixa dela por completo.
+//
+// ISTO NÃO É REGRA NOVA DE ESCRITA, e nada aqui reescreve o texto da IA — a rede que fazia isso
+// saiu na v1315, por ordem do dono, e NÃO VOLTA. É o remédio de sempre deste projeto: entregar o
+// FATO pronto, em vez de escrever mais uma instrução mandando a IA ser esperta.
+//
+// Tudo aqui é conta de calendário e de aritmética sobre o texto da própria conversa. Nenhuma
+// informação comercial nova é criada, nada vem do código.
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+
+const MAX_FICHARIO = 14;
+// A lista de perguntas tem teto próprio, e maior de propósito: a pergunta mais PERIGOSA de
+// repetir é justamente a mais antiga — a que o corretor fez no primeiro contato e ninguém
+// lembra mais. Com o teto de 14, a pergunta "morar ou investir?" do primeiro dia caía fora da
+// lista, e era exatamente a que as três sugestões refaziam sete meses depois (prints do dono).
+const MAX_PERGUNTAS_FICHARIO = 30;
+
+function _hojeDiaCivil(agora) {
+  const p = partesDataBR(agora instanceof Date ? agora : new Date());
+  return p ? numeroDiaCivil(p.y, p.m, p.d) : null;
+}
+
+function _diasDesde(dia, hojeDia) {
+  return (dia == null || hojeDia == null) ? null : Math.max(0, hojeDia - dia);
+}
+
+function _trechoCurto(texto, limite = 180) {
+  const t = String(texto || "").replace(/\s+/g, " ").trim();
+  return t.length > limite ? `${t.slice(0, limite - 1)}…` : t;
+}
+
+function _reaisBR(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "";
+  try { return `R$ ${num.toLocaleString("pt-BR")}`; } catch (_) { return `R$ ${num}`; }
+}
+
+function _haQuantoTempo(dias) {
+  if (dias == null) return "quando não deu pra identificar";
+  if (dias === 0) return "hoje";
+  if (dias === 1) return "há 1 dia";
+  return `há ${dias} dias`;
+}
+
+// ─── 1. TODO VALOR EM DINHEIRO JÁ DITO NA CONVERSA, COM A IDADE DELE ─────────────────────────
+// Um preço de sete meses atrás e um preço de ontem chegam na IA com a mesma cara quando a conversa
+// vai num bloco só. Aqui cada valor passa a vir com a data e com quantos dias tem.
+export function valoresCitadosNaConversa(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const hojeDia = _hojeDiaCivil(agora);
+  const porValor = new Map();
+  for (const m of arr) {
+    if (!ehMensagemRealParaTempo(m)) continue;
+    const texto = String(m?.text || "");
+    const valores = valoresNaMensagem(texto);
+    if (!valores.length) continue;
+    const p = dataCivilDeMensagem(m);
+    const lado = _ladoDaMensagem(m, corretorNome, lead);
+    const quem = lado === "cliente" ? "pelo cliente" : lado === "corretor" ? "pelo corretor" : "por autor não identificado";
+    for (const valor of valores) {
+      if (!porValor.has(valor)) porValor.set(valor, []);
+      porValor.get(valor).push({ dia: p?.dia ?? null, data: p?.texto || "", quem, trecho: _trechoCurto(texto) });
+    }
+  }
+  const saida = [];
+  for (const [valor, ocorrencias] of porValor) {
+    const comDia = ocorrencias.filter(o => o.dia != null).sort((a, b) => a.dia - b.dia);
+    const primeira = comDia[0] || ocorrencias[0];
+    const ultima = comDia[comDia.length - 1] || ocorrencias[ocorrencias.length - 1];
+    saida.push({
+      valor,
+      vezes: ocorrencias.length,
+      primeiraData: primeira?.data || "data não identificada",
+      ultimaData: ultima?.data || "data não identificada",
+      diasAtras: _diasDesde(ultima?.dia ?? null, hojeDia),
+      quem: ultima?.quem || "por autor não identificado",
+      trecho: ultima?.trecho || ""
+    });
+  }
+  return saida
+    .sort((a, b) => (a.diasAtras ?? Number.MAX_SAFE_INTEGER) - (b.diasAtras ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, MAX_FICHARIO);
+}
+
+// ─── 2. O QUE O CORRETOR JÁ PERGUNTOU ────────────────────────────────────────────────────────
+// "Boa tarde, tudo bem?" não é pergunta de trabalho e fica de fora; o resto entra com a data.
+const PERGUNTA_DE_CORTESIA = /^(tudo bem|tudo bom|td bem|como vai|como (voc[êe] )?est[áa]|e a[íi]|pode ser|posso te ajudar|certo|ok|beleza)\b/i;
+
+export function perguntasJaFeitasPeloCorretor(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const hojeDia = _hojeDiaCivil(agora);
+  const porChave = new Map();
+  for (const m of arr) {
+    if (!ehMensagemRealParaTempo(m)) continue;
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
+    const texto = String(m?.text || "").trim();
+    if (!texto.includes("?")) continue;
+    const p = dataCivilDeMensagem(m);
+    // Frase a frase: uma mensagem de seis linhas que termina em "?" tem UMA pergunta, não seis
+    // linhas de pergunta. Sem isso a lista virava um paredão ilegível.
+    for (const bruta of texto.split(/(?<=[.!?])\s+|\n+/)) {
+      const pergunta = String(bruta || "").trim();
+      if (!pergunta.endsWith("?")) continue;
+      const limpa = pergunta.replace(/^[^A-Za-zÀ-ÿ0-9]+/, "").trim();
+      if (limpa.length < 14) continue;
+      // Tira a saudação e o nome do cliente antes de decidir se é cortesia: "Boa tarde Fulana, tudo bem?"
+      // aparecia na lista como se fosse pergunta de trabalho, repetida várias vezes.
+      const nucleo = limpa
+        .replace(/^(bom dia|boa tarde|boa noite|ol[áa]|oi|opa|e a[íi])\b[\s,!.]*/i, "")
+        .replace(/^\p{Lu}[\p{L}'-]*[\s,]+/u, "")
+        .trim();
+      if (!nucleo || PERGUNTA_DE_CORTESIA.test(nucleo)) continue;
+      const chave = _semAcentoMinuscula(limpa).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      if (!chave) continue;
+      const anterior = porChave.get(chave);
+      if (anterior) {
+        anterior.vezes += 1;
+        if (p?.dia != null && (anterior.dia == null || p.dia > anterior.dia)) {
+          anterior.dia = p.dia;
+          anterior.ultimaData = p.texto;
+        }
+        continue;
+      }
+      porChave.set(chave, {
+        texto: _trechoCurto(limpa, 160),
+        vezes: 1,
+        dia: p?.dia ?? null,
+        primeiraData: p?.texto || "data não identificada",
+        ultimaData: p?.texto || "data não identificada"
+      });
+    }
+  }
+  return [...porChave.values()]
+    .map(q => ({ ...q, diasAtras: _diasDesde(q.dia, hojeDia) }))
+    .sort((a, b) => (a.diasAtras ?? Number.MAX_SAFE_INTEGER) - (b.diasAtras ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, MAX_PERGUNTAS_FICHARIO);
+}
+
+// ─── 3. QUE PRÓXIMO PASSO O CORRETOR JÁ PROPÔS ───────────────────────────────────────────────
+// Visita, café, reunião, apresentação. Quando o mesmo convite já foi feito quatro vezes e a
+// conversa seguiu sem ele, propor o quinto igual não é próximo passo.
+const CONVITE_DO_CORRETOR = /\b(visit(a|ar|ando)|visit[áa]-l[oa]|conhecer o (im[óo]vel|apartamento|empreendimento|projeto)|um caf[ée]|reuni[ãa]o|apresentar (melhor|os|o )|lev[áa]-l[oa]|te levar|levar (voc[êe]|a senhora)|agendar|marcar (um|uma)|te esperar (a[íi]|na|no)|passar (a[íi]|na construtora|no plant[ãa]o))\b/i;
+
+export function proximosPassosJaPropostos(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const hojeDia = _hojeDiaCivil(agora);
+  const achados = [];
+  for (const m of arr) {
+    if (!ehMensagemRealParaTempo(m)) continue;
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || !CONVITE_DO_CORRETOR.test(texto)) continue;
+    const p = dataCivilDeMensagem(m);
+    achados.push({
+      data: p?.texto || "data não identificada",
+      dia: p?.dia ?? null,
+      diasAtras: _diasDesde(p?.dia ?? null, hojeDia),
+      trecho: _trechoCurto(texto, 150)
+    });
+  }
+  return achados.slice(-MAX_FICHARIO);
+}
+
+// ─── 4. A ENTRADA QUE NÃO É DINHEIRO — E A FAIXA DE COMPRA QUE ELA ABRE ───────────────────────
+// Este é o item que virou o jogo na leitura à mão: o cliente entrou por um anúncio de um valor,
+// mas ofereceu como entrada um bem que vale outra coisa. A faixa real dele não tem nada a ver com
+// o anúncio — e essa conta o app nunca fez.
+const PERMUTA_DO_CLIENTE = /\b(permut\w*|troc(a|ar|aria|o)\b|dar de entrada|como (parte da )?entrada|na troca|pegar(iam|ia|em)?\b[^.?!]{0,25}\bde entrada)\b/i;
+const BEM_DE_PERMUTA = /\b(terreno|terrenos|lote|lotes|s[íi]tio|ch[áa]cara|carro|caminhonete|caminh[ãa]o|apartamento|apto|casa|im[óo]vel|im[óo]veis|sala|loja|gado)\b/i;
+const PERCENTUAL_SOLTO = /(\d{1,3})\s*%/g;
+const PERCENTUAL_FAIXA = /(\d{1,3})\s*(?:a|at[ée]|à|-)\s*(\d{1,3})\s*%/g;
+// "o valor dos terrenos fica 360" — no mercado imobiliário isso é 360 mil, e era o número que
+// destravava a conta. O app só lê assim DENTRO de uma fala de permuta, e sempre mostra o texto
+// original ao lado, pra IA poder discordar.
+const VALOR_EM_MIL_SEM_UNIDADE = /\b(?:valor|vale|valeria|fica(?:ria)?(?:\s+em)?|sai(?:ria)?\s+por|em torno de|cerca de|uns)\s+(?:de\s+)?(?:r\$\s*)?(\d{2,4})\b(?!\s*(?:m[²2]\b|metros|mil|milh|anos|dias|meses|reais|%|quartos|dormit|su[íi]te))/i;
+
+export function permutaOferecidaPeloCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const hojeDia = _hojeDiaCivil(agora);
+  const falasDoCliente = [];
+  const percentuais = new Set();
+  let valorDaEntrada = null;
+  let valorComoEscrito = "";
+
+  for (const m of arr) {
+    if (!ehMensagemRealParaTempo(m)) continue;
+    const lado = _ladoDaMensagem(m, corretorNome, lead);
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    const p = dataCivilDeMensagem(m);
+
+    if (lado === "cliente" && PERMUTA_DO_CLIENTE.test(texto) && BEM_DE_PERMUTA.test(texto)) {
+      falasDoCliente.push({
+        data: p?.texto || "data não identificada",
+        diasAtras: _diasDesde(p?.dia ?? null, hojeDia),
+        trecho: _trechoCurto(texto, 220)
+      });
+      // O valor do bem, quando o cliente disse. Primeiro o formato completo ("R$ 360.000",
+      // "360 mil"); só se não houver, o número seco que o mercado lê como mil.
+      const comUnidade = valoresNaMensagem(texto);
+      if (comUnidade.length) {
+        const maior = Math.max(...comUnidade);
+        if (valorDaEntrada == null || maior > valorDaEntrada) {
+          valorDaEntrada = maior;
+          valorComoEscrito = _reaisBR(maior);
+        }
+      } else {
+        const seco = VALOR_EM_MIL_SEM_UNIDADE.exec(texto);
+        const bruto = seco ? Number(seco[1]) : null;
+        if (bruto != null && bruto >= 20 && bruto <= 5000 && valorDaEntrada == null) {
+          valorDaEntrada = bruto * 1000;
+          valorComoEscrito = `"${seco[0].trim()}" (número seco na conversa; lido como ${_reaisBR(bruto * 1000)})`;
+        }
+      }
+    }
+
+    // A regra de porcentagem é do corretor, dita nesta conversa. O app não tem regra própria.
+    if (lado === "corretor" && /\b(permut|troca|entrada|volta)\w*/i.test(texto)) {
+      PERCENTUAL_FAIXA.lastIndex = 0;
+      let f;
+      while ((f = PERCENTUAL_FAIXA.exec(texto)) !== null) {
+        for (const n of [Number(f[1]), Number(f[2])]) if (n > 0 && n <= 100) percentuais.add(n);
+      }
+      PERCENTUAL_SOLTO.lastIndex = 0;
+      let s;
+      while ((s = PERCENTUAL_SOLTO.exec(texto)) !== null) {
+        const n = Number(s[1]);
+        if (n > 0 && n <= 100) percentuais.add(n);
+      }
+    }
+  }
+
+  if (!falasDoCliente.length) return null;
+
+  const pcts = [...percentuais].sort((a, b) => a - b);
+  let faixaCompra = null;
+  if (valorDaEntrada != null && pcts.length) {
+    const maiorPct = pcts[pcts.length - 1];
+    const menorPct = pcts[0];
+    faixaCompra = {
+      de: Math.round(valorDaEntrada / (maiorPct / 100)),
+      ate: Math.round(valorDaEntrada / (menorPct / 100)),
+      menorPct,
+      maiorPct
+    };
+  }
+  return { falasDoCliente, percentuais: pcts, valorDaEntrada, valorComoEscrito, faixaCompra };
+}
+
+// ─── O FICHÁRIO INTEIRO, JÁ EM TEXTO PRO PEDIDO ──────────────────────────────────────────────
+export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const blocos = [];
+
+  const valores = valoresCitadosNaConversa(timeline, corretorNome, lead, agora);
+  if (valores.length) {
+    const linhas = valores.map(v => {
+      const repetido = v.vezes > 1 && v.primeiraData !== v.ultimaData ? ` (citado ${v.vezes}x; a primeira em ${v.primeiraData})` : "";
+      return `- ${_reaisBR(v.valor)} — dito ${v.quem} em ${v.ultimaData}, ${_haQuantoTempo(v.diasAtras)}${repetido}. Trecho: "${v.trecho}"`;
+    });
+    blocos.push(`VALORES EM DINHEIRO JÁ CITADOS NESTA CONVERSA (lidos do texto pelo app, com a idade de cada um):
+${linhas.join("\n")}
+Um valor só vale como preço de hoje se for recente. Valor antigo não volta à conversa como o preço atual — se for preciso usá-lo, é como "vou confirmar o valor atualizado".`);
+  }
+
+  const perguntas = perguntasJaFeitasPeloCorretor(timeline, corretorNome, lead, agora);
+  if (perguntas.length) {
+    const linhas = perguntas.map(q => {
+      const repetida = q.vezes > 1 ? ` — JÁ FEITA ${q.vezes} VEZES` : "";
+      return `- "${q.texto}" (${q.ultimaData}, ${_haQuantoTempo(q.diasAtras)})${repetida}`;
+    });
+    blocos.push(`PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA:
+${linhas.join("\n")}
+Antes de escrever uma pergunta, confira esta lista. Se a resposta já está na conversa, não pergunte de novo. Se a pergunta continua sem resposta e ainda é a mais importante, reconheça que já perguntou em vez de perguntar do zero — e considere se não há um caminho melhor que insistir na mesma pergunta.`);
+  }
+
+  const passos = proximosPassosJaPropostos(timeline, corretorNome, lead, agora);
+  if (passos.length) {
+    const linhas = passos.map(p => `- ${p.data} (${_haQuantoTempo(p.diasAtras)}): "${p.trecho}"`);
+    blocos.push(`PRÓXIMOS PASSOS (visita, café, reunião, apresentação) QUE O CORRETOR JÁ PROPÔS NESTA CONVERSA: ${passos.length}.
+${linhas.join("\n")}
+Se o mesmo passo já foi proposto várias vezes e a conversa seguiu sem ele, propor de novo do mesmo jeito tende a repetir o mesmo resultado. Isso não proíbe insistir — obriga a decidir com esse fato na mão.`);
+  }
+
+  const permuta = permutaOferecidaPeloCliente(timeline, corretorNome, lead, agora);
+  if (permuta) {
+    const linhas = permuta.falasDoCliente.map(f => `- ${f.data} (${_haQuantoTempo(f.diasAtras)}): "${f.trecho}"`);
+    const partes = [`ENTRADA QUE NÃO É DINHEIRO, OFERECIDA PELO PRÓPRIO CLIENTE (permuta/troca):
+${linhas.join("\n")}`];
+    if (permuta.valorDaEntrada != null) partes.push(`Valor que o cliente deu para esse bem: ${permuta.valorComoEscrito}.`);
+    if (permuta.percentuais.length) partes.push(`Porcentagens de permuta ditas PELO CORRETOR nesta conversa: ${permuta.percentuais.map(p => `${p}%`).join(", ")}.`);
+    if (permuta.faixaCompra) {
+      partes.push(`FAIXA DE COMPRA QUE ESSA ENTRADA ABRE, pela regra dita nesta conversa: de ${_reaisBR(permuta.faixaCompra.de)} a ${_reaisBR(permuta.faixaCompra.ate)} (a entrada cobrindo de ${permuta.faixaCompra.maiorPct}% a ${permuta.faixaCompra.menorPct}% da compra). Conta de aritmética feita pelo app sobre o que está escrito; não é proposta nem avaliação, e nada disso está fechado.`);
+    }
+    partes.push(`ISTO MUDA O PODER DE COMPRA DO CLIENTE. O produto pelo qual ele entrou (anúncio, primeiro contato) pode não ter nada a ver com a faixa que essa entrada abre. Antes de seguir conduzindo pelo produto de entrada, verifique na própria conversa se a faixa nova já foi tratada — e se produtos dessa faixa já apareceram antes no histórico.`);
+    blocos.push(partes.join("\n"));
+  }
+
+  return blocos.join("\n\n");
+}
+
 
 function _regrasLegadasParaTextoPipeline(arr) {
   if (!Array.isArray(arr)) return "";
@@ -1230,13 +1547,17 @@ const _PRAZO_DO_CLIENTE = [
 // regra genérica.
 //
 // Só olha o texto e as datas da própria conversa; não decide nada comercial.
-const _VALOR_NA_FRASE = /(?:R\$\s*)?(\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\d+(?:[.,]\d+)?\s*(?:mil|milh[õo]es|milh[ãa]o))/gi;
+// v1317 — a ordem das alternativas importa: com "mil" na frente, "1,2 milhão" casava só até
+// "1,2 mil", e um imóvel de milhão era lido como R$ 1.200. As formas mais longas vêm primeiro.
+const _VALOR_NA_FRASE = /(?:R\$\s*)?(\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\d+(?:[.,]\d+)?\s*(?:milh[õo]es|milh[ãa]o|mil))/gi;
 
 // "350.000", "350 mil", "R$ 1,2 milhão" viram o mesmo número, pra poder comparar.
 function _valorNormalizado(bruto) {
   const t = String(bruto || "").toLowerCase().trim();
   const milhao = /milh/.test(t);
-  const mil = /\bmil\b/.test(t);
+  // v1317 — "800mil" (colado, como se escreve no WhatsApp) não casava com /\bmil\b/: entre o "0"
+  // e o "m" não há fronteira de palavra. O valor virava 800, caía no piso de mil reais e sumia.
+  const mil = /mil\b/.test(t);
   let n = t.replace(/r\$|\s|milh[õo]es|milh[ãa]o|mil/g, "");
   if (mil || milhao) n = n.replace(",", ".");
   else n = n.replace(/\./g, "").replace(",", ".");
@@ -3812,6 +4133,12 @@ TEXTOS DAS TENTATIVAS SEM RESPOSTA (fato histórico; não presuma o motivo do si
 ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
     : "TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA: nenhuma (a última palavra da conversa é do cliente).";
 
+  // v1317 — O FICHÁRIO DA CONVERSA: valores já citados com a idade de cada um, perguntas que o
+  // corretor já fez, próximos passos que ele já propôs, e a entrada em permuta oferecida pelo
+  // cliente com a faixa de compra que ela abre. Tudo calculado sobre o texto desta conversa —
+  // ver montarFicharioDaConversa. String vazia quando a conversa não tem nada disso.
+  const ficharioDaConversa = montarFicharioDaConversa(timelineArr, corretorNome, lead || {}, _agoraDt);
+
   // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
@@ -3895,7 +4222,9 @@ Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
-Corretor: ${corretorNome}
+${ficharioDaConversa ? `
+${ficharioDaConversa}
+` : ""}Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
 A saudação, o reconhecimento ou não do intervalo e o tipo de próximo passo devem seguir o Cérebro.
