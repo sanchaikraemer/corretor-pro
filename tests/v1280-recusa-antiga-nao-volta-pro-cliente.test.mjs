@@ -9,7 +9,9 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
 // v1291 — ATENÇÃO, ISTO MUDOU DE FORMA. O bloco saiu na reescrita entregue pelo dono; a garantia
 // ficou nos campos do diagnóstico e nas regras de histórico.
 
-assert.match(src, /"produtoInteresse":"produto\/necessidade atual, sem ressuscitar produto superado"/,
+// v1322 — a regra ganhou a definição de superado (produto largado POR PREÇO volta quando a faixa
+// muda). A garantia deste teste continua: o que o cliente DESCARTOU por critério vigente não volta.
+assert.match(src, /"produtoInteresse":"produto\/necessidade atual, sem ressuscitar produto superado\./,
   'produto que o cliente já descartou não pode voltar como interesse atual');
 assert.match(src, /"oQueOClienteQuer":"necessidade e critérios atuais confirmados; não misture interesse antigo superado"/,
   'e o que ele quer hoje não se mistura com o que ele já descartou');
