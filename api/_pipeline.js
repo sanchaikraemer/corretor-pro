@@ -2917,6 +2917,75 @@ export function anonimizarTextoAprendizadoExportacao(valor, aliases = []) {
   return texto.replace(/\s+/g, " ").trim().slice(0, 30000);
 }
 
+// v1326 — O APRENDIZADO DE UM CLIENTE NÃO LEVA OS DADOS DELE PARA A CONVERSA DE OUTRO.
+//
+// Auditoria de 20/08/2026: "jeitoAprendidoCompacto ainda pode inserir material aprendido de outras
+// conversas — 'Mensagem real sua', a resposta usada numa objeção, a técnica que funcionou. O prompt
+// avisa 'imite a forma, não o conteúdo', mas o texto armazenado não passa por anonimização forte
+// antes de voltar para outro lead. Uma mensagem real aprendida pode conter nome, empreendimento,
+// cidade, valor, condição, endereço."
+//
+// A v1301 já tinha tirado o pedaço mais perigoso (casos e fatos de outro cliente como FONTE de
+// fato). O que sobrou aqui é a exposição: pedir pra IA não copiar é instrução; tirar o dado antes
+// de mandar é garantia. Agora o que atravessa de um cliente pra outro é a ESTRUTURA da condução —
+// "quando o cliente sinalizou entrada abaixo da condição padrão, o corretor propôs validar uma
+// exceção" — e não "no [empreendimento] conseguimos R$ 200 mil de entrada".
+//
+// O que sai: nome do cliente de origem (pelos mesmos apelidos que a exportação já usava), nome do
+// empreendimento, valor em dinheiro, endereço, telefone, e-mail, documento e link. O que fica:
+// a forma de escrever, a sequência da condução, a objeção em si, percentual, prazo e metragem —
+// tudo que ensina COMO conduzir sem dizer QUEM ou QUANTO.
+//
+// LIMITE HONESTO: um nome próprio que nunca apareceu no nome do arquivo nem no campo produto
+// (o vizinho citado no meio da frase, por exemplo) pode escapar. Por isso o aviso do prompt
+// continua existindo — a limpeza é a primeira barreira, não a única.
+const _VALOR_EM_DINHEIRO = /R\$\s?\d[\d.,]*(\s*(mil|milh(ão|ões|ao|oes)))?|\b\d{2,4}\s*(mil|milh(ão|ões|ao|oes))\b/gi;
+// O endereço é cortado pelo NOME dele, não por um pedaço fixo da frase: depois do tipo de via
+// entram só as palavras com inicial maiúscula (o nome próprio) e o número, se houver. Sem isso a
+// limpeza engolia o resto da frase junto ("na Rua X o metro quadrado é…") e a condução perdia
+// sentido. Endereço escrito todo em minúscula, como se digita no WhatsApp ("esquina da ..."),
+// tem regra própria logo abaixo.
+const _ENDERECO_NA_FRASE = /\b([Rr]ua|[Aa]venida|[Aa]v\.|[Tt]ravessa|[Aa]lameda|[Ee]strada|[Rr]odovia|[Bb]airro)\s+[\wÀ-ÿ'.-]+(?:\s+(?:[A-ZÁ-ÚÂ-Û][\wÀ-ÿ'.-]*|d[aeo]s?)){0,3}(?:,?\s*n?[ºo°]?\s*\d{1,5})?/g;
+const _ESQUINA_NA_FRASE = /\besquina\s+d[ao]s?\s+[\wÀ-ÿ'.-]+(?:\s+[\wÀ-ÿ'.-]+)?/gi;
+
+export function limparAprendizadoDeOutroCliente(valor, origem = {}, aliasesExtras = []) {
+  const arquivo = String(origem?.arquivo || origem?.sourceFile || "");
+  const produto = String(origem?.produto || "");
+  const aliases = [...aliasesExtras, ...aliasesPrivadosDoArquivo(arquivo, produto)];
+  let texto = anonimizarTextoAprendizadoExportacao(valor, aliases);
+  if (!texto) return "";
+  if (produto.trim().length >= 3) {
+    const seguro = produto.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    texto = texto.replace(new RegExp(seguro, "gi"), "[empreendimento]");
+  }
+  return texto
+    .replace(_VALOR_EM_DINHEIRO, "[valor]")
+    .replace(_ENDERECO_NA_FRASE, "[endereço]")
+    .replace(_ESQUINA_NA_FRASE, "[endereço]")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Os apelidos de TODOS os clientes que já ensinaram alguma coisa: assim o nome de um cliente que
+// aparece por acaso no aprendizado de outro também some. Barato (roda sobre o que já está na
+// memória) e é a mesma lista que a exportação monta.
+export function apelidosDeTodosOsClientesAprendidos(config, memoria) {
+  const lista = [];
+  const ia = config?.inteligenciaAprendida;
+  if (ia && typeof ia === "object") {
+    for (const chave of ["tons", "tecnicas", "objecoes", "movimentosOk", "movimentosTravaram", "padroesFollowup", "produtoVsPerfil"]) {
+      for (const item of (Array.isArray(ia[chave]) ? ia[chave] : [])) {
+        const o = item?.origem && typeof item.origem === "object" ? item.origem : {};
+        lista.push(...aliasesPrivadosDoArquivo(o.arquivo || "", o.produto || ""));
+      }
+    }
+  }
+  for (const caso of (Array.isArray(memoria?.casos) ? memoria.casos : [])) {
+    lista.push(...aliasesPrivadosDoArquivo(caso?.sourceFile || "", caso?.produto || ""));
+  }
+  return [...new Set(lista)].sort((a, b) => b.length - a.length).slice(0, 400);
+}
+
 function dataExportacaoAprendizado(valor) {
   if (!valor) return "";
   try {
@@ -3630,11 +3699,15 @@ um tempo solicitado. NUNCA proponha uma ação que dependa de estrutura que o C�
 // sem despejar as 249 observações e distorcer (igual jogar no ChatGPT com 2 exemplos do seu jeito).
 // Exportada pra o teste poder verificar o EFEITO (o que o aprendizado põe no prompt), em vez de
 // procurar texto no código-fonte — ver tests/aprendizado-continuo.
-export function jeitoAprendidoCompacto(config, contexto) {
+export function jeitoAprendidoCompacto(config, contexto, memoria = null) {
   const ia = config?.inteligenciaAprendida;
   if (!ia || typeof ia !== "object") return "";
   const query = new Set(_tokensRank(contexto || ""));
   const partes = [];
+  // v1326 — tudo o que sai daqui vem de OUTRAS conversas. Cada pedaço passa pela limpeza antes de
+  // entrar no pedido: nome, empreendimento, valor e endereço do cliente de origem ficam para trás.
+  const apelidos = apelidosDeTodosOsClientesAprendidos(config, memoria);
+  const limpar = (texto, item) => limparAprendizadoDeOutroCliente(texto, item?.origem || {}, apelidos);
   if (Array.isArray(ia.tons) && ia.tons.length) {
     // v1212 — o bloco "tom" era só `slice(-3)`: pegava os três últimos, fossem eles o que fossem.
     // Na conta do dono a maioria é DESCRIÇÃO abstrata ("conversação amigável e informativa",
@@ -3642,8 +3715,13 @@ export function jeitoAprendidoCompacto(config, contexto) {
     // devolve exatamente o texto genérico que ele odeia ("fico à disposição", "espero que esteja
     // indo bem"). No meio da lista existem MENSAGENS REAIS dele, que valem muito mais: agora elas
     // entram primeiro, e a descrição só completa o que faltar.
-    const textos = ia.tons.map(e => String(e?.texto || "").trim()).filter(t => t.length > 8);
-    const pareceMensagemReal = t => /[?!]/.test(t) && /\b(voc[êe]|te\s|seu\s|sua\s|estou|posso|tudo bem)\b/i.test(t);
+    const textos = ia.tons.map(e => limpar(e?.texto || "", e)).filter(t => t.length > 8);
+    // v1326 — BUG ANTIGO, ACHADO AO ESCREVER O TESTE DA LIMPEZA: o `\b` depois de "você" nunca
+    // fecha (em expressão regular sem modo unicode, o "ê" já é caractere de fora), então TODA
+    // mensagem real escrita com "você" — a grafia normal — caía como se fosse descrição de tom.
+    // Na prática o pedido dizia "Seu tom: <mensagem real dele>" em vez de "Mensagem real sua
+    // (imite a forma, não o conteúdo)", que é o que faz a IA copiar o jeito e não o conteúdo.
+    const pareceMensagemReal = t => /[?!]/.test(t) && /(\bvoc[êe]|\bte\s|\bseu\s|\bsua\s|\bestou\b|\bposso\b|tudo bem)/i.test(t);
     const reais = textos.filter(pareceMensagemReal).slice(-2);
     const descricoes = textos.filter(t => !pareceMensagemReal(t)).slice(-(reais.length ? 1 : 2));
     if (reais.length) partes.push("Mensagem real sua (imite a forma, não o conteúdo): " + reais.join(" // "));
@@ -3651,7 +3729,7 @@ export function jeitoAprendidoCompacto(config, contexto) {
   }
   if (Array.isArray(ia.objecoes) && ia.objecoes.length) {
     const objs = _topRelevantes(ia.objecoes.filter(o => o && o.funcionou === true), o => `${o.objecao || ""} ${o.respostaUsada || ""}`, query, 4)
-      .map(o => `quando "${String(o.objecao || "").trim()}", você responde: ${String(o.respostaUsada || "").trim()}`)
+      .map(o => `quando "${limpar(o.objecao || "", o)}", você responde: ${limpar(o.respostaUsada || "", o)}`)
       .filter(l => l.length > 18);
     if (objs.length) partes.push("Objeções (do seu jeito, já funcionou): " + objs.join(" | "));
   }
@@ -3659,17 +3737,17 @@ export function jeitoAprendidoCompacto(config, contexto) {
   if (Array.isArray(ia.movimentosOk)) tecs.push(...ia.movimentosOk);
   if (Array.isArray(ia.tecnicas)) tecs.push(...ia.tecnicas);
   if (tecs.length) {
-    const top = _topRelevantes(tecs, e => e.texto, query, 3).map(e => String(e.texto || "").trim()).filter(t => t.length > 8);
+    const top = _topRelevantes(tecs, e => e.texto, query, 3).map(e => limpar(e?.texto || "", e)).filter(t => t.length > 8);
     if (top.length) partes.push("Já funcionou com você: " + top.join(" / "));
   }
   // v1315 — "Produto certo pro perfil" NÃO volta: era nome de empreendimento oferecido a OUTRO
   // cliente entrando no pedido desta conversa. Saiu na v1301 por ordem do dono (print do endereço
   // inventado) e continua fora. O dado segue gravado e visível na tela de Aprendizado.
   if (Array.isArray(ia.padroesFollowup) && ia.padroesFollowup.length) {
-    const fu = _topRelevantes(ia.padroesFollowup, e => e.texto, query, 2).map(e => String(e.texto || "").trim()).filter(t => t.length > 8);
+    const fu = _topRelevantes(ia.padroesFollowup, e => e.texto, query, 2).map(e => limpar(e?.texto || "", e)).filter(t => t.length > 8);
     if (fu.length) partes.push("Seu follow-up que dá resposta: " + fu.join(" / "));
   }
-  return partes.length ? "SEU JEITO (aprendido das suas conversas reais — siga seu estilo e o que já funcionou; adapte ao contexto desta conversa, NÃO copie literal):\n- " + partes.join("\n- ") : "";
+  return partes.length ? "SEU JEITO (aprendido das suas conversas reais — siga seu estilo e o que já funcionou; adapte ao contexto desta conversa, NÃO copie literal).\nNome, empreendimento, valor e endereço das outras conversas foram RETIRADOS antes de chegar aqui e aparecem como [valor], [empreendimento], [endereço] ou [cliente] — não tente adivinhar o que estava ali, e nunca escreva esses marcadores na mensagem:\n- " + partes.join("\n- ") : "";
 }
 
 // v1212 — OS CASOS REAIS DA CARTEIRA VOLTAM PRO PROMPT.
@@ -3710,20 +3788,24 @@ export function casosSemelhantesPrompt(memoria, contexto, n = 4) {
   ).slice(0, Math.max(1, n)).map(x => x.c);
   const linhas = [];
   let total = 0;
+  // v1326 — cada caso vem de OUTRO cliente: limpa antes de entrar no pedido (nome, empreendimento,
+  // valor, endereço). O que atravessa é a condução, não os dados de quem foi atendido.
+  const apelidos = apelidosDeTodosOsClientesAprendidos(null, memoria);
+  const limpo = (texto, caso, max) => textoCaso(limparAprendizadoDeOutroCliente(texto, { arquivo: caso?.sourceFile, produto: caso?.produto }, apelidos), max);
   for (const c of escolhidos) {
-    const conducao = textoCaso(c.conducaoCorretor, 300);
-    const situacao = textoCaso(c.situacao, 200);
+    const conducao = limpo(c.conducaoCorretor, c, 300);
+    const situacao = limpo(c.situacao, c, 200);
     if (!conducao || !situacao) continue;
     const partes = [`Situação: ${situacao}`];
-    const sinal = textoCaso(c.sinalCliente, 160);
+    const sinal = limpo(c.sinalCliente, c, 160);
     if (sinal) partes.push(`Cliente sinalizou: ${sinal}`);
     partes.push(`Você conduziu assim: ${conducao}`);
     const resultado = String(c.resultado || "observada");
-    const evidencia = textoCaso(c.evidenciaResultado, 160);
+    const evidencia = limpo(c.evidenciaResultado, c, 160);
     partes.push(resultado === "nao-funcionou"
       ? `NÃO FUNCIONOU${evidencia ? ` (${evidencia})` : ""} — não repita este caminho aqui`
       : `Resultado: ${resultado}${evidencia ? ` (${evidencia})` : ""}`);
-    const regra = textoCaso(c.regra, 200);
+    const regra = limpo(c.regra, c, 200);
     if (regra) partes.push(`Regra que ficou: ${regra}`);
     const linha = `- ${partes.join(" | ")}`;
     if (total + linha.length > MAX_BLOCO_CASOS_PROMPT) break;
@@ -3733,7 +3815,7 @@ export function casosSemelhantesPrompt(memoria, contexto, n = 4) {
   if (!linhas.length) return "";
   return `CASOS REAIS DESTE CORRETOR (situações parecidas que ELE já atendeu, com a condução real dele e o que aconteceu depois):
 ${linhas.join("\n")}
-Use como referência de CONDUÇÃO e de ESCRITA — o formato, o tamanho e o jeito de encaminhar. Adapte ao caso atual e NUNCA copie fato, valor, produto ou condição de um caso antigo para esta conversa: os fatos desta conversa são os únicos que valem aqui.`;
+Use como referência de CONDUÇÃO e de ESCRITA — o formato, o tamanho e o jeito de encaminhar. Adapte ao caso atual e NUNCA copie fato, valor, produto ou condição de um caso antigo para esta conversa: os fatos desta conversa são os únicos que valem aqui. Nome, empreendimento, valor e endereço já foram RETIRADOS destes casos ([cliente], [empreendimento], [valor], [endereço]) — não tente adivinhar o que estava ali, e nunca escreva esses marcadores na mensagem.`;
 }
 
 // Extrai a INTELIGÊNCIA OBSERVADA de UMA conversa já salva (timeline em texto), pra ensinar o
@@ -4248,11 +4330,14 @@ ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
   // o prompt fica exatamente como era antes.
-  const jeitoAprendido = chaveAprendizado ? jeitoAprendidoCompacto(configCerebro, timelineText) : "";
   // v1212 — os CASOS REAIS da carteira (banco de casos v2) entram no prompt. Eram 661 casos
   // guardados na conta do dono, lidos só pela planilha de exportação e pelo contador da tela.
   // Falha do cache: análise segue sem o bloco, como antes.
   const memoriaCasos = await loadMemoriaComercialV2(false, organizationId).catch(() => null);
+  // v1326 — a memória entra aqui só para a LIMPEZA: é dela que sai a lista de apelidos de todos os
+  // clientes que já ensinaram alguma coisa, pra que o nome de um não escape no aprendizado de
+  // outro. Por isso o jeito aprendido passou a ser montado depois de carregá-la.
+  const jeitoAprendido = chaveAprendizado ? jeitoAprendidoCompacto(configCerebro, timelineText, memoriaCasos) : "";
   // v1301 — DUAS FONTES SAÍRAM DAQUI, POR ORDEM DIRETA DO DONO ("tira as duas fontes", 18/08):
   // os CASOS de outros clientes e os FATOS ensinados da carteira. Com pouca coisa escrita na
   // conversa, era dali que o modelo preenchia o vazio — e o cliente recebia por escrito o endereço
