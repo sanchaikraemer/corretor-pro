@@ -4312,7 +4312,7 @@ Formato JSON obrigatório:
     "aguardar":false,
     "motivo":"preencher somente quando o cliente pediu espaço/tempo ou houver razão concreta para não contatar agora"
   },
-  "produtoInteresse":"produto/necessidade atual, sem ressuscitar produto superado",
+  "produtoInteresse":"produto/necessidade atual, sem ressuscitar produto superado. SUPERADO é só o que o cliente descartou por critério que continua valendo (tamanho, região, tipo). Produto abandonado POR PREÇO volta a valer quando a faixa de compra muda: se a virada abriu faixa nova, o produto antigo que agora cabe nela é candidato de novo — reabri-lo pelo ponto da objeção que ficou de pé é jogada legítima",
   "produtosInteresse":["produtos/unidades atuais realmente relevantes"],
   "etapaSugerida":"estágio comercial atual",
   "clientProfile":"perfil comercial factual e útil, sem diagnóstico psicológico",
@@ -4354,6 +4354,11 @@ REGRAS PARA AS TRÊS MENSAGENS
 - Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
 - Não despeje catálogo quando os critérios já permitem curadoria.
 - Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
+- NÃO DESCREVA O CLIENTE PARA ELE MESMO EM LINGUAGEM DE SISTEMA. "Você tinha entrado pelo
+  apartamento", "você demonstrou interesse", "seu perfil de busca", "sua jornada", "na sua
+  captação" — isso é conversa de corretor com o sistema, não de corretor com gente. Fale do
+  IMÓVEL e do que a pessoa DISSE: "o apartamento de R$ 430 mil que você perguntou", "você me
+  disse que 43 m² ficou pequeno". O cliente não "entra" por nada — ele pergunta, pede, responde.
 - TEMPO SE ESCREVE COM O NÚMERO QUE ESTÁ NO CONTEXTO TÉCNICO, nunca por estimativa. Se lá está
   escrito 1 dia, é errado escrever "já se passaram alguns dias", "faz um tempo" ou "uns dias".
   Sem o número na mão, não fale de tempo — o cliente lembra quando falou com você.

@@ -15,7 +15,8 @@ assert.match(src, /Informação recente substitui a antiga somente quando forem 
   'o que veio depois manda quando briga com o que veio antes');
 assert.match(src, /"oQueMudouNoTempo":"mudanças relevantes de necessidade, produto, prazo, objetivo ou estágio/,
   'a mudança de planos precisa ter campo próprio na análise');
-assert.match(src, /"produtoInteresse":"produto\/necessidade atual, sem ressuscitar produto superado"/,
+// v1322 — mesma nuance da v1280: superado ganhou definição; largado por preço volta quando a faixa muda.
+assert.match(src, /"produtoInteresse":"produto\/necessidade atual, sem ressuscitar produto superado\./,
   'e o produto abandonado não pode voltar como interesse atual');
 
 // 2. Silêncio não é aceite (a trava que impedia deduzir orçamento de quem não respondeu).
