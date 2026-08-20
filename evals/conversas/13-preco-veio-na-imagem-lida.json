@@ -1,0 +1,54 @@
+{
+  "id": "preco-veio-na-imagem-lida",
+  "titulo": "O preço atual está na arte que o corretor mandou, não no texto",
+  "veioDe": "NOTAS-v1306.md — a importação passou a ler imagem e PDF",
+  "porQueImporta": "Antes da v1306 a IA respondia com o único número que enxergava (o velho, escrito em texto) e ignorava a arte com o preço de hoje.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Tatiane Broch.txt",
+  "conversa": [
+    {
+      "date": "02/02/2026",
+      "time": "11:00",
+      "author": "Sanchai",
+      "text": "Bom dia, Tatiane! Naquela época o valor era R$ 520.000."
+    },
+    {
+      "date": "02/02/2026",
+      "time": "11:20",
+      "author": "Tatiane Broch",
+      "text": "Obrigada, vou ver com meu marido"
+    },
+    {
+      "date": "19/08/2026",
+      "time": "14:03",
+      "author": "Sanchai",
+      "text": "[Imagem lida pela IA] Arte do empreendimento: unidade 302, 2 dormitórios com suíte, 78 m², 1 vaga. Valor promocional de agosto: R$ 598.000. Entrada facilitada em 36x."
+    },
+    {
+      "date": "19/08/2026",
+      "time": "14:31",
+      "author": "Tatiane Broch",
+      "text": "Essa condição de entrada em 36x vale pra qualquer unidade?"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Tatiane Broch",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Essa condição de entrada em 36x"
+    ],
+    "aIaPrecisaPerceber": [
+      "o valor e a condição de hoje vieram da arte lida, não do texto antigo",
+      "a cliente fez uma pergunta objetiva sobre a condição de entrada"
+    ],
+    "asMensagensNaoPodem": [
+      "usar o valor antigo escrito em texto como se fosse o atual",
+      "afirmar que a condição vale para todas as unidades sem essa informação estar na conversa"
+    ],
+    "asMensagensPrecisam": [
+      "responder à pergunta dela sobre a entrada em 36x",
+      "confirmar o que está escrito na arte sem inventar o que não está"
+    ]
+  }
+}

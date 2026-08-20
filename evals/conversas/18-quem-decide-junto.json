@@ -1,0 +1,42 @@
+{
+  "id": "quem-decide-junto",
+  "titulo": "A decisão não é só de quem está conversando",
+  "veioDe": "NOTAS-v1225.md — quem decide junto entrou na leitura do cliente",
+  "porQueImporta": "Conduzir só com quem responde no WhatsApp e ignorar quem decide junto trava a venda no fim.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Priscila Meireles.txt",
+  "conversa": [
+    {
+      "date": "15/08/2026",
+      "time": "19:00",
+      "author": "Sanchai",
+      "text": "Boa noite, Priscila! Consegue passar amanhã pra ver a unidade?"
+    },
+    {
+      "date": "15/08/2026",
+      "time": "19:26",
+      "author": "Priscila Meireles",
+      "text": "Preciso ver com meu pai, é ele que vai ajudar na entrada. Ele só olha as coisas no fim de semana"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Priscila Meireles",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Preciso ver com meu pai"
+    ],
+    "aIaPrecisaPerceber": [
+      "há uma segunda pessoa decidindo junto e ela participa da entrada",
+      "a disponibilidade dessa pessoa é no fim de semana"
+    ],
+    "asMensagensNaoPodem": [
+      "marcar a visita ignorando quem decide junto",
+      "pressionar por uma decisão imediata dela sozinha"
+    ],
+    "asMensagensPrecisam": [
+      "propor um horário que inclua quem decide junto",
+      "dar a ela algo concreto para levar a essa conversa"
+    ]
+  }
+}

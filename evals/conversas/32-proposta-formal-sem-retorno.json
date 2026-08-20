@@ -1,0 +1,60 @@
+{
+  "id": "proposta-formal-sem-retorno",
+  "titulo": "Proposta formal enviada e o cliente sumiu",
+  "veioDe": "NOTAS-v1277.md — duas tentativas sem resposta",
+  "porQueImporta": "Depois da proposta, repetir 'ficou alguma dúvida?' é o caminho mais rápido para o silêncio definitivo.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Sérgio Kaufmann.txt",
+  "conversa": [
+    {
+      "date": "07/08/2026",
+      "time": "18:30",
+      "author": "Sérgio Kaufmann",
+      "text": "Me manda a proposta por escrito que eu analiso com calma"
+    },
+    {
+      "date": "08/08/2026",
+      "time": "16:00",
+      "author": "Sanchai",
+      "text": "Sérgio, segue a proposta formal da unidade 803: entrada de R$ 120.000, saldo em 60 parcelas e reforço anual."
+    },
+    {
+      "date": "08/08/2026",
+      "time": "16:02",
+      "author": "Sanchai",
+      "text": "Fico à disposição pra ajustar o que for preciso."
+    },
+    {
+      "date": "12/08/2026",
+      "time": "10:15",
+      "author": "Sanchai",
+      "text": "Sérgio, conseguiu analisar a proposta que te mandei?"
+    },
+    {
+      "date": "18/08/2026",
+      "time": "09:40",
+      "author": "Sanchai",
+      "text": "Sérgio, a unidade 803 segue disponível até o fim da semana. Quer que eu segure?"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Sérgio Kaufmann",
+    "quemFalouPorUltimo": "corretor",
+    "tentativasSemResposta": 3,
+    "vozDoCorretorNaoPodeConter": [
+      "Me manda a proposta por escrito"
+    ],
+    "aIaPrecisaPerceber": [
+      "existe uma proposta concreta na mesa e nenhuma resposta do cliente",
+      "o corretor já cobrou retorno em três dias diferentes"
+    ],
+    "asMensagensNaoPodem": [
+      "mandar mais uma cobrança igual às anteriores",
+      "reduzir a proposta por conta própria para reanimar a conversa"
+    ],
+    "asMensagensPrecisam": [
+      "mudar o tipo de abordagem depois de três tentativas",
+      "oferecer uma saída de baixo custo para o cliente responder, mesmo que seja um não"
+    ]
+  }
+}

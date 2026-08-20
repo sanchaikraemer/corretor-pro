@@ -1,0 +1,48 @@
+{
+  "id": "comparando-com-concorrente",
+  "titulo": "O cliente está comparando com outro empreendimento",
+  "veioDe": "NOTAS-v1225.md — objeção comparativa",
+  "porQueImporta": "Falar mal do concorrente queima o corretor; ignorar a comparação deixa o cliente decidir sozinho.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Camila Reis.txt",
+  "conversa": [
+    {
+      "date": "18/08/2026",
+      "time": "20:00",
+      "author": "Camila Reis",
+      "text": "Vi um parecido dois quarteirões pra baixo por 40 mil a menos, com a mesma metragem"
+    },
+    {
+      "date": "18/08/2026",
+      "time": "20:12",
+      "author": "Sanchai",
+      "text": "Boa noite, Camila! Posso te explicar a diferença entre os dois?"
+    },
+    {
+      "date": "18/08/2026",
+      "time": "20:30",
+      "author": "Camila Reis",
+      "text": "Pode, mas pra mim o que pesa é o valor da parcela"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Camila Reis",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "o que pesa é o valor da parcela"
+    ],
+    "aIaPrecisaPerceber": [
+      "a cliente está comparando com outro imóvel e disse o critério dela: a parcela",
+      "o valor absoluto não é o que decide para ela"
+    ],
+    "asMensagensNaoPodem": [
+      "falar mal do concorrente",
+      "insistir em diferenciais que não afetam a parcela"
+    ],
+    "asMensagensPrecisam": [
+      "tratar a comparação pelo critério que ela deu",
+      "propor um caminho concreto para comparar as parcelas"
+    ]
+  }
+}

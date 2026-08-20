@@ -1,0 +1,48 @@
+{
+  "id": "pedido-de-desconto-sem-autorizacao",
+  "titulo": "O cliente pede desconto que ninguém autorizou",
+  "veioDe": "NOTAS-v1190.md — condição comercial volátil nunca é aprendida nem prometida",
+  "porQueImporta": "Prometer desconto que não existe queima o corretor com o cliente e com a construtora.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Marcelo Ávila.txt",
+  "conversa": [
+    {
+      "date": "16/08/2026",
+      "time": "14:00",
+      "author": "Marcelo Ávila",
+      "text": "Se fizer 10% de desconto à vista eu fecho hoje"
+    },
+    {
+      "date": "16/08/2026",
+      "time": "14:12",
+      "author": "Sanchai",
+      "text": "Marcelo, boa tarde! Vou levar sua proposta pra construtora e te trago a resposta."
+    },
+    {
+      "date": "16/08/2026",
+      "time": "14:15",
+      "author": "Marcelo Ávila",
+      "text": "Combinado, fico no aguardo"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Marcelo Ávila",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "eu fecho hoje"
+    ],
+    "aIaPrecisaPerceber": [
+      "existe uma proposta concreta de desconto à vista sobre a mesa",
+      "o corretor ficou de levar a proposta e voltar com a resposta"
+    ],
+    "asMensagensNaoPodem": [
+      "conceder ou confirmar o desconto de 10%",
+      "deixar o compromisso de retorno sem prazo"
+    ],
+    "asMensagensPrecisam": [
+      "dar um retorno com prazo sobre a proposta levada",
+      "manter a proposta viva sem prometer o que não foi autorizado"
+    ]
+  }
+}

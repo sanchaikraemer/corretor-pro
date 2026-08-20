@@ -3651,6 +3651,11 @@ function _topRelevantes(arr, textOf, querySet, n) {
 // dia, sem medir cada uma contra conversa real, piora o resultado.
 // ============================================================================================
 
+// ===== INÍCIO DO MIOLO DO PROMPT — porteiro da bateria (v1327) =====
+// Tudo entre este marcador e o "FIM DO MIOLO DO PROMPT" entra na assinatura conferida por
+// tests/v1327-porteiro-do-prompt.test.mjs. Mexeu aqui, a suíte fica vermelha até a bateria de
+// conversas ser rodada (antes e depois) e o resultado ser registrado em
+// evals/assinatura-do-prompt.json. É a regra do CLAUDE.md virada em trava.
 const INTELIGENCIA_CARTEIRA = `INTELIGÊNCIA COMERCIAL BASE — REDE DE SEGURANÇA GERAL:
 
 Este bloco existe para contas sem Cérebro configurado e como proteção factual mínima. Quando houver
@@ -3774,6 +3779,7 @@ export function casosSemelhantesPrompt(memoria, contexto, n = 4) {
   if (!casos.length) return "";
   const query = new Set(_tokensRank(contexto || ""));
   const textoDoCaso = c => `${c.situacao || ""} ${c.sinalCliente || ""} ${c.impedimento || ""} ${c.regra || ""} ${c.produto || ""} ${c.etapa || ""}`;
+// ===== FIM DO MIOLO DO PROMPT =====
   const pontuados = casos.map((c, i) => ({
     c, i,
     sim: query.size ? _simRank(query, textoDoCaso(c)) : 0,
@@ -4357,6 +4363,7 @@ ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
   // real no comentário de conhecimentoCorretorTexto).
   const conhecimentoCorretor = ""; // v1315 — idem: fora do pedido desde a v1301.
 
+  // ===== INÍCIO DO MIOLO DO PROMPT — porteiro da bateria (v1327) =====
   const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:
 O conteúdo atual do Cérebro Comercial abaixo é a autoridade máxima sobre método, análise, estratégia,
 tom, objeções e condução. Não crie um segundo playbook por fora dele.
@@ -4600,6 +4607,7 @@ Antes de devolver o JSON, confirme:
 10. A resposta está fiel ao Cérebro Comercial atual?
 11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
     alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
+  // ===== FIM DO MIOLO DO PROMPT =====
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).

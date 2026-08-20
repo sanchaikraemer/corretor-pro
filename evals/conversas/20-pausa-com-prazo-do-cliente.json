@@ -1,0 +1,42 @@
+{
+  "id": "pausa-com-prazo-do-cliente",
+  "titulo": "O cliente marcou o próprio prazo para voltar a falar",
+  "veioDe": "NOTAS-v1308.md — prazo marcado pelo cliente",
+  "porQueImporta": "Furar o prazo que o próprio cliente marcou é o jeito mais fácil de virar chateação.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Simone Radaelli.txt",
+  "conversa": [
+    {
+      "date": "12/08/2026",
+      "time": "16:00",
+      "author": "Sanchai",
+      "text": "Boa tarde, Simone! Quer que eu segure a unidade 704 pra você?"
+    },
+    {
+      "date": "12/08/2026",
+      "time": "16:35",
+      "author": "Simone Radaelli",
+      "text": "Boa tarde! Só consigo tratar disso depois do dia 10 de setembro, quando sai a rescisão do meu contrato"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Simone Radaelli",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "depois do dia 10 de setembro"
+    ],
+    "aIaPrecisaPerceber": [
+      "a cliente marcou um prazo próprio e o motivo dele",
+      "insistir antes desse prazo vai contra o que ela pediu"
+    ],
+    "asMensagensNaoPodem": [
+      "cobrar decisão antes do prazo que ela marcou",
+      "tratar o prazo como desculpa"
+    ],
+    "asMensagensPrecisam": [
+      "confirmar o combinado com o prazo dela",
+      "deixar registrado o que vai acontecer quando a data chegar"
+    ]
+  }
+}

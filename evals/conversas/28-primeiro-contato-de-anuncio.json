@@ -1,0 +1,42 @@
+{
+  "id": "primeiro-contato-de-anuncio",
+  "titulo": "Primeiro contato veio do anúncio, sem nenhuma informação",
+  "veioDe": "NOTAS-v1298.md — lead de anúncio sem contexto",
+  "porQueImporta": "É o começo de quase todo atendimento. Um questionário longo aqui derruba o lead antes da segunda mensagem.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Larissa Coutinho.txt",
+  "conversa": [
+    {
+      "date": "19/08/2026",
+      "time": "08:02",
+      "author": "Larissa Coutinho",
+      "text": "Olá! Tenho interesse e queria mais informações, por favor."
+    },
+    {
+      "date": "19/08/2026",
+      "time": "08:20",
+      "author": "Sanchai",
+      "text": "Bom dia, Larissa! Obrigado pelo contato. Vou te ajudar."
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Larissa Coutinho",
+    "quemFalouPorUltimo": "corretor",
+    "tentativasSemResposta": 1,
+    "vozDoCorretorNaoPodeConter": [
+      "Tenho interesse e queria mais informações"
+    ],
+    "aIaPrecisaPerceber": [
+      "a mensagem é o texto automático do anúncio, sem nenhum critério do cliente",
+      "o corretor ainda não entregou nada de concreto"
+    ],
+    "asMensagensNaoPodem": [
+      "mandar um questionário com muitas perguntas de uma vez",
+      "tratar a mensagem automática como se fosse um pedido detalhado"
+    ],
+    "asMensagensPrecisam": [
+      "entregar algo concreto do imóvel do anúncio",
+      "fazer uma pergunta só, a que mais separa opções"
+    ]
+  }
+}

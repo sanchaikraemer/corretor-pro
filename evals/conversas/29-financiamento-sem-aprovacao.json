@@ -1,0 +1,48 @@
+{
+  "id": "financiamento-sem-aprovacao",
+  "titulo": "O cliente quer financiar e não sabe se tem crédito",
+  "veioDe": "NOTAS-v1225.md — pendência financeira do cliente",
+  "porQueImporta": "Sem aprovação de crédito, visita e reserva viram trabalho perdido; com ela, a negociação anda sozinha.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Wesley Pontes.txt",
+  "conversa": [
+    {
+      "date": "16/08/2026",
+      "time": "10:00",
+      "author": "Wesley Pontes",
+      "text": "Quero financiar quase tudo, só tenho uns 30 mil de entrada. Dá certo?"
+    },
+    {
+      "date": "16/08/2026",
+      "time": "10:15",
+      "author": "Sanchai",
+      "text": "Bom dia, Wesley! Dá pra estudar sim. Você já fez simulação em algum banco?"
+    },
+    {
+      "date": "16/08/2026",
+      "time": "10:40",
+      "author": "Wesley Pontes",
+      "text": "Nunca fiz, não sei nem por onde começar"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Wesley Pontes",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Nunca fiz, não sei nem por onde começar"
+    ],
+    "aIaPrecisaPerceber": [
+      "o cliente nunca simulou crédito e a entrada dele é pequena",
+      "o próximo passo real é a aprovação, não a visita"
+    ],
+    "asMensagensNaoPodem": [
+      "afirmar que o financiamento será aprovado",
+      "marcar visita como se o crédito já estivesse resolvido"
+    ],
+    "asMensagensPrecisam": [
+      "conduzir a simulação de crédito como próximo passo",
+      "explicar o caminho de forma simples, sem jargão de banco"
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "corretor-prometeu-e-nao-voltou",
+  "titulo": "O corretor prometeu retorno e não voltou",
+  "veioDe": "NOTAS-v1266.md — compromisso do corretor em aberto",
+  "porQueImporta": "Quando a falha é do corretor, fingir que nada aconteceu é pior do que reconhecer e entregar.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Vanessa Loureiro.txt",
+  "conversa": [
+    {
+      "date": "06/08/2026",
+      "time": "15:20",
+      "author": "Vanessa Loureiro",
+      "text": "Você consegue confirmar até amanhã se a unidade 1102 aceita financiamento pela Caixa?"
+    },
+    {
+      "date": "06/08/2026",
+      "time": "15:25",
+      "author": "Sanchai",
+      "text": "Consigo sim, Vanessa! Te confirmo amanhã cedo."
+    },
+    {
+      "date": "18/08/2026",
+      "time": "10:00",
+      "author": "Vanessa Loureiro",
+      "text": "E aí, conseguiu confirmar?"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Vanessa Loureiro",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "conseguiu confirmar?"
+    ],
+    "aIaPrecisaPerceber": [
+      "o corretor prometeu uma confirmação para o dia seguinte e não voltou",
+      "passaram-se doze dias e a cliente teve que cobrar"
+    ],
+    "asMensagensNaoPodem": [
+      "ignorar o atraso e responder como se nada tivesse acontecido",
+      "dar uma resposta vaga sobre o financiamento"
+    ],
+    "asMensagensPrecisam": [
+      "reconhecer o atraso de forma curta e sem drama",
+      "entregar ou marcar prazo curto para a confirmação pedida"
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "cliente-so-quer-a-planta",
+  "titulo": "O cliente pede uma coisa objetiva e o corretor responde outra",
+  "veioDe": "NOTAS-v1279.md — pedido objetivo do cliente",
+  "porQueImporta": "Quando o cliente pede material específico, entregar outra coisa é ruído — e ele repete o pedido em vez de avançar.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Bruno Sartori.txt",
+  "conversa": [
+    {
+      "date": "19/08/2026",
+      "time": "09:00",
+      "author": "Bruno Sartori",
+      "text": "Consegue me mandar a planta do 3 dormitórios?"
+    },
+    {
+      "date": "19/08/2026",
+      "time": "09:14",
+      "author": "Sanchai",
+      "text": "Bom dia, Bruno! Esse empreendimento tem piscina, salão de festas e academia."
+    },
+    {
+      "date": "19/08/2026",
+      "time": "09:20",
+      "author": "Bruno Sartori",
+      "text": "Legal, mas eu queria a planta mesmo"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Bruno Sartori",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "eu queria a planta mesmo"
+    ],
+    "aIaPrecisaPerceber": [
+      "o cliente pediu a planta duas vezes e ainda não recebeu",
+      "o que foi respondido não era o que ele pediu"
+    ],
+    "asMensagensNaoPodem": [
+      "listar de novo o lazer do prédio",
+      "prometer material sem dizer quando"
+    ],
+    "asMensagensPrecisam": [
+      "tratar o envio da planta como próximo passo",
+      "confirmar qual tipologia ele quer receber"
+    ]
+  }
+}

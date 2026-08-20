@@ -1,0 +1,54 @@
+{
+  "id": "preco-antigo-na-mesma-conversa",
+  "titulo": "Há um preço de meses atrás e um preço de agora na mesma conversa",
+  "veioDe": "NOTAS-v1305.md — preço vencido voltando como se fosse o de hoje",
+  "porQueImporta": "Numa conversa longa, o preço antigo e o novo chegam na IA com a mesma cara. Mandar o antigo pro cliente é o erro mais caro que este app pode cometer.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Rogério Maza.txt",
+  "conversa": [
+    {
+      "date": "05/01/2026",
+      "time": "10:00",
+      "author": "Sanchai",
+      "text": "Bom dia, Rogério! O apartamento da esquina sai a partir de R$ 610.000 com uma vaga."
+    },
+    {
+      "date": "05/01/2026",
+      "time": "10:40",
+      "author": "Rogério Maza",
+      "text": "Vou pensar e te falo"
+    },
+    {
+      "date": "14/08/2026",
+      "time": "09:12",
+      "author": "Sanchai",
+      "text": "Bom dia, Rogério! Passando pra atualizar: a tabela mudou, hoje a mesma unidade está R$ 689.000."
+    },
+    {
+      "date": "14/08/2026",
+      "time": "09:30",
+      "author": "Rogério Maza",
+      "text": "Subiu bastante né. Ainda dá pra negociar alguma coisa?"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Rogério Maza",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Subiu bastante né"
+    ],
+    "aIaPrecisaPerceber": [
+      "existem dois preços na conversa e o mais recente é o que vale hoje",
+      "o cliente perguntou diretamente sobre negociação e essa pergunta está sem resposta"
+    ],
+    "asMensagensNaoPodem": [
+      "repetir o preço antigo como se fosse o preço atual",
+      "prometer desconto que não foi autorizado"
+    ],
+    "asMensagensPrecisam": [
+      "responder à pergunta sobre negociação sem inventar condição",
+      "usar o preço mais recente da conversa"
+    ]
+  }
+}

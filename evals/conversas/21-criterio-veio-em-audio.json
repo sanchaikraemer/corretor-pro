@@ -1,0 +1,42 @@
+{
+  "id": "criterio-veio-em-audio",
+  "titulo": "O critério do cliente veio num áudio, não no texto",
+  "veioDe": "NOTAS-v1119.md — transcrição de áudio entra na análise",
+  "porQueImporta": "Metade do que o cliente decide é falado em áudio. Se a transcrição não é tratada como fala dele, a análise perde o essencial.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Aline Berger.txt",
+  "conversa": [
+    {
+      "date": "18/08/2026",
+      "time": "08:15",
+      "author": "Sanchai",
+      "text": "Bom dia, Aline! Me conta o que você procura que eu separo as opções."
+    },
+    {
+      "date": "18/08/2026",
+      "time": "08:40",
+      "author": "Aline Berger",
+      "text": "[Áudio transcrito] Bom dia! Então, a gente precisa de três dormitórios, de preferência com suíte, e tem que ter espaço pra cachorro grande. Até seiscentos mil a gente consegue, e não pode ser em andar alto porque meu sogro tem medo de elevador."
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Aline Berger",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "a gente precisa de três dormitórios"
+    ],
+    "aIaPrecisaPerceber": [
+      "a cliente já entregou tipologia, teto de valor e duas restrições concretas",
+      "andar alto está descartado por um motivo declarado"
+    ],
+    "asMensagensNaoPodem": [
+      "perguntar de novo quantos dormitórios ou qual o valor",
+      "oferecer unidade em andar alto"
+    ],
+    "asMensagensPrecisam": [
+      "usar os critérios que ela deu no áudio",
+      "propor opções que respeitem as duas restrições"
+    ]
+  }
+}

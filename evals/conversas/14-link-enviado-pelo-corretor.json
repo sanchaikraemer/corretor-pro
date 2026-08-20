@@ -1,0 +1,42 @@
+{
+  "id": "link-enviado-pelo-corretor",
+  "titulo": "A seleção de imóveis está atrás de um link que o corretor mandou",
+  "veioDe": "NOTAS-v1307.md — o link do corretor passou a ser aberto e lido",
+  "porQueImporta": "O corretor manda link o dia inteiro. Se a IA não sabe o que tem lá dentro, ela conduz no escuro e o cliente percebe.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Everton Klein.txt",
+  "conversa": [
+    {
+      "date": "19/08/2026",
+      "time": "17:00",
+      "author": "Sanchai",
+      "text": "Boa tarde, Everton! Separei três opções pra você: https://exemplo.com.br/selecao\n[Link lido pela IA] Seleção com 3 apartamentos: 2 dormitórios 68 m² por R$ 545.000; 3 dormitórios 92 m² por R$ 742.000; cobertura 140 m² por R$ 1.180.000. Todos com entrega imediata."
+    },
+    {
+      "date": "19/08/2026",
+      "time": "17:22",
+      "author": "Everton Klein",
+      "text": "O do meio me interessou. Tem vaga coberta?"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Everton Klein",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "O do meio me interessou"
+    ],
+    "aIaPrecisaPerceber": [
+      "o cliente escolheu a opção do meio, de 3 dormitórios",
+      "a conversa não diz se essa unidade tem vaga coberta"
+    ],
+    "asMensagensNaoPodem": [
+      "afirmar que tem vaga coberta sem essa informação estar na conversa",
+      "mandar de novo as três opções como se ele não tivesse escolhido"
+    ],
+    "asMensagensPrecisam": [
+      "tratar especificamente a unidade que ele escolheu",
+      "dizer que vai confirmar a vaga, em vez de inventar a resposta"
+    ]
+  }
+}
