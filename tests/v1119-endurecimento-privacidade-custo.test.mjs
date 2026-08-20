@@ -61,7 +61,12 @@ const privacidade = ler("privacidade.html");
 assert.match(privacidade, /ficha do lead[\s\S]{0,120}?sem o campo de telefone/i,
   "a política precisa dizer que a ficha do lead é enviada sem o campo de telefone");
 assert.match(privacidade, /Vercel/, "a política precisa citar a Vercel como fornecedor de infraestrutura");
-assert.match(privacidade, /Imagens, vídeos e documentos[\s\S]*?não são analisados/, "a política precisa dizer que imagem/vídeo não são analisados");
+// v1322 — esta linha exigia a frase "Imagens, vídeos e documentos […] não são analisados". Ela
+// deixou de ser verdade na v1306 (imagem e PDF passaram a ser lidos) e na v1307 (link do corretor
+// passou a ser aberto): a política estava prometendo o contrário do que o sistema faz. O que
+// continua valendo — e é exigido aqui — é que VÍDEO segue fora da análise. O resto do texto novo é
+// guardado em tests/v1322-politica-fiel-a-leitura-de-imagem-pdf-e-link.test.mjs.
+assert.match(privacidade, /V[íi]deos? não s(ão|er) analisad/i, "a política precisa dizer que vídeo não é analisado");
 assert.doesNotMatch(privacidade, /não fica resquício/, "a política não pode mais prometer 'sem resquício' (remoção de arquivos é best-effort)");
 
 // ── 5. Painel mostra aviso de exclusão parcial ─────────────────────────────────────────────

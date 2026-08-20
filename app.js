@@ -5517,7 +5517,7 @@ function cp1225LinhaDeOndeVeio(a){
     : "";
   // As porcentagens já vêm como HTML colorido de cp1304Pct (o resto do texto é gerado aqui, não
   // vem do usuário), então esta linha não passa por escapeHtml — senão a cor viraria texto na tela.
-  return reuso + `<div class="small" style="color:var(--muted);margin:-4px 0 10px">${reuso ? "Leitura da análise anterior" : "Análise feita"} ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${avisoModelo}${aviso}</div>`;
+  return reuso + `<div class="small" style="color:var(--muted);margin:-4px 0 10px">${reuso ? "Leitura da análise anterior" : "Análise feita"} ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${cp1323MaterialNaoLido(a)}${avisoModelo}${aviso}</div>`;
 }
 
 // v1308 — EM QUE MODO ESTA ANÁLISE FOI FEITA (as três chaves da tela do Cérebro).
@@ -5541,6 +5541,25 @@ function cp1308FaixaModoHtml(a){
     ? desligadas[0]
     : desligadas.slice(0, -1).join(", ") + " e " + desligadas[desligadas.length - 1];
   return `<div style="border:1px solid var(--risco-line,rgba(255,98,88,.45));background:var(--risco-soft,rgba(255,98,88,.10));border-radius:12px;padding:10px 12px;margin:0 0 10px"><b style="color:var(--risco);font-size:12.5px">Análise de teste: ${escapeHtml(lista)} ${desligadas.length === 1 ? "estava desligado" : "estavam desligados"}.</b><div class="small" style="color:var(--muted);margin-top:3px">Você desligou essa chave em Cérebro → Chaves da análise. Religue e reanalise para voltar ao normal.</div></div>`;
+}
+
+// v1323 — O MATERIAL QUE A IA NÃO VIU, DITO NA TELA.
+//
+// O dono comparou a análise com a conversa e viu que as fotos, o PDF e os áudios daquele
+// atendimento continuavam marcados como "conteúdo não analisado". A análise estava certa no que
+// dava pra ver — só que ninguém avisava que faltava ver o resto. Agora a linha de prova diz, e diz
+// o que fazer: reexportar a conversa COM os arquivos e importar de novo.
+function cp1323MaterialNaoLido(a){
+  const m = (a && typeof a.materialNaoLido === "object" && a.materialNaoLido) ? a.materialNaoLido : null;
+  if(!m) return "";
+  const fotos = Number(m.imagens) || 0, docs = Number(m.documentos) || 0, audios = Number(m.audios) || 0;
+  if(fotos + docs + audios <= 0) return "";
+  const partes = [];
+  if(fotos) partes.push(`${fotos} ${pl(fotos, "foto", "fotos")}`);
+  if(docs) partes.push(`${docs} ${pl(docs, "PDF", "PDFs")}`);
+  if(audios) partes.push(`${audios} ${pl(audios, "áudio", "áudios")}`);
+  const lista = partes.length === 1 ? partes[0] : partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1];
+  return ` · <b style="color:var(--risco)">a IA não leu ${lista} desta conversa</b> (exporte a conversa no WhatsApp com <b>“Incluir mídia”</b> e importe de novo pra ela ler o material)`;
 }
 
 // v1304 — a porcentagem colorida da linha de prova: verde quando fechou 100%, vermelho quando

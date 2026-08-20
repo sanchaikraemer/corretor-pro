@@ -826,6 +826,19 @@ async function renderProcessedResult(data, meta){
 
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "mídia ficou oculta" : "mídias ficaram ocultas"} — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  // v1323 — FOTO E PDF QUE FICARAM DE FORA TAMBÉM PRECISAM APARECER AQUI.
+  //
+  // O aviso acima só existia pro caso da exportação sem mídia, e falava só dos áudios. Quando a
+  // conversa vinha com os nomes dos arquivos mas eles não eram lidos (teto do dia, arquivo que não
+  // veio no ZIP, conversa importada antes de o app saber ler imagem/PDF), a tela ficava muda: o
+  // corretor recebia a análise sem saber que a arte com o preço nunca tinha sido vista pela IA.
+  const naoLido = (analysis && typeof analysis.materialNaoLido === "object" && analysis.materialNaoLido) || null;
+  const fotosForaCount = Number(naoLido?.imagens) || 0;
+  const docsForaCount = Number(naoLido?.documentos) || 0;
+  const materialNaoLidoHtml = (!sm.exportadoSemMidia && (fotosForaCount + docsForaCount) > 0)
+    ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8"><b>⚠️ A IA não leu ${fotosForaCount ? `${fotosForaCount} ${fotosForaCount === 1 ? "foto" : "fotos"}` : ""}${fotosForaCount && docsForaCount ? " e " : ""}${docsForaCount ? `${docsForaCount} ${docsForaCount === 1 ? "PDF" : "PDFs"}` : ""} desta conversa.</b> O que estiver escrito neles (preço, planta, condição) ficou de fora da análise. Reexporte a conversa no WhatsApp com <b>"Incluir mídia"</b> e importe de novo pra IA ler esse material.</div>`
+    : "";
+
   // v1178 — ÁUDIO QUE NÃO VIROU TEXTO AGORA DIZ POR QUÊ.
   //
   // "ta louco cara? parou de transcrever os áudios?" (dono, 07/08/2026). O app tinha três motivos
@@ -933,7 +946,7 @@ async function renderProcessedResult(data, meta){
     // do que continua sendo ignorado (vídeo e o resto).
     `<b>Imagens/PDFs lidos:</b> ${data.visuaisLidos || 0} · <b>links lidos:</b> ${data.linksLidos || 0} · <b>arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
-    janelaHtml + corteZipHtml + semMidiaHtml + audioSemTextoHtml + incrementalHtml +
+    janelaHtml + corteZipHtml + semMidiaHtml + materialNaoLidoHtml + audioSemTextoHtml + incrementalHtml +
     `</div>` +
     cpPreviaCerebroHTML(analysis) +
     cpUpgradeProHTML(analysis) +

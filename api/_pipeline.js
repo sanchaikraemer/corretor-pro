@@ -1083,6 +1083,54 @@ export function perguntasJaFeitasPeloCorretor(timeline, corretorNome = "", lead 
     .slice(0, MAX_PERGUNTAS_FICHARIO);
 }
 
+// ─── 2-B. O QUE O CLIENTE JÁ DISSE (v1323) ───────────────────────────────────────────────────
+// A lista de perguntas do corretor (bloco 2) evita repetir PERGUNTA. Faltava o outro lado: o que o
+// CLIENTE já respondeu. Na conversa fixa, a cliente disse "3 terrenos lá numa esquina da ouro
+// preto" — e a sugestão de mensagem pediu "me manda a localização certinha deles". Pedir o que o
+// cliente já deu soa como quem não leu a conversa, e foi o dono quem pegou isso na tela.
+// Aqui não há interpretação nenhuma: é a fala dele, com a data, sem repetição.
+const MAX_FALAS_CLIENTE = 30;
+const FALA_SEM_CONTEUDO = /^(sim|n[ãa]o|ok|okay|certo|claro|obrigad[oa]|blz|beleza|isso|entendi|perfeito|boa noite|bom dia|boa tarde|oi|ol[áa])[\s.!]*$/i;
+
+export function falasJaDitasPeloCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const hojeDia = _hojeDiaCivil(agora);
+  const porChave = new Map();
+  for (const m of arr) {
+    if (!ehMensagemRealParaTempo(m)) continue;
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "cliente") continue;
+    let texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    // Marcador de arquivo não é fala; áudio transcrito é (o que vale é o que ele falou).
+    if (/^\[Arquivo enviado/.test(texto)) continue;
+    // Linha de anexo com o nome do arquivo ("PTT-...opus (arquivo anexado)") também não é fala:
+    // o que vale dela é a transcrição, que chega por outro caminho.
+    if (/\(arquivo anexado\)\s*$/i.test(texto)) continue;
+    if (/^\[[ÁA]udio(:| )/.test(texto) && !/^\[[ÁA]udio transcrito\]/.test(texto)) continue;
+    texto = texto.replace(/^\[[ÁA]udio transcrito\]\s*/, "").trim();
+    if (texto.length < 8 || FALA_SEM_CONTEUDO.test(texto)) continue;
+    const chave = _semAcentoMinuscula(texto).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    if (!chave) continue;
+    const p = dataCivilDeMensagem(m);
+    const anterior = porChave.get(chave);
+    if (anterior) {
+      anterior.vezes += 1;
+      if (p?.dia != null && (anterior.dia == null || p.dia > anterior.dia)) { anterior.dia = p.dia; anterior.ultimaData = p.texto; }
+      continue;
+    }
+    porChave.set(chave, {
+      texto: _trechoCurto(texto, 200),
+      vezes: 1,
+      dia: p?.dia ?? null,
+      ultimaData: p?.texto || "data não identificada"
+    });
+  }
+  return [...porChave.values()]
+    .map(f => ({ ...f, diasAtras: _diasDesde(f.dia, hojeDia) }))
+    .sort((a, b) => (a.diasAtras ?? Number.MAX_SAFE_INTEGER) - (b.diasAtras ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, MAX_FALAS_CLIENTE);
+}
+
 // ─── 3. QUE PRÓXIMO PASSO O CORRETOR JÁ PROPÔS ───────────────────────────────────────────────
 // Visita, café, reunião, apresentação. Quando o mesmo convite já foi feito quatro vezes e a
 // conversa seguiu sem ele, propor o quinto igual não é próximo passo.
@@ -1126,6 +1174,7 @@ export function permutaOferecidaPeloCliente(timeline, corretorNome = "", lead = 
   const hojeDia = _hojeDiaCivil(agora);
   const falasDoCliente = [];
   const percentuais = new Set();
+  const valoresDoCorretor = [];
   let valorDaEntrada = null;
   let valorComoEscrito = "";
 
@@ -1161,6 +1210,14 @@ export function permutaOferecidaPeloCliente(timeline, corretorNome = "", lead = 
       }
     }
 
+    // v1323 — todo valor que o CORRETOR já disse, com data: é com ele que se compara a faixa
+    // calculada mais abaixo (ver "âncora"). Nada é criado aqui, só anotado.
+    if (lado === "corretor") {
+      for (const v of valoresNaMensagem(texto)) {
+        valoresDoCorretor.push({ valor: v, dia: p?.dia ?? null, data: p?.texto || "data não identificada", trecho: _trechoCurto(texto, 150) });
+      }
+    }
+
     // A regra de porcentagem é do corretor, dita nesta conversa. O app não tem regra própria.
     if (lado === "corretor" && /\b(permut|troca|entrada|volta)\w*/i.test(texto)) {
       PERCENTUAL_FAIXA.lastIndex = 0;
@@ -1191,7 +1248,40 @@ export function permutaOferecidaPeloCliente(timeline, corretorNome = "", lead = 
       maiorPct
     };
   }
-  return { falasDoCliente, percentuais: pcts, valorDaEntrada, valorComoEscrito, faixaCompra };
+  // v1323 — A ÂNCORA: o valor de compra que o PRÓPRIO CORRETOR já colocou na mesa dentro dessa
+  // faixa. Na conversa fixa ele disse "o valor da compra teria que ser em torno de 800mil" — e a
+  // sugestão do app devolveu ao cliente "faixa de R$ 720 a R$ 900 mil", reabrindo um número ABAIXO
+  // do que ele mesmo tinha ancorado no dia anterior. Valor de outro produto (o do anúncio, por
+  // exemplo) fica de fora sozinho: só entra o que cai dentro da faixa calculada.
+  let ancora = null;
+  if (faixaCompra) {
+    const dentro = valoresDoCorretor
+      .filter(v => v.valor >= faixaCompra.de && v.valor <= faixaCompra.ate)
+      .sort((a, b) => (a.dia ?? -1) - (b.dia ?? -1));
+    const escolhida = dentro.length ? dentro[dentro.length - 1] : null;
+    ancora = escolhida ? { ...escolhida, diasAtras: _diasDesde(escolhida.dia, hojeDia) } : null;
+  }
+  return { falasDoCliente, percentuais: pcts, valorDaEntrada, valorComoEscrito, faixaCompra, ancora };
+}
+
+// ─── O MATERIAL QUE FICOU DE FORA DESTA ANÁLISE (v1323) ──────────────────────────────────────
+// Foto e PDF passaram a ser lidos na v1306; áudio é transcrito desde sempre. Mas quando o arquivo
+// não vem no ZIP (exportação sem mídia), quando o teto do dia já estourou ou quando a conversa
+// entrou no app antes dessas leituras existirem, a linha continua na conversa como "conteúdo não
+// analisado pela IA" — e nada na tela dizia isso. O corretor lia a análise achando que a IA tinha
+// visto a arte com o preço, e ela não tinha visto nada. Vídeo fica fora da conta de propósito:
+// ele nunca é lido, por decisão do dono, então não é surpresa nenhuma.
+export function contarMaterialNaoLido(timeline) {
+  let imagens = 0, documentos = 0, audios = 0;
+  for (const m of (Array.isArray(timeline) ? timeline : [])) {
+    const t = String(m?.text || "");
+    if (/imagem — conteúdo não analisado/i.test(t)) imagens += 1;
+    else if (/documento\/PDF — conteúdo não analisado/i.test(t)) documentos += 1;
+    else if (/[áa]udio — conteúdo não analisado/i.test(t)
+      || /\.opus \(arquivo anexado\)/i.test(t)
+      || /^\[[ÁA]udio:\s/.test(t)) audios += 1;
+  }
+  return { imagens, documentos, audios, total: imagens + documentos + audios };
 }
 
 // ─── O FICHÁRIO INTEIRO, JÁ EM TEXTO PRO PEDIDO ──────────────────────────────────────────────
@@ -1220,6 +1310,17 @@ ${linhas.join("\n")}
 Antes de escrever uma pergunta, confira esta lista. Se a resposta já está na conversa, não pergunte de novo. Se a pergunta continua sem resposta e ainda é a mais importante, reconheça que já perguntou em vez de perguntar do zero — e considere se não há um caminho melhor que insistir na mesma pergunta.`);
   }
 
+  const falasCliente = falasJaDitasPeloCliente(timeline, corretorNome, lead, agora);
+  if (falasCliente.length) {
+    const linhas = falasCliente.map(f => {
+      const repetida = f.vezes > 1 ? ` — repetida ${f.vezes}x` : "";
+      return `- "${f.texto}" (${f.ultimaData}, ${_haQuantoTempo(f.diasAtras)})${repetida}`;
+    });
+    blocos.push(`O QUE O CLIENTE JÁ DISSE NESTA CONVERSA (a fala dele, copiada do texto pelo app):
+${linhas.join("\n")}
+Antes de PEDIR qualquer informação ao cliente, confira esta lista. O que ele já disse não se pede de novo: parta do que ele disse e peça só o que falta de verdade (o detalhe, o documento, a confirmação). Pedir de volta o que já está escrito acima é a coisa que mais parece que ninguém leu a conversa.`);
+  }
+
   const passos = proximosPassosJaPropostos(timeline, corretorNome, lead, agora);
   if (passos.length) {
     const linhas = passos.map(p => `- ${p.data} (${_haQuantoTempo(p.diasAtras)}): "${p.trecho}"`);
@@ -1237,6 +1338,10 @@ ${linhas.join("\n")}`];
     if (permuta.percentuais.length) partes.push(`Porcentagens de permuta ditas PELO CORRETOR nesta conversa: ${permuta.percentuais.map(p => `${p}%`).join(", ")}.`);
     if (permuta.faixaCompra) {
       partes.push(`FAIXA DE COMPRA QUE ESSA ENTRADA ABRE, pela regra dita nesta conversa: de ${_reaisBR(permuta.faixaCompra.de)} a ${_reaisBR(permuta.faixaCompra.ate)} (a entrada cobrindo de ${permuta.faixaCompra.maiorPct}% a ${permuta.faixaCompra.menorPct}% da compra). Conta de aritmética feita pelo app sobre o que está escrito; não é proposta nem avaliação, e nada disso está fechado.`);
+    }
+    if (permuta.ancora) {
+      partes.push(`VALOR QUE O PRÓPRIO CORRETOR JÁ COLOCOU NA MESA, DENTRO DESSA FAIXA: ${_reaisBR(permuta.ancora.valor)}, em ${permuta.ancora.data} (${_haQuantoTempo(permuta.ancora.diasAtras ?? null)}). Trecho: "${permuta.ancora.trecho}".
+Essa é a referência que já está na conversa. Ao falar com o cliente, não apresente número ABAIXO dela sem que a própria conversa dê motivo (o cliente pediu opção menor, a condição mudou, o valor era de outro produto): repetir a ponta de baixo da faixa derruba o que o corretor já ancorou, e ele perde sem ganhar nada. A faixa acima é conta interna pra pensar — não é o número pra colar na mensagem.`);
     }
     partes.push(`ISTO MUDA O PODER DE COMPRA DO CLIENTE. O produto pelo qual ele entrou (anúncio, primeiro contato) pode não ter nada a ver com a faixa que essa entrada abre. Antes de seguir conduzindo pelo produto de entrada, verifique na própria conversa se a faixa nova já foi tratada — e se produtos dessa faixa já apareceram antes no histórico.`);
     blocos.push(partes.join("\n"));
@@ -4651,6 +4756,9 @@ Antes de devolver o JSON, confirme:
       // entrou nesta análise. É transparência, não regra de análise — por isso não voltou atrás.
       cerebroEnviado: cerebroNoPedido ? contarCerebroEnviado(configCerebro) : { total: 0, percentual: 0 },
       aprendizadoEnviado: contarAprendizadoEnviado({ jeitoAprendido, exemplosVozCorretor }),
+      // v1323 — a mesma prova de sempre, agora pro material: quantas fotos/PDFs/áudios desta
+      // conversa NÃO viraram texto e portanto não entraram na leitura da IA.
+      materialNaoLido: contarMaterialNaoLido(timelineArr),
       conversaLidaPelaIA: entradaIncremental
         ? { modo: "resumo+novidade", mensagensEnviadas: entradaIncremental.enviadas, mensagensResumidas: entradaIncremental.poupadas, mensagensNovas: entradaIncremental.novas }
         : cortadaPorLimiteTecnico
@@ -5177,12 +5285,148 @@ export function linkPodeSerLido(url) {
   let u;
   try { u = new URL(String(url || "")); } catch (_) { return false; }
   if (u.protocol !== "https:") return false;
-  const host = u.hostname.toLowerCase();
-  if (!host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return false;
+  if (u.username || u.password) return false;
+  if (u.port && u.port !== "443") return false;
+  const host = u.hostname.toLowerCase().replace(/\.$/, "");
+  if (!host || host === "localhost" || host.endsWith(".localhost")) return false;
+  if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".home.arpa")) return false;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;
   if (/^\[?[0-9a-f:]+\]?$/i.test(host) && host.includes(":")) return false;
   if (!host.includes(".")) return false;
   return true;
+}
+
+// v1322 — AS TRÊS BRECHAS QUE A AUDITORIA ACHOU NA LEITURA DE LINK.
+//
+// O endereço era conferido uma vez, no começo, e depois o servidor mandava buscar com
+// `redirect: "follow"` e lia a resposta inteira. Sobravam três caminhos abertos:
+//   1) um site público podia responder "vá para outro endereço" e esse destino NÃO era conferido —
+//      dava pra empurrar o servidor pra dentro da rede interna por desvio;
+//   2) um domínio de aparência normal podia APONTAR (no DNS) para um endereço interno — a checagem
+//      antiga só olhava o nome escrito, nunca para onde ele levava;
+//   3) o teto de 700 KB só era aplicado DEPOIS de a página inteira ter sido baixada, e o relógio de
+//      9 segundos era desligado antes de o corpo terminar de chegar.
+// Agora a leitura passa por um caminho só: resolve o nome, recusa endereço privado/reservado, segue
+// redirecionamento na mão conferindo CADA parada, e baixa em pedaços cortando no teto — com o
+// relógio valendo até o último byte.
+const MAX_REDIRECIONAMENTOS_LINK = 3;
+
+// Endereço numérico que nunca pode ser alvo: rede local, loopback, link-local, multicast, reservado.
+export function ipEhPrivadoOuReservado(ip) {
+  const texto = String(ip || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!texto) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(texto)) {
+    const [a, b] = texto.split(".").map(Number);
+    if ([a, b].some(n => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+    if (a === 0 || a === 10 || a === 127) return true;                       // este host, rede privada, loopback
+    if (a === 100 && b >= 64 && b <= 127) return true;                       // CGNAT
+    if (a === 169 && b === 254) return true;                                 // link-local (metadados de nuvem)
+    if (a === 172 && b >= 16 && b <= 31) return true;                        // rede privada
+    if (a === 192 && (b === 168 || b === 0 || b === 88)) return true;        // rede privada e faixas especiais
+    if (a === 198 && (b === 18 || b === 19 || b === 51)) return true;        // teste de banca e documentação
+    if (a === 203 && b === 0) return true;                                   // documentação
+    if (a >= 224) return true;                                               // multicast e reservado
+    return false;
+  }
+  if (texto.includes(":")) {
+    const mapeado = texto.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+    if (mapeado) return ipEhPrivadoOuReservado(mapeado[1]);
+    if (texto === "::" || texto === "::1") return true;                      // indefinido e loopback
+    if (/^f[cd][0-9a-f]{2}:/.test(texto)) return true;                       // rede local única (fc00::/7)
+    if (/^fe[89ab][0-9a-f]:/.test(texto)) return true;                       // link-local (fe80::/10)
+    if (/^ff[0-9a-f]{2}:/.test(texto)) return true;                          // multicast
+    if (/^(64:ff9b|2002):/.test(texto)) return true;                         // NAT64 e 6to4
+    return false;
+  }
+  return true;
+}
+
+// Pra onde esse nome leva de verdade. Devolve true quando leva (ou pode levar) pra rede interna —
+// inclusive quando o nome não resolve, porque aí não dá pra garantir nada e o certo é não abrir.
+export async function hostApontaPraRedePrivada(host, lookupImpl = null) {
+  const nome = String(host || "").trim().toLowerCase();
+  if (!nome) return true;
+  let procurar = lookupImpl;
+  if (!procurar) {
+    try {
+      const dns = await import("node:dns/promises");
+      procurar = (h) => dns.lookup(h, { all: true, verbatim: true });
+    } catch (_) { return true; }
+  }
+  let enderecos;
+  try { enderecos = await procurar(nome); } catch (_) { return true; }
+  const lista = (Array.isArray(enderecos) ? enderecos : [enderecos])
+    .map(e => (typeof e === "string" ? e : e?.address))
+    .filter(Boolean);
+  if (!lista.length) return true;
+  return lista.some(ipEhPrivadoOuReservado);
+}
+
+// Baixa o corpo em pedaços e para no teto — nunca guarda a página inteira antes de cortar.
+async function lerCorpoComTeto(resposta, teto = MAX_BYTES_PAGINA) {
+  const corpo = resposta?.body;
+  if (!corpo || typeof corpo.getReader !== "function") {
+    // Resposta sem fluxo (mocks de teste): mesmo assim nada acima do teto passa adiante.
+    return String(await resposta.text() || "").slice(0, teto);
+  }
+  const leitor = corpo.getReader();
+  const decodificador = new TextDecoder("utf-8");
+  let texto = "";
+  let bytes = 0;
+  try {
+    while (bytes < teto) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      bytes += value?.byteLength || value?.length || 0;
+      texto += decodificador.decode(value, { stream: true });
+    }
+  } finally {
+    try { await leitor.cancel(); } catch (_) {}
+  }
+  return texto.slice(0, teto);
+}
+
+// A ÚNICA porta por onde o servidor abre um endereço de fora. Devolve { status, html }; nunca
+// lança, nunca segue redirecionamento sem conferir, nunca baixa mais que o teto.
+export async function baixarPaginaComSeguranca(url, { fetchImpl = null, lookupImpl = null, timeoutMs = 9000 } = {}) {
+  const buscar = fetchImpl || globalThis.fetch;
+  const controller = new AbortController();
+  const corte = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let atual = String(url || "");
+    for (let salto = 0; salto <= MAX_REDIRECIONAMENTOS_LINK; salto++) {
+      if (!linkPodeSerLido(atual)) return { status: "endereco_bloqueado", html: "" };
+      const alvo = new URL(atual);
+      if (await hostApontaPraRedePrivada(alvo.hostname, lookupImpl)) {
+        return { status: "endereco_bloqueado", html: "" };
+      }
+      const resposta = await buscar(atual, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: { "user-agent": "CorretorPro/1 (leitura de material enviado pelo corretor)", accept: "text/html,text/plain" }
+      });
+      const codigo = Number(resposta?.status || 0);
+      if (codigo >= 300 && codigo < 400) {
+        const destino = resposta?.headers?.get?.("location");
+        if (!destino) return { status: `pagina_respondeu_${codigo}`, html: "" };
+        let proximo;
+        try { proximo = new URL(String(destino), atual).toString(); } catch (_) { return { status: "endereco_bloqueado", html: "" }; }
+        atual = proximo;
+        continue;
+      }
+      if (!resposta?.ok) return { status: `pagina_respondeu_${codigo || "erro"}`, html: "" };
+      const tipo = String(resposta.headers?.get?.("content-type") || "").toLowerCase();
+      if (tipo && !/text\/html|text\/plain|application\/xhtml/.test(tipo)) return { status: "pagina_nao_e_texto", html: "" };
+      const anunciado = Number(resposta.headers?.get?.("content-length") || 0);
+      if (anunciado > MAX_BYTES_PAGINA) return { status: "pagina_grande_demais", html: "" };
+      return { status: "ok", html: await lerCorpoComTeto(resposta, MAX_BYTES_PAGINA) };
+    }
+    return { status: "redirecionou_demais", html: "" };
+  } catch (error) {
+    return { status: "erro_leitura", html: "", error: describeOpenAIError(error) };
+  } finally {
+    clearTimeout(corte);
+  }
 }
 
 // Os links mandados pelo corretor, do mais recente pro mais antigo, sem repetir.
@@ -5228,7 +5472,7 @@ const PEDIDO_LEITURA_LINK = [
 
 // Lê os links escolhidos. Devolve { url: { status, text } }. Nunca lança: erro vira status e a
 // importação segue exatamente como seguia antes desta versão.
-export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO_PADRAO_LEGADA, { deadlineTs = 0, openai = null, fetchImpl = null } = {}) {
+export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO_PADRAO_LEGADA, { deadlineTs = 0, openai = null, fetchImpl = null, lookupImpl = null } = {}) {
   const oa = openai || getOpenAI();
   const leituras = {};
   const lista = (Array.isArray(urls) ? urls : []).filter(linkPodeSerLido);
@@ -5237,21 +5481,9 @@ export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO
   for (const url of lista) {
     if (deadlineTs && Date.now() > deadlineTs) { leituras[url] = { status: "sem_tempo_nesta_importacao", text: "" }; continue; }
     try {
-      const controller = new AbortController();
-      const corte = setTimeout(() => controller.abort(), 9000);
-      let resposta;
-      try {
-        resposta = await buscar(url, {
-          redirect: "follow",
-          signal: controller.signal,
-          headers: { "user-agent": "CorretorPro/1 (leitura de material enviado pelo corretor)", accept: "text/html,text/plain" }
-        });
-      } finally { clearTimeout(corte); }
-      if (!resposta?.ok) { leituras[url] = { status: `pagina_respondeu_${resposta?.status || "erro"}`, text: "" }; continue; }
-      const tipo = String(resposta.headers?.get?.("content-type") || "").toLowerCase();
-      if (tipo && !/text\/html|text\/plain|application\/xhtml/.test(tipo)) { leituras[url] = { status: "pagina_nao_e_texto", text: "" }; continue; }
-      const html = String(await resposta.text() || "").slice(0, MAX_BYTES_PAGINA);
-      const texto = textoVisivelDaPagina(html).slice(0, 6000);
+      const baixada = await baixarPaginaComSeguranca(url, { fetchImpl: buscar, lookupImpl });
+      if (baixada.status !== "ok") { leituras[url] = { status: baixada.status, text: "" }; continue; }
+      const texto = textoVisivelDaPagina(baixada.html).slice(0, 6000);
       if (texto.length < MIN_CHARS_PAGINA_UTIL) {
         // Página montada por JavaScript: a leitura simples só enxerga a casca. Fica registrado
         // como não lido — e nada é inventado no lugar.
