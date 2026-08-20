@@ -1131,6 +1131,137 @@ export function falasJaDitasPeloCliente(timeline, corretorNome = "", lead = {}, 
     .slice(0, MAX_FALAS_CLIENTE);
 }
 
+// ─── 2-B. A PERGUNTA QUE FICOU NO AR ─────────────────────────────────────────────────────────
+// v1329 — o buraco que apareceu na conversa fixa do projeto, e que nem o app nem a leitura feita à
+// mão pegaram: o corretor perguntou se o cliente pretendia FINANCIAR O SALDO, o cliente respondeu
+// sobre o bem que ofereceu em troca e passou por cima da pergunta. Era A pergunta que decide se a
+// compra existe (a permuta cobre parte; o resto ninguém sabe de onde vem), e nenhuma das três
+// sugestões tocou nela.
+//
+// A lista de PERGUNTAS JÁ FEITAS (bloco 2) impede repetir. Esta aqui é o contrário: mostra a
+// pergunta que PRECISA voltar, porque nunca foi respondida. Repetir pergunta respondida é o pecado
+// de um lado; deixar morrer a pergunta que decide é o pecado do outro.
+//
+// Como o app decide que ficou sem resposta — tudo conta sobre o texto, nenhum palpite:
+//   • olha só as falas do CLIENTE depois da pergunta;
+//   • se a primeira delas é um sim/não curto ("Sim", "Não temos pressa", "Pode ser"), a pergunta
+//     conta como respondida;
+//   • senão, procura nas falas dele qualquer palavra de conteúdo da pergunta ("financiar",
+//     "saldo", "morar", "investir"). Achou o assunto, conta como tocada;
+//   • não achou nada disso, entra na lista.
+// É uma conferência de assunto, não de mérito: por isso o texto do fichário diz que o app NÃO
+// ACHOU resposta, e não que o cliente "se recusou a responder".
+const MAX_PERGUNTAS_SEM_RESPOSTA = 5;
+// Só entra na lista a pergunta que DECIDE o atendimento. Sem este filtro a lista enchia de
+// "o que você gostaria de ver primeiro?" e "teria alguma observação a fazer?", e a pergunta que
+// vale (o saldo, a faixa, o prazo) afundava no meio. As palavras abaixo são as que mudam a
+// condução de uma venda de imóvel — não têm preço, produto nem nome de empreendimento dentro.
+const _PALAVRA_QUE_DECIDE = new Set([
+  "financiar", "financiamento", "financia", "saldo", "entrada", "permuta", "permutar", "troca",
+  "avaliar", "avaliacao", "valor", "valores", "faixa", "investimento", "investir", "morar",
+  "prazo", "entrega", "pronto", "planta", "tamanho", "metragem", "metros", "quarto", "quartos",
+  "dormitorio", "dormitorios", "banheiro", "banheiros", "suite", "suites", "garagem", "regiao",
+  "bairro", "centro", "localizacao", "visita", "visitar", "decisao", "decidir", "esposa",
+  "marido", "familia", "orcamento", "parcela", "parcelas", "sinal", "fgts", "credito"
+]);
+const _RESPOSTA_CURTA_DO_CLIENTE = /^(sim|nao|n[aã]o|isso|claro|certo|ok|beleza|perfeito|pode ser|podemos|combinado|talvez|acho que|prefiro|quero|ainda n[aã]o|por enquanto n[aã]o)\b/i;
+const _PALAVRA_SEM_PESO = new Set([
+  "para", "pra", "pro", "com", "sem", "que", "qual", "quais", "quanto", "quantos", "quantas", "como",
+  "onde", "quando", "porque", "voce", "voces", "senhor", "senhora", "seu", "sua", "seus", "suas",
+  "meu", "minha", "nos", "eles", "elas", "isso", "esse", "essa", "este", "esta", "aquele", "aquela",
+  "tem", "temos", "seria", "sera", "esta", "estao", "fica", "ficar", "poderia", "posso", "pode",
+  "podemos", "gostaria", "quer", "queria", "vamos", "fazer", "melhor", "certo", "algum", "alguma",
+  "mais", "menos", "muito", "pouco", "hoje", "agora", "ainda", "sobre", "entao", "aqui", "ali",
+  "bom", "boa", "dia", "tarde", "noite", "obrigado", "favor", "conta", "caso", "coisa", "gente",
+  "dele", "dela", "deles", "delas", "pelo", "pela", "dos", "das", "nas", "nos", "por", "uma", "uns"
+]);
+
+function _palavrasDeConteudo(texto) {
+  const limpo = _semAcentoMinuscula(texto).replace(/[^a-z0-9\s]/g, " ");
+  const fora = new Set();
+  for (const palavra of limpo.split(/\s+/)) {
+    if (palavra.length < 4) continue;
+    if (_PALAVRA_SEM_PESO.has(palavra)) continue;
+    fora.add(palavra);
+  }
+  return fora;
+}
+
+function _pesoDeDecisao(texto) {
+  let peso = 0;
+  for (const palavra of _palavrasDeConteudo(texto)) if (_PALAVRA_QUE_DECIDE.has(palavra)) peso += 1;
+  return peso;
+}
+
+export function perguntasSemRespostaDoCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const lados = arr.map(m => _ladoDaMensagem(m, corretorNome, lead));
+  const porChave = new Map();
+
+  for (let i = 0; i < arr.length; i++) {
+    if (lados[i] !== "corretor") continue;
+    const texto = String(arr[i]?.text || "").trim();
+    if (!texto.includes("?")) continue;
+
+    // As falas do cliente DEPOIS desta mensagem — é onde a resposta estaria.
+    const depois = [];
+    for (let j = i + 1; j < arr.length; j++) {
+      if (lados[j] === "cliente") depois.push(String(arr[j]?.text || "").trim());
+    }
+    const primeira = depois[0] || "";
+    const respondeuCurto = !!primeira && _RESPOSTA_CURTA_DO_CLIENTE.test(primeira);
+    const falaDoCliente = depois.join(" \n ");
+    const p = dataCivilDeMensagem(arr[i]);
+
+    for (const bruta of texto.split(/(?<=[.!?])\s+|\n+/)) {
+      const pergunta = String(bruta || "").trim();
+      if (!pergunta.endsWith("?")) continue;
+      const limpa = pergunta.replace(/^[^A-Za-zÀ-ÿ0-9]+/, "").trim();
+      if (limpa.length < 14) continue;
+      const nucleo = limpa
+        .replace(/^(bom dia|boa tarde|boa noite|ol[áa]|oi|opa|e a[íi])\b[\s,!.]*/i, "")
+        .replace(/^\p{Lu}[\p{L}'-]*[\s,]+/u, "")
+        .trim();
+      if (!nucleo || PERGUNTA_DE_CORTESIA.test(nucleo)) continue;
+      // Convite pra visita/café já tem bloco próprio (o 3). Aqui é pergunta de informação.
+      if (CONVITE_DO_CORRETOR.test(limpa)) continue;
+
+      const chave = _semAcentoMinuscula(limpa).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      if (!chave) continue;
+      if (!depois.length) continue; // o cliente não falou mais nada: é silêncio, não pergunta sem resposta
+
+      let respondida = respondeuCurto;
+      if (!respondida) {
+        const chaves = _palavrasDeConteudo(limpa);
+        if (!chaves.size) respondida = true; // sem palavra de conteúdo, não dá pra conferir: não acusa
+        else {
+          const ditoPeloCliente = _palavrasDeConteudo(falaDoCliente);
+          for (const palavra of chaves) {
+            if (ditoPeloCliente.has(palavra)) { respondida = true; break; }
+          }
+        }
+      }
+
+      const anterior = porChave.get(chave);
+      if (respondida) { porChave.delete(chave); continue; }
+      if (anterior && (anterior.dia ?? -1) >= (p?.dia ?? -1)) { anterior.vezes += 1; continue; }
+      porChave.set(chave, {
+        texto: _trechoCurto(limpa, 160),
+        vezes: (anterior?.vezes || 0) + 1,
+        dia: p?.dia ?? null,
+        data: p?.texto || "data não identificada"
+      });
+    }
+  }
+
+  return [...porChave.values()]
+    .map(q => ({ ...q, diasAtras: _diasDesde(q.dia, hojeDia), peso: _pesoDeDecisao(q.texto) }))
+    .filter(q => q.peso > 0)
+    .sort((a, b) => (b.peso - a.peso) || ((a.diasAtras ?? Number.MAX_SAFE_INTEGER) - (b.diasAtras ?? Number.MAX_SAFE_INTEGER)))
+    .slice(0, MAX_PERGUNTAS_SEM_RESPOSTA);
+}
+
 // ─── 3. QUE PRÓXIMO PASSO O CORRETOR JÁ PROPÔS ───────────────────────────────────────────────
 // Visita, café, reunião, apresentação. Quando o mesmo convite já foi feito quatro vezes e a
 // conversa seguiu sem ele, propor o quinto igual não é próximo passo.
@@ -1154,6 +1285,100 @@ export function proximosPassosJaPropostos(timeline, corretorNome = "", lead = {}
     });
   }
   return achados.slice(-MAX_FICHARIO);
+}
+
+// ─── 3-B. O QUE O CLIENTE RECUSOU, E POR QUE MOTIVO ──────────────────────────────────────────
+// v1329 — o erro que o dono flagrou na tela de 20/08: a sugestão voltou no apartamento de 43 m²,
+// que a cliente tinha descartado por TAMANHO ("muito pequeno"), porque a faixa de preço dela
+// tinha mudado. Preço não era o motivo — então a faixa mudar não devolve o produto.
+// Aqui o app anota a recusa COM O MOTIVO, na fala do cliente, e o que estava em discussão na hora.
+const _MOTIVO_DE_RECUSA = [
+  { motivo: "TAMANHO", re: /\b(pequen\w+|apertad\w+|min[úu]scul\w+)\b/i },
+  { motivo: "PREÇO", re: /\b(caro|car[íi]ssim\w+|acima do (meu|nosso|que)|fora do (or[çc]amento|meu alcance)|n[ãa]o cabe no (meu|nosso)|sem condi[çc][õo]es de pagar)\b/i },
+  { motivo: "LOCALIZAÇÃO", re: /\b(longe|afastad\w+|outro bairro|n[ãa]o gosto (do|da|dessa|desse)\s*(bairro|regi[ãa]o|local|localiza[çc][ãa]o)?)\b/i },
+  { motivo: "PRAZO", re: /\b(demora|demorad\w+|muito tempo|n[ãa]o posso esperar|s[óo] em \d{4})\b/i },
+  { motivo: "POSIÇÃO", re: /\b(fundos|escur\w+|sem sol|andar baixo|barulh\w+)\b/i }
+];
+
+export function recusasDoCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const lados = arr.map(m => _ladoDaMensagem(m, corretorNome, lead));
+  const achados = [];
+  for (let i = 0; i < arr.length; i++) {
+    if (lados[i] !== "cliente") continue;
+    const texto = String(arr[i]?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    const casada = _MOTIVO_DE_RECUSA.find(m => m.re.test(texto));
+    if (!casada) continue;
+    // O que estava na mesa: a última fala do corretor antes disso, e o último valor citado.
+    let emDiscussao = "";
+    let valorEmJogo = null;
+    for (let j = i - 1; j >= 0 && j >= i - 12; j--) {
+      const anterior = String(arr[j]?.text || "").replace(/\s+/g, " ").trim();
+      if (!anterior) continue;
+      if (!emDiscussao && lados[j] === "corretor") emDiscussao = _trechoCurto(anterior, 120);
+      if (valorEmJogo == null) {
+        const valores = valoresNaMensagem(anterior);
+        if (valores.length) valorEmJogo = Math.max(...valores);
+      }
+      if (emDiscussao && valorEmJogo != null) break;
+    }
+    const p = dataCivilDeMensagem(arr[i]);
+    achados.push({
+      motivo: casada.motivo,
+      data: p?.texto || "data não identificada",
+      diasAtras: _diasDesde(p?.dia ?? null, hojeDia),
+      fala: _trechoCurto(texto, 140),
+      emDiscussao,
+      valorEmJogo
+    });
+  }
+  return achados.slice(-MAX_FICHARIO);
+}
+
+// ─── 3-C. O QUE O CORRETOR PROMETEU E NÃO ENTREGOU ───────────────────────────────────────────
+// v1329 — a sugestão de 20/08 inventou uma pendência ("ficou pendente eu te confirmar os 2
+// banheiros") que nunca existiu, enquanto a pendência REAL passava batida: em 29/06 o corretor
+// escreveu "Posso te enviar o valor, as fotos e as condições de pagamento?" e o valor nunca foi.
+// A cliente sumiu ali mesmo. Cliente que pede informação e não recebe some.
+const _PROMESSA_DO_CORRETOR = /\b(te (envio|mando|passo|encaminho)|vou (te )?(enviar|mandar|passar|confirmar|conferir|verificar|checar)|posso te (enviar|mandar|passar)|j[áa] te (envio|mando|passo)|te (envio|mando|passo) (o|a|os|as)\b)/i;
+const _DIAS_PARA_CUMPRIR_PROMESSA = 3;
+
+function _pareceEntrega(texto) {
+  const t = String(texto || "");
+  if (/\[(Arquivo enviado|Imagem lida|Documento lido|Link lido|Áudio transcrito)/i.test(t)) return true;
+  if (/\(arquivo anexado\)/i.test(t)) return true;
+  if (/https?:\/\//i.test(t)) return true;
+  return valoresNaMensagem(t).length > 0;
+}
+
+export function promessasNaoCumpridasDoCorretor(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const lados = arr.map(m => _ladoDaMensagem(m, corretorNome, lead));
+  const abertas = [];
+  for (let i = 0; i < arr.length; i++) {
+    if (lados[i] !== "corretor") continue;
+    const texto = String(arr[i]?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || !_PROMESSA_DO_CORRETOR.test(texto)) continue;
+    const p = dataCivilDeMensagem(arr[i]);
+    const diaPromessa = p?.dia ?? null;
+    let cumprida = false;
+    for (let j = i + 1; j < arr.length; j++) {
+      if (lados[j] !== "corretor") continue;
+      const dj = dataCivilDeMensagem(arr[j])?.dia ?? null;
+      if (diaPromessa != null && dj != null && dj - diaPromessa > _DIAS_PARA_CUMPRIR_PROMESSA) break;
+      if (_pareceEntrega(String(arr[j]?.text || ""))) { cumprida = true; break; }
+    }
+    if (cumprida) continue;
+    abertas.push({
+      data: p?.texto || "data não identificada",
+      diasAtras: _diasDesde(diaPromessa, hojeDia),
+      trecho: _trechoCurto(texto, 160)
+    });
+  }
+  return abertas.slice(-MAX_FICHARIO);
 }
 
 // ─── 4. A ENTRADA QUE NÃO É DINHEIRO — E A FAIXA DE COMPRA QUE ELA ABRE ───────────────────────
@@ -1321,12 +1546,40 @@ ${linhas.join("\n")}
 Antes de PEDIR qualquer informação ao cliente, confira esta lista. O que ele já disse não se pede de novo: parta do que ele disse e peça só o que falta de verdade (o detalhe, o documento, a confirmação). Pedir de volta o que já está escrito acima é a coisa que mais parece que ninguém leu a conversa.`);
   }
 
+  const semResposta = perguntasSemRespostaDoCliente(timeline, corretorNome, lead, agora);
+  if (semResposta.length) {
+    const linhas = semResposta.map(q => `- "${q.texto}" (perguntada em ${q.data}, ${_haQuantoTempo(q.diasAtras)})`);
+    blocos.push(`PERGUNTAS DO CORRETOR QUE O CLIENTE NUNCA RESPONDEU (o app procurou o assunto nas falas do cliente depois da pergunta e não achou):
+${linhas.join("\n")}
+Estas são o contrário da lista de cima: aqui não é repetição, é buraco. Uma pergunta em aberto que ainda decide o atendimento (de onde vem o dinheiro, qual a faixa, morar ou investir, que prazo serve) vale mais do que inventar uma pergunta nova — sem a resposta dela o próximo passo é chute. Escolha a que ainda decide hoje, retome-a de forma natural, e ignore as que o tempo já respondeu. O app confere assunto, não intenção: o cliente pode ter respondido com outras palavras.`);
+  }
+
   const passos = proximosPassosJaPropostos(timeline, corretorNome, lead, agora);
   if (passos.length) {
     const linhas = passos.map(p => `- ${p.data} (${_haQuantoTempo(p.diasAtras)}): "${p.trecho}"`);
     blocos.push(`PRÓXIMOS PASSOS (visita, café, reunião, apresentação) QUE O CORRETOR JÁ PROPÔS NESTA CONVERSA: ${passos.length}.
 ${linhas.join("\n")}
 Se o mesmo passo já foi proposto várias vezes e a conversa seguiu sem ele, propor de novo do mesmo jeito tende a repetir o mesmo resultado. Isso não proíbe insistir — obriga a decidir com esse fato na mão.`);
+  }
+
+  const recusas = recusasDoCliente(timeline, corretorNome, lead, agora);
+  if (recusas.length) {
+    const linhas = recusas.map(r => {
+      const naMesa = r.emDiscussao ? ` Na hora se falava de: "${r.emDiscussao}".` : "";
+      const valor = r.valorEmJogo != null ? ` Valor em jogo naquele momento: ${_reaisBR(r.valorEmJogo)}.` : "";
+      return `- ${r.data} (${_haQuantoTempo(r.diasAtras)}) — MOTIVO: ${r.motivo}. O cliente disse: "${r.fala}".${naMesa}${valor}`;
+    });
+    blocos.push(`O QUE O CLIENTE RECUSOU, E POR QUE MOTIVO (lido da fala dele):
+${linhas.join("\n")}
+O motivo manda. Produto recusado por TAMANHO não volta porque a faixa de preço mudou; produto recusado por PREÇO pode voltar quando a faixa muda; recusado por LOCALIZAÇÃO, PRAZO ou POSIÇÃO só volta se aquilo mudou. Trazer de volta o que foi recusado, sem que o motivo tenha mudado, é o erro que faz o cliente sentir que ninguém escutou.`);
+  }
+
+  const promessas = promessasNaoCumpridasDoCorretor(timeline, corretorNome, lead, agora);
+  if (promessas.length) {
+    const linhas = promessas.map(q => `- ${q.data} (${_haQuantoTempo(q.diasAtras)}): "${q.trecho}"`);
+    blocos.push(`O QUE O CORRETOR DISSE QUE IA ENVIAR E NÃO APARECE ENVIADO NESTA CONVERSA:
+${linhas.join("\n")}
+Esta é a pendência REAL do atendimento — e costuma ser o motivo do silêncio do cliente: quem pede informação e não recebe, para de responder. Cumprir isto vale mais que qualquer pergunta nova. NÃO invente pendência que não está nesta lista.`);
   }
 
   const permuta = permutaOferecidaPeloCliente(timeline, corretorNome, lead, agora);
@@ -1342,6 +1595,26 @@ ${linhas.join("\n")}`];
     if (permuta.ancora) {
       partes.push(`VALOR QUE O PRÓPRIO CORRETOR JÁ COLOCOU NA MESA, DENTRO DESSA FAIXA: ${_reaisBR(permuta.ancora.valor)}, em ${permuta.ancora.data} (${_haQuantoTempo(permuta.ancora.diasAtras ?? null)}). Trecho: "${permuta.ancora.trecho}".
 Essa é a referência que já está na conversa. Ao falar com o cliente, não apresente número ABAIXO dela sem que a própria conversa dê motivo (o cliente pediu opção menor, a condição mudou, o valor era de outro produto): repetir a ponta de baixo da faixa derruba o que o corretor já ancorou, e ele perde sem ganhar nada. A faixa acima é conta interna pra pensar — não é o número pra colar na mensagem.`);
+    }
+    // v1329 — a conta que faltava: cada imóvel já citado, testado contra a regra do próprio
+    // corretor. Foi o erro de uma leitura feita à mão em 20/08 (reabrir um imóvel de R$ 670 mil
+    // com permuta de R$ 360 mil = 53,7%, acima do teto de 50% que o corretor tinha dito).
+    if (permuta.valorDaEntrada != null && permuta.percentuais.length) {
+      const teto = permuta.percentuais[permuta.percentuais.length - 1];
+      const testados = valores
+        .filter(v => v.valor >= 100000 && v.valor >= permuta.valorDaEntrada)
+        .map(v => {
+          const cobertura = Math.round((permuta.valorDaEntrada / v.valor) * 100);
+          const veredito = cobertura > teto
+            ? `FORA da regra dita nesta conversa (a permuta cobriria ${cobertura}%, acima de ${teto}%)`
+            : `cabe na regra (a permuta cobriria ${cobertura}%)`;
+          return `- ${_reaisBR(v.valor)} → ${veredito}`;
+        });
+      if (testados.length) {
+        partes.push(`CADA VALOR JÁ CITADO NESTA CONVERSA, TESTADO CONTRA A REGRA DE PERMUTA DO PRÓPRIO CORRETOR:
+${testados.join("\n")}
+Aritmética do app sobre o que está escrito. Não ofereça ao cliente, como se coubesse na permuta, imóvel marcado como FORA da regra — a conta não fecha e quem prometeu vai ter que voltar atrás.`);
+      }
     }
     partes.push(`ISTO MUDA O PODER DE COMPRA DO CLIENTE. O produto pelo qual ele entrou (anúncio, primeiro contato) pode não ter nada a ver com a faixa que essa entrada abre. Antes de seguir conduzindo pelo produto de entrada, verifique na própria conversa se a faixa nova já foi tratada — e se produtos dessa faixa já apareceram antes no histórico.`);
     blocos.push(partes.join("\n"));
