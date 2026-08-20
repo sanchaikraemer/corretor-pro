@@ -6,10 +6,12 @@ import { conferirConfiguracao } from "./_config.js";
 //   ?mode=bucket          → configura o bucket do Supabase Storage p/ ZIPs grandes
 //   ?mode=banco           → diz quais migrações estão MESMO aplicadas no banco (v1185)
 //   ?mode=config          → confere as variáveis de ambiente contra o catálogo (v1325)
+//   ?mode=bateria         → roda a bateria de conversas com IA de verdade, em pedaços (v1330)
 // Unifica os antigos api/status.js, api/diagnostico-openai.js e api/configurar-bucket.js
 // (economiza vagas de Serverless Function no plano Hobby da Vercel).
 import { createClient } from "@supabase/supabase-js";
 import { getOpenAIRaw, getOpenAIConfigSummary, describeOpenAIError, verificarLimiteDiario, criarChatComLimite, limiteDeSaida } from "./_pipeline.js";
+import { CASOS, rodarCaso, modeloJuiz } from "../evals/motor.mjs";
 import { registrarUsoIA } from "./_iaCusto.js";
 
 // v1013 — mode=openai faz uma chamada REAL (e paga) à OpenAI a cada clique no botão "Testar IA".
@@ -50,6 +52,14 @@ export default async function handler(req, res) {
     if (!admin) return json(res, 403, { ok: false, error: "Conferir a configuração é uma ação exclusiva do administrador da plataforma." });
     return modoConfig(res);
   }
+  // v1330 — mode=bateria roda a BATERIA DE CONVERSAS com IA de verdade, em pedaços, pelo botão do
+  // painel. Gasta dinheiro a cada clique (é análise real + juiz), mexe com a plataforma inteira e
+  // é a régua que decide se uma mudança na análise pode ir pro ar: exclusivo do administrador.
+  if (mode === "bateria") {
+    const admin = await getPlatformAdminUserId(req, getSupabaseAdmin());
+    if (!admin) return json(res, 403, { ok: false, error: "Medir a qualidade da análise é uma ação exclusiva do administrador da plataforma." });
+    return modoBateria(req, res, organizationId);
+  }
   // mode=status/openai continuam abertos a qualquer corretor autenticado (telas reais do app
   // usam pra checar se a IA está respondendo) — mas sem revelar prefixo/final da chave OpenAI
   // nem organização/projeto pra quem não é administrador da plataforma.
@@ -62,6 +72,37 @@ export default async function handler(req, res) {
     return modoOpenAI(res, !!admin, organizationId);
   }
   return modoStatus(res, !!admin);
+}
+
+// ---------- mode=bateria (v1330) ----------
+// Roda de 1 a 3 conversas por chamada e devolve o placar do pedaço. Quem varre a bateria inteira é
+// a tela, chamando de pedaço em pedaço — porque uma análise real leva perto de um minuto e a função
+// tem teto de tempo. Em pedaços, o dono também vê o resultado andando em vez de olhar tela parada.
+const MAX_CASOS_POR_CHAMADA = 3;
+
+async function modoBateria(req, res, organizationId) {
+  const openai = getOpenAIRaw();
+  if (!openai) return json(res, 503, { ok: false, error: "A chave da OpenAI não está configurada nesta hospedagem." });
+  const total = CASOS.length;
+  const de = Math.max(0, Math.min(total, Number(req.query?.de) || 0));
+  const quantos = Math.max(1, Math.min(MAX_CASOS_POR_CHAMADA, Number(req.query?.quantos) || 1));
+  const ate = Math.min(total, de + quantos);
+  const pedaco = CASOS.slice(de, ate);
+  if (!pedaco.length) return json(res, 200, { ok: true, total, de, ate, resultados: [], fim: true });
+
+  const resultados = [];
+  for (const caso of pedaco) {
+    resultados.push(await rodarCaso({ openai, caso, organizationId }));
+  }
+  return json(res, 200, {
+    ok: true,
+    total,
+    de,
+    ate,
+    fim: ate >= total,
+    modeloJuiz: modeloJuiz(),
+    resultados
+  });
 }
 
 // ---------- mode=status (antigo api/status.js) ----------

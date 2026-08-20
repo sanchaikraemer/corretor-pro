@@ -20,12 +20,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
-import { guessLeadData, analyzeWithBrain } from "../api/_pipeline.js";
+// v1330 — o motor da bateria (as conversas, o juiz e a rodada de um caso) mora em api/_bateria.js,
+// porque agora ele roda TAMBÉM pelo botão do painel administrativo. Aqui ficou só o que é da linha
+// de comando: escolher caso, salvar rodada, comparar antes e depois.
+import { CASOS, rodarCaso, modeloJuiz } from "./motor.mjs";
 
 const RAIZ = path.dirname(fileURLToPath(import.meta.url));
 const PASTA_CONVERSAS = path.join(RAIZ, "conversas");
 const PASTA_RESULTADOS = path.join(RAIZ, "resultados");
-const MODELO_JUIZ = process.env.EVALS_MODELO_JUIZ || "gpt-4o-mini";
+const MODELO_JUIZ = modeloJuiz();
 
 const args = Object.fromEntries(process.argv.slice(2)
   .filter(a => a.startsWith("--"))
@@ -44,13 +47,11 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 // ── As conversas ──────────────────────────────────────────────────────────────
-let casos = fs.readdirSync(PASTA_CONVERSAS).filter(f => f.endsWith(".json")).sort()
-  .map(f => JSON.parse(fs.readFileSync(path.join(PASTA_CONVERSAS, f), "utf8")));
+let casos = CASOS;
 if (args.caso) {
-  casos = casos.filter(c => c.id === args.caso);
+  casos = CASOS.filter(c => c.id === args.caso);
   if (!casos.length) encerrar(`Não achei a conversa "${args.caso}". Disponíveis:\n  ` +
-    fs.readdirSync(PASTA_CONVERSAS).filter(f => f.endsWith(".json"))
-      .map(f => JSON.parse(fs.readFileSync(path.join(PASTA_CONVERSAS, f), "utf8")).id).join("\n  "));
+    CASOS.map(c => c.id).join("\n  "));
 }
 
 // Cérebro opcional: sem ele a análise sai em modo prévia (que também é um cenário real — é o que
@@ -63,53 +64,6 @@ if (args.cerebro) {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ── O juiz ────────────────────────────────────────────────────────────────────
-// Recebe a situação, o que a IA respondeu e a régua escrita em português. Nunca recebe a resposta
-// "certa" pronta — ele julga se a régua foi cumprida, item por item, e precisa justificar.
-async function julgar(caso, analise) {
-  const tresMensagens = [analise?.messages?.a, analise?.messages?.b, analise?.messages?.c]
-    .filter(Boolean).map((m, i) => `${i + 1}) ${m}`).join("\n");
-  const diagnostico = JSON.stringify(analise?.diagnostico || {}, null, 1).slice(0, 4000);
-
-  const pedido = `Você confere o trabalho de um sistema que analisa conversas de corretor de imóveis.
-Julgue APENAS pelo que está escrito abaixo. Não invente contexto e não seja generoso: na dúvida, marque como não cumprido e explique.
-
-=== A CONVERSA ANALISADA ===
-${caso.conversa.map(m => `[${m.date} ${m.time || ""}] ${m.author}: ${m.text}`).join("\n")}
-
-=== O QUE O SISTEMA ENTENDEU (diagnóstico) ===
-${diagnostico}
-Resumo: ${analise?.summary || "(vazio)"}
-Próximo passo: ${analise?.nextAction || "(vazio)"}
-
-=== AS TRÊS MENSAGENS QUE O SISTEMA SUGERIU ===
-${tresMensagens || "(nenhuma mensagem foi gerada)"}
-
-=== A RÉGUA ===
-PRECISA TER PERCEBIDO (olhe o diagnóstico e o resumo):
-${(caso.esperado.aIaPrecisaPerceber || []).map((t, i) => `P${i + 1}. ${t}`).join("\n")}
-
-AS MENSAGENS NÃO PODEM (olhe as três mensagens):
-${(caso.esperado.asMensagensNaoPodem || []).map((t, i) => `N${i + 1}. ${t}`).join("\n")}
-
-AS MENSAGENS PRECISAM (olhe as três mensagens):
-${(caso.esperado.asMensagensPrecisam || []).map((t, i) => `S${i + 1}. ${t}`).join("\n")}
-
-Devolva SÓ este JSON, sem texto em volta:
-{"itens":[{"codigo":"P1","cumpriu":true,"porque":"uma frase curta citando o trecho que prova"}]}
-Um item para CADA código listado acima. "cumpriu" para N* significa que a proibição foi RESPEITADA.`;
-
-  const r = await openai.chat.completions.create({
-    model: MODELO_JUIZ,
-    messages: [{ role: "user", content: pedido }],
-    response_format: { type: "json_object" },
-    temperature: 0,
-    max_tokens: 1200
-  });
-  try { return JSON.parse(r.choices?.[0]?.message?.content || "{}")?.itens || []; }
-  catch (_) { return []; }
-}
-
 // ── Rodada ────────────────────────────────────────────────────────────────────
 const resultados = [];
 console.log(`\nBateria de conversas — ${casos.length} conversa(s), IA de verdade.`);
@@ -118,24 +72,10 @@ console.log("");
 
 for (const caso of casos) {
   process.stdout.write(`  ${caso.id} ... `);
-  const timeline = caso.conversa.map(m => ({ ...m, type: m.type || "text" }));
-  const lead = guessLeadData(timeline, caso.corretorNome, caso.nomeArquivo);
-  try {
-    const analise = await analyzeWithBrain({ lead, timeline, openai, cerebroConfig });
-    const itens = await julgar(caso, analise);
-    const ok = itens.filter(i => i.cumpriu).length;
-    resultados.push({
-      id: caso.id, titulo: caso.titulo, ok, total: itens.length, itens,
-      clienteIdentificado: lead.clientName,
-      mensagens: [analise?.messages?.a, analise?.messages?.b, analise?.messages?.c].filter(Boolean),
-      proximoPasso: analise?.nextAction || ""
-    });
-    console.log(`${ok}/${itens.length}`);
-    for (const i of itens.filter(x => !x.cumpriu)) console.log(`      ✗ ${i.codigo}: ${i.porque}`);
-  } catch (e) {
-    resultados.push({ id: caso.id, titulo: caso.titulo, erro: e.message, ok: 0, total: 0, itens: [] });
-    console.log(`ERRO — ${e.message}`);
-  }
+  const r = await rodarCaso({ openai, caso, cerebroConfig });
+  resultados.push(r);
+  console.log(r.erro ? `ERRO — ${r.erro}` : `${r.ok}/${r.total}`);
+  for (const f of (r.falhas || [])) console.log(`      ✗ ${f.codigo}: ${f.porque}`);
 }
 
 const somaOk = resultados.reduce((s, r) => s + r.ok, 0);

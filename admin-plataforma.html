@@ -124,6 +124,23 @@
       <div id="configDetalhe"></div>
       <div id="msgConfig"></div>
     </div>
+
+    <!-- v1330 — A RÉGUA DA ANÁLISE, NA MÃO DO DONO.
+         A bateria de conversas existe desde a v1283, mas só rodava por linha de comando, com a
+         chave da OpenAI na mão de um programador. Ou seja: quem decide se a análise melhorou ou
+         piorou não conseguia medir. Agora ela roda daqui, com a chave que já está na hospedagem.
+         Cada conversa é fictícia e traz a régua escrita: o que a IA precisava perceber, o que as
+         mensagens não podiam fazer e o que precisavam fazer. Gasta IA a cada rodada (é análise de
+         verdade + um segundo modelo conferindo), por isso o botão avisa o custo antes. -->
+    <div class="cartao painel-largo" id="areaBateria" style="display:none">
+      <div class="rodape-conta">
+        <div><b>Qualidade da análise</b><div class="tag-empresa">Roda conversas de teste na IA de verdade e confere, uma a uma, se a análise entendeu e conduziu direito.</div></div>
+        <button class="secundario pequeno" id="btnBateria" onclick="rodarBateria()">Medir agora</button>
+      </div>
+      <div id="bateriaResumo" class="banco-resumo">Ainda não medido nesta sessão. Uma rodada completa leva alguns minutos e gasta em torno de R$ 3 a R$ 5 de IA.</div>
+      <div id="bateriaDetalhe"></div>
+      <div id="msgBateria"></div>
+    </div>
   </div>
 
 <script>
@@ -169,6 +186,9 @@ async function entrarAdmin() {
     document.getElementById('areaUsoIA').style.display = '';
     document.getElementById('areaBanco').style.display = '';
     document.getElementById('areaConfig').style.display = '';
+    // v1330 — o cartão da bateria aparece, mas NÃO mede sozinho: cada rodada gasta IA de verdade,
+    // então quem manda medir é o dono, clicando.
+    document.getElementById('areaBateria').style.display = '';
     carregarEmpresas();
     carregarUsoIA();
     carregarBanco();
@@ -598,6 +618,87 @@ async function carregarBanco() {
 // v1325 — a tela da conferência de configuração (/api/diagnostico?mode=config). Mesma linguagem
 // da conferência do banco: diz se está tudo certo e, quando não está, diz o que fazer — sem
 // mostrar o valor de nenhuma chave.
+// v1330 — a bateria roda em pedaços (a análise de uma conversa leva perto de um minuto e a função
+// do servidor tem teto de tempo). A tela vai pedindo pedaço por pedaço e mostrando o placar andar.
+let bateriaRodando = false;
+async function rodarBateria() {
+  if (bateriaRodando) return;
+  const resumo = document.getElementById('bateriaResumo');
+  const detalhe = document.getElementById('bateriaDetalhe');
+  const msg = document.getElementById('msgBateria');
+  const botao = document.getElementById('btnBateria');
+  if (!resumo) return;
+  if (!confirm('Medir a qualidade da análise roda conversas de teste na IA de verdade.\n\nLeva alguns minutos e gasta em torno de R$ 3 a R$ 5. Pode ir?')) return;
+  bateriaRodando = true;
+  botao.disabled = true;
+  botao.textContent = 'Medindo…';
+  msg.className = ''; msg.textContent = '';
+  detalhe.innerHTML = '';
+  resumo.className = 'banco-resumo';
+  resumo.textContent = 'Começando…';
+
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) {
+    resumo.className = 'banco-resumo falta-banco';
+    resumo.textContent = 'Sua sessão de administrador venceu. Entre de novo pra medir.';
+    bateriaRodando = false; botao.disabled = false; botao.textContent = 'Medir agora';
+    return;
+  }
+
+  const todos = [];
+  let de = 0, total = 0, fim = false, falhouRede = '';
+  while (!fim) {
+    let r = null;
+    try {
+      const resp = await fetch(`/api/diagnostico?mode=bateria&de=${de}&quantos=2`, { headers: { 'Authorization': `Bearer ${token}` } });
+      r = await resp.json().catch(() => ({}));
+      if (!resp.ok) { falhouRede = r.error || `Código ${resp.status}.`; break; }
+    } catch (e) {
+      falhouRede = e?.message || 'a conexão caiu no meio da medição';
+      break;
+    }
+    total = r.total || total;
+    todos.push(...(r.resultados || []));
+    de = r.ate || (de + 2);
+    fim = !!r.fim;
+    const itensOk = todos.reduce((s, x) => s + (x.ok || 0), 0);
+    const itensTotal = todos.reduce((s, x) => s + (x.total || 0), 0);
+    resumo.textContent = `Medindo… ${todos.length} de ${total} conversas — ${itensOk} de ${itensTotal} pontos da régua cumpridos.`;
+    detalhe.innerHTML = todos.map(linhaDaBateria).join('');
+  }
+
+  const itensOk = todos.reduce((s, x) => s + (x.ok || 0), 0);
+  const itensTotal = todos.reduce((s, x) => s + (x.total || 0), 0);
+  const comErro = todos.filter(x => x.erro).length;
+  const perfeitas = todos.filter(x => !x.erro && x.total && x.ok === x.total).length;
+  resumo.className = 'banco-resumo ' + (itensTotal && itensOk === itensTotal ? 'ok-banco' : 'falta-banco');
+  resumo.textContent = falhouRede
+    ? `Medição interrompida em ${todos.length} de ${total || '?'} conversas. ${falhouRede}`
+    : `${todos.length} conversas medidas — ${itensOk} de ${itensTotal} pontos da régua cumpridos, ${perfeitas} conversa(s) sem nenhuma falha${comErro ? `, ${comErro} com erro` : ''}.`;
+  detalhe.innerHTML = todos.map(linhaDaBateria).join('');
+  if (!falhouRede) {
+    msg.className = '';
+    msg.textContent = 'Guarde este número: é ele que diz se a próxima mudança na análise melhorou ou piorou.';
+  } else {
+    msg.className = 'erro';
+    msg.textContent = falhouRede;
+  }
+  bateriaRodando = false; botao.disabled = false; botao.textContent = 'Medir de novo';
+}
+
+function linhaDaBateria(r) {
+  const nota = r.erro ? 'erro' : `${r.ok}/${r.total}`;
+  const cor = r.erro ? '#f28b82' : (r.total && r.ok === r.total ? '#7ee2a8' : '#f5c26b');
+  const falhas = (r.falhas || []).map(f => `<div class="tag-empresa" style="margin-left:12px">✗ ${escaparTexto(f.codigo)}: ${escaparTexto(f.porque)}</div>`).join('');
+  const erro = r.erro ? `<div class="tag-empresa" style="margin-left:12px">✗ ${escaparTexto(r.erro)}</div>` : '';
+  return `<div style="margin-top:8px"><b style="color:${cor}">${nota}</b> — ${escaparTexto(r.titulo || r.id)}</div>${falhas}${erro}`;
+}
+
+function escaparTexto(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 async function carregarConfig() {
   const resumo = document.getElementById('configResumo');
   const detalhe = document.getElementById('configDetalhe');
