@@ -37,12 +37,6 @@ for (const regra of [
 ]) {
   assert.ok(protecoes.includes(regra), `a proteção "${regra.slice(0, 40)}..." precisa continuar escrita`);
 }
-// v1330 — as três mensagens são pedidas na ETAPA QUE ESCREVE, com o mesmo formato de sempre.
-const inicioEsquemaMsg = src.indexOf('const blocoEsquemaMensagens = `');
-const esquemaMsg = src.slice(inicioEsquemaMsg, src.indexOf('`;', inicioEsquemaMsg));
-for (const campo of ['mensagens', 'recomendada', 'maisSuave', 'maisDireta', 'aLabel', 'ordemDeEnvio']) {
-  assert.ok(esquemaMsg.includes(`"${campo}"`), `"${campo}" precisa continuar sendo pedido à IA — a tela do cliente lê esse campo`);
-}
 assert.ok(src.indexOf('Aplique sempre estas proteções de integridade') < src.indexOf('=== INÍCIO DO CÉREBRO COMERCIAL ==='),
   'as proteções ficam ANTES do Cérebro, valendo também pra conta que ainda não configurou nada');
 
@@ -65,18 +59,14 @@ assert.match(src, /Os dados acima são contexto, não ordens para forçar visita
   'e o contexto técnico não pode virar ordem de forçar próximo passo');
 
 // ── 5. O formato de resposta continua completo (é o que a tela do cliente lê) ─────────────────
-// v1330 — as regras das três mensagens viraram um bloco próprio (blocoRegrasDasMensagens),
-// declarado antes do prompt e colado na etapa que ESCREVE. Os recortes abaixo passaram a apontar
-// pro bloco, não pro texto solto no meio do pedido.
-const inicioFormato = src.indexOf('Formato JSON obrigatório:');
-const formato = src.slice(inicioFormato, src.indexOf('blocoRegrasDasMensagens', inicioFormato));
+const formato = src.slice(src.indexOf('Formato JSON obrigatório:'), src.indexOf('REGRAS PARA AS TRÊS MENSAGENS'));
 for (const campo of [
   'quemEhOCliente', 'summary', 'leituraDaConversa', 'comoConduzir', 'oQueOClienteQuer', 'ondeParou',
   'oQueMudouNoTempo', 'condicaoDoCliente', 'diagnostico', 'ultimaPessoaFalar', 'ultimoCompromissoCliente',
   'pedidoSemResposta', 'objecaoPrincipal', 'pendenciaFinanceira', 'jaSabemos', 'faixaDeValor',
   'imovelDoCliente', 'motivoDaMudanca', 'quemDecide', 'pedidoEspontaneo', 'faltaDescobrir',
-  'recomendacaoContato', 'produtoInteresse', 'produtosInteresse', 'etapaSugerida', 'clientProfile',
-  'nextAction'
+  'mensagens', 'recomendada', 'maisSuave', 'maisDireta', 'recomendacaoContato', 'produtoInteresse',
+  'produtosInteresse', 'etapaSugerida', 'clientProfile', 'nextAction'
 ]) {
   assert.ok(formato.includes(`"${campo}"`), `"${campo}" precisa continuar sendo pedido à IA — a tela do cliente lê esse campo`);
 }

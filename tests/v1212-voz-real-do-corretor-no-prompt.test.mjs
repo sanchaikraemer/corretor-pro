@@ -64,11 +64,9 @@ await analyzeWithBrain({
   cerebroConfig: { corretorNome: "Corretor Sanchai", metodo: "Regra do corretor.", tom: "Tom do corretor." }
 });
 
-// v1330 — duas chamadas: a leitura e a redação das três. A voz do corretor precisa chegar na que
-// ESCREVE, então o pedido conferido aqui junta as duas.
-assert.equal(chamadas.length, 2, "a análise usa duas chamadas: a leitura e a redação das três");
+assert.equal(chamadas.length, 1);
 const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
-const pedido = chamadas.map(c => c.messages.find(m => m.role === "user")?.content || "").join("\n");
+const pedido = chamadas[0].messages.find(m => m.role === "user")?.content || "";
 
 // v1291 — o dono trocou o título do bloco de voz. O conteúdo (as mensagens reais dele NESTA
 // conversa) continua chegando na IA, que é o que importa.

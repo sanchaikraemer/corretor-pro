@@ -56,15 +56,12 @@ function openaiFalso(guardar){
   };
 }
 
-// v1330 — a leitura é a PRIMEIRA chamada; a segunda escreve as três mensagens e recebe só a cauda
-// da conversa. Tudo o que este teste mede (conversa inteira x resumo + novidade) é da leitura.
 const analisar = async (timeline, contextoIncremental) => {
   let prompt = '';
-  let primeiro = true;
   await analyzeWithBrain({
     lead: { clientName: 'Cliente', fileName: 'conversa.txt' },
     timeline,
-    openai: openaiFalso((p) => { if (primeiro) { prompt = p; primeiro = false; } }),
+    openai: openaiFalso((p) => { prompt = p; }),
     leadId: 'lead-1',
     contextoIncremental,
     cerebroConfig: { corretorNome: 'Corretor', instrucoes: 'Fale de forma direta.' },

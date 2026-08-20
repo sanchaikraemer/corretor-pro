@@ -42,13 +42,14 @@ await analyzeWithBrain({
   cerebroConfig: { metodo: "Regra de teste do corretor.", tom: "Tom do corretor." }
 });
 
-// v1330 — duas etapas: a leitura (chamada 1) e a redação das três (chamada 2). As regras das três
-// mensagens viajam com a etapa que escreve; o Cérebro (system) vai nas duas.
-assert.equal(chamadas.length, 2, "a análise usa duas chamadas: a leitura e a redação das três");
+assert.equal(chamadas.length, 1, "a análise deve usar uma única chamada à IA");
 // v1291 — parte das regras das três mensagens mora nas instruções (system) e parte no pedido
 // (user). O que importa é que a IA receba tudo isso na mesma execução, então a checagem é feita
 // sobre os dois juntos.
-const pedido = chamadas.flatMap(c => c.messages.map(m => m.content || "")).join("\n");
+const pedido = [
+  chamadas[0].messages.find(m => m.role === "system")?.content || "",
+  chamadas[0].messages.find(m => m.role === "user")?.content || ""
+].join("\n");
 
 // A ordem antiga, absoluta, não pode voltar: era ela que brigava com o Cérebro.
 assert.doesNotMatch(

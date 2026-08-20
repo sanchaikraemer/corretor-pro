@@ -46,18 +46,13 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
 // A revisão final continua existindo e continua sendo a última coisa do pedido.
-// v1330 — o texto da revisão virou constante; o que precisa vir depois da conversa é o ponto em
-// que ela é colada no pedido da leitura.
-const posRevisao = pipeline.indexOf('${duasEtapas ? revisaoSoDaLeitura : revisaoCompleta}');
+const posRevisao = pipeline.indexOf('REVISÃO FINAL SILENCIOSA');
 assert.ok(posRevisao > pipeline.indexOf('${timelineText}'),
   'a revisão final precisa vir depois da conversa — é o último item lido antes de a IA escrever');
-// v1330 — os itens sobre as TRÊS MENSAGENS passaram pra revisão da etapa que escreve
-// (revisaoSoDasMensagens); os itens sobre a leitura ficaram na dela. Os dois continuam existindo.
-const inicioRevisaoMsg = pipeline.indexOf('const revisaoSoDasMensagens = `');
-const revisaoDasMensagens = pipeline.slice(inicioRevisaoMsg, pipeline.indexOf('`;', inicioRevisaoMsg));
-assert.match(revisaoDasMensagens, /As três mensagens executam a leitura acima, em vez de seguir um roteiro automático\?/,
+const lista = pipeline.slice(posRevisao, posRevisao + 1400);
+assert.match(lista, /As três mensagens executam essa leitura, em vez de seguir um roteiro automático\?/,
   'a revisão final precisa conferir se as três executam a leitura, não um roteiro');
-assert.match(revisaoDasMensagens, /Alguma mensagem força visita\/encontro\/proposta sem maturidade\?/,
+assert.match(lista, /Alguma mensagem força visita\/encontro\/proposta sem maturidade\?/,
   'e precisa conferir se alguma mensagem força encontro sem maturidade — o miolo do item da pausa');
 
 // Regra da v1145: campo que não aparece na tela não é pedido à IA (e o que aparece continua sendo).
@@ -71,7 +66,7 @@ assert.match(pipeline, /"faltaDescobrir":\["somente informações ainda abertas/
   'idem a pauta do que falta descobrir');
 
 // ── Nada comercial cravado (regra da casa) ────────────────────────────────────────────────────
-assert.doesNotMatch(revisaoDasMensagens, /R\$|Patr[íi]cia|Personalité|Renaissance|Evolutti|Senger|Carazinho/,
+assert.doesNotMatch(lista, /R\$|Patr[íi]cia|Personalité|Renaissance|Evolutti|Senger|Carazinho/,
   'a regra não pode citar empreendimento, construtora, preço ou nome de cliente — isso vem do Cérebro ou da conversa');
 
 console.log('v1271-retomada-da-pausa-marcada-pelo-cliente: ok');

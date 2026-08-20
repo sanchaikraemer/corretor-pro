@@ -79,11 +79,7 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
   assert.match(integridade, /não transforme silêncio em confirmação, aceite, objeção ou diagnóstico psicológico/,
     'e continua proibido adivinhar o que o cliente pensa a partir do silêncio');
 
-// v1330 — as regras das três mensagens viraram um bloco próprio (blocoRegrasDasMensagens),
-// declarado antes do prompt e colado na etapa que ESCREVE. Os recortes abaixo passaram a apontar
-// pro bloco, não pro texto solto no meio do pedido.
-  const inicioTres = pipeline.indexOf('const blocoRegrasDasMensagens = `');
-  const tresMensagens = pipeline.slice(inicioTres, pipeline.indexOf('`;', inicioTres));
+  const tresMensagens = pipeline.slice(pipeline.indexOf('REGRAS PARA AS TRÊS MENSAGENS'), pipeline.indexOf('CONVERSA ${'));
   assert.match(tresMensagens, /Não invente ação já realizada, novidade, disponibilidade, prazo, condição, urgência ou escassez/,
     'novidade inventada — o relato do print — continua proibida nas três sugestões');
   assert.match(tresMensagens, /Diferencie "vou verificar" de "verifiquei"/,
