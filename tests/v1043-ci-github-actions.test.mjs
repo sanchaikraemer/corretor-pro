@@ -13,7 +13,10 @@ const yml = fs.readFileSync(caminho, 'utf8');
 
 // Roda em push E em pull_request pra main — senão um PR podia ficar vermelho sem ninguém notar
 // até já estar mesclado.
-assert.match(yml, /on:\s*\n\s*push:\s*\n\s*branches:\s*\[main\]/, 'precisa rodar em push pra main');
+// v1324 — passou a rodar em push de QUALQUER branch (`branches: ['**']`), não só do main: o
+// objetivo é ver o vermelho enquanto ainda se está trabalhando, antes até de abrir o PR. O que
+// este teste guarda continua sendo o mesmo: a suíte roda sozinha em push e em PR.
+assert.match(yml, /on:\s*\n\s*push:\s*\n\s*branches:\s*(\[main\]|\['\*\*'\])/, 'precisa rodar em push (main ou todas as branches)');
 assert.match(yml, /pull_request:\s*\n\s*branches:\s*\[main\]/, 'precisa rodar em pull_request pra main');
 
 // Instala as dependências de verdade (npm ci, não npm install — reproduzível, trava no

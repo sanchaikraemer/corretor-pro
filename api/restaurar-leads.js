@@ -228,6 +228,9 @@ async function adaptiveBatchUpsert(supabase, rows) {
   let current = rows.map(row => ({ ...row }));
   const removed = [];
   for (let attempt = 0; attempt < 20; attempt++) {
+    // multiempresa-ok: gravação, não leitura. Cada linha de `current` já carrega o
+    // organization_id da empresa dona do backup (montado em restaurarLeads), e o próprio
+    // adaptiveBatchUpsert se recusa a descartar essa coluna — ver COLUNAS_ADAPTAVEIS logo abaixo.
     const { error } = await supabase
       .from("whatsapp_processamentos")
       .upsert(current, { onConflict: "id" });

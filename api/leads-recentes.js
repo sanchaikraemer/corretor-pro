@@ -222,6 +222,8 @@ function json(res, status, payload) {
 // filtradas pela empresa. Se qualquer uma falhar, devolve `indefinida` — e o app, sem assinatura
 // confiável, faz a busca completa como sempre fez. Nunca pode ser motivo pra esconder novidade.
 export async function calcularAssinaturaDaCarteira(supabase, organizationId) {
+  // multiempresa-ok: aqui só nasce o construtor da consulta; quem usa (logo abaixo) filtra por
+  // organization_id nas duas chamadas. A guarda de isolamento (v1324) exige esta declaração.
   const tabela = () => supabase.from("whatsapp_processamentos");
 
   let total = null;

@@ -1,19 +1,32 @@
 name: CI
 
-# Roda a suíte de testes do projeto (npm test — node --check em toda API + a suíte inteira de
-# tests/*.test.mjs) em toda alteração enviada ao GitHub. A auditoria técnica/comercial de
-# 27/07/2026 apontou que os testes dependiam de execução manual antes de publicar — isso corrige
-# esse ponto sem mudar nada do fluxo de publicação em si (a Vercel continua publicando por conta
-# própria a cada push em main; este workflow só avisa, com o "x" ou "✓" no commit/PR, se algo
-# quebrou).
+# Roda a suíte do projeto (npm test — node --check em toda a API + os arquivos tests/*.test.mjs)
+# em toda alteração enviada ao GitHub.
+#
+# v1324 — a auditoria de 20/08/2026 apontou que "teste vermelho ≠ produção bloqueada": este
+# workflow avisava, mas não impedia nada. O bloqueio de verdade passou a ser feito no ponto que
+# ninguém consegue contornar sem querer: a PUBLICAÇÃO. O vercel.json agora publica com
+# `npm test && node build.js`, então suíte vermelha = build da Vercel falha = a versão anterior
+# continua no ar. Este workflow continua existindo por dois motivos: dá o "x"/"✓" visível no PR
+# antes de mesclar (mais rápido que descobrir na publicação) e é a checagem que pode ser marcada
+# como obrigatória no GitHub (Settings → Rules/Branches), que é o único passo que depende de um
+# clique do dono.
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  testes:
+    name: testes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

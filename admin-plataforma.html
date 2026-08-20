@@ -107,6 +107,23 @@
       <div id="bancoDetalhe"></div>
       <div id="msgBanco"></div>
     </div>
+
+    <!-- v1324 — SAÚDE DA CONFIGURAÇÃO, com tela.
+         A auditoria de 20/08/2026: são 55 variáveis de ambiente e nenhuma conferência. Neste
+         projeto o erro típico não dá erro nenhum — nome digitado errado na Vercel simplesmente
+         não é lido, e valor "true" numa chave que só liga com "1" deixa a chave desligada. Os
+         dois casos passam despercebidos até um corretor esbarrar na função que dependia daquilo.
+         A rota /api/diagnostico?mode=config compara o que está no ar com o catálogo de
+         api/_config.js; esta tela mostra o resultado em português, sem revelar valor nenhum. -->
+    <div class="cartao painel-largo" id="areaConfig" style="display:none">
+      <div class="rodape-conta">
+        <div><b>Saúde da configuração</b><div class="tag-empresa">As chaves e ajustes do servidor estão escritos do jeito que o sistema lê?</div></div>
+        <button class="secundario pequeno" onclick="carregarConfig()">Conferir agora</button>
+      </div>
+      <div id="configResumo" class="banco-resumo">Conferindo…</div>
+      <div id="configDetalhe"></div>
+      <div id="msgConfig"></div>
+    </div>
   </div>
 
 <script>
@@ -151,9 +168,11 @@ async function entrarAdmin() {
     document.getElementById('areaPainel').style.display = '';
     document.getElementById('areaUsoIA').style.display = '';
     document.getElementById('areaBanco').style.display = '';
+    document.getElementById('areaConfig').style.display = '';
     carregarEmpresas();
     carregarUsoIA();
     carregarBanco();
+    carregarConfig();
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);
@@ -571,6 +590,62 @@ async function carregarBanco() {
   } catch (e) {
     resumo.className = 'banco-resumo falta-banco';
     resumo.textContent = 'Não foi possível conferir o banco agora.';
+    msg.className = 'erro';
+    msg.textContent = e.message || String(e);
+  }
+}
+
+// v1324 — a tela da conferência de configuração (/api/diagnostico?mode=config). Mesma linguagem
+// da conferência do banco: diz se está tudo certo e, quando não está, diz o que fazer — sem
+// mostrar o valor de nenhuma chave.
+async function carregarConfig() {
+  const resumo = document.getElementById('configResumo');
+  const detalhe = document.getElementById('configDetalhe');
+  const msg = document.getElementById('msgConfig');
+  if (!resumo) return;
+  msg.className = ''; msg.textContent = '';
+  detalhe.innerHTML = '';
+  resumo.className = 'banco-resumo';
+  resumo.textContent = 'Conferindo…';
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) {
+    resumo.className = 'banco-resumo falta-banco';
+    resumo.textContent = 'Sua sessão de administrador venceu. Entre de novo pra conferir a configuração.';
+    return;
+  }
+  try {
+    const resp = await fetch('/api/diagnostico?mode=config', { headers: { 'Authorization': `Bearer ${token}` } });
+    const r = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      resumo.className = 'banco-resumo falta-banco';
+      resumo.textContent = 'Não foi possível conferir a configuração agora.';
+      msg.className = 'erro';
+      msg.textContent = r.error || `Código ${resp.status}.`;
+      return;
+    }
+    const problemas = Array.isArray(r.problemas) ? r.problemas : [];
+    const erros = problemas.filter(p => p.nivel === 'erro');
+    const avisos = problemas.filter(p => p.nivel !== 'erro');
+    if (!problemas.length) {
+      resumo.className = 'banco-resumo ok-banco';
+      resumo.textContent = `✓ Configuração em ordem — ${r.definidas} de ${r.total} ajustes definidos, nenhum com problema.`;
+      detalhe.innerHTML = `<div class="banco-passo">Nada a fazer. O que não está definido está rodando no valor de fábrica, que é o normal.</div>`;
+      return;
+    }
+    resumo.className = erros.length ? 'banco-resumo falta-banco' : 'banco-resumo';
+    resumo.textContent = erros.length
+      ? `⚠ ${erros.length === 1 ? 'Um ajuste está impedindo o sistema de funcionar como deveria' : erros.length + ' ajustes estão impedindo o sistema de funcionar como deveria'}.`
+      : `${avisos.length === 1 ? 'Um ajuste está escrito de um jeito que o sistema não lê' : avisos.length + ' ajustes estão escritos de um jeito que o sistema não lê'} — nada quebrado, mas não está fazendo efeito.`;
+    const item = (p) => `<li class="config-item"><b>${escapeHtml(p.nome)}</b> — ${escapeHtml(p.mensagem)}</li>`;
+    detalhe.innerHTML = `<div class="banco-passo">
+      ${erros.length ? `<b>Precisa arrumar:</b><ul style="margin:8px 0 0;padding-left:20px">${erros.map(item).join('')}</ul>` : ''}
+      ${avisos.length ? `${erros.length ? '<div style="margin-top:12px"></div>' : ''}<b>Sem efeito hoje:</b><ul style="margin:8px 0 0;padding-left:20px">${avisos.map(item).join('')}</ul>` : ''}
+      <div style="margin-top:10px">Onde arrumar: <b>Vercel → o projeto do Corretor Pro → Settings → Environment Variables</b>. Depois de salvar, é preciso publicar de novo (Redeploy) pra valer. Volte aqui e clique em <b>Conferir agora</b>.</div>
+    </div>`;
+  } catch (e) {
+    resumo.className = 'banco-resumo falta-banco';
+    resumo.textContent = 'Não foi possível conferir a configuração agora.';
     msg.className = 'erro';
     msg.textContent = e.message || String(e);
   }

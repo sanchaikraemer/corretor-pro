@@ -324,6 +324,11 @@ button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
 .banco-passo b{ color:var(--cp-text); }
 .banco-passo ol{ margin:10px 0 0; padding-left:20px; }
 .banco-passo li{ margin-bottom:6px; }
+/* v1324 — a lista da conferência de configuração tem nomes longos e sem espaço
+   (DIRECIONA_USAR_APRENDIZADO_AUTO). Sem isto, no celular a linha empurra a página inteira pro
+   lado — pego na conferência visual da própria v1324, a 390px. */
+.config-item{ overflow-wrap:anywhere; word-break:break-word; }
+
 .banco-arquivo{
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px;
   background:rgba(255,255,255,.06); border-radius:6px; padding:2px 6px;
