@@ -39,7 +39,7 @@
       "maxDuration": 60
     },
     "api/diagnostico.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/restaurar-leads.js": {
       "maxDuration": 60

@@ -152,6 +152,8 @@ export const CATALOGO_ENV = [
     oQueFaz: "Tempo máximo de UMA chamada à IA antes de desistir." },
   { nome: "DIRECIONA_ANALYSIS_MAX_TOKENS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
     oQueFaz: "Tamanho máximo da resposta da IA." },
+  { nome: "EVALS_MODELO_JUIZ", tipo: "texto", obrigatoria: false, grupo: "Ajuste fino",
+    oQueFaz: "Modelo que confere as respostas na medição de qualidade da análise (padrão: o modelo de tarefas simples)." },
   { nome: "DIRECIONA_MAX_CONTEXT_CHARS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
     oQueFaz: "Quanto texto de conversa cabe num pedido (padrão 120000 caracteres)." },
   { nome: "DIRECIONA_MAX_VISUAIS_IMPORT", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
