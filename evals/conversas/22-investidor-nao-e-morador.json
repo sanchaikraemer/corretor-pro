@@ -1,0 +1,42 @@
+{
+  "id": "investidor-nao-e-morador",
+  "titulo": "O cliente é investidor, não vai morar",
+  "veioDe": "NOTAS-v1225.md — perfil do cliente muda a condução",
+  "porQueImporta": "Vender lazer e vista para quem quer rentabilidade é falar a língua errada — e o cliente sente.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Ivan Portela.txt",
+  "conversa": [
+    {
+      "date": "14/08/2026",
+      "time": "11:00",
+      "author": "Sanchai",
+      "text": "Bom dia, Ivan! Esse apartamento tem uma vista linda e o lazer completo do prédio."
+    },
+    {
+      "date": "14/08/2026",
+      "time": "11:18",
+      "author": "Ivan Portela",
+      "text": "Não vou morar nele. Quero saber quanto rende de aluguel e como está a vacância na região"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Ivan Portela",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Quero saber quanto rende de aluguel"
+    ],
+    "aIaPrecisaPerceber": [
+      "o cliente é investidor e a decisão dele é por retorno, não por moradia",
+      "ele pediu dois números específicos: aluguel e vacância"
+    ],
+    "asMensagensNaoPodem": [
+      "insistir em lazer, vista e acabamento como argumento principal",
+      "inventar percentual de rentabilidade ou de vacância"
+    ],
+    "asMensagensPrecisam": [
+      "tratar o pedido dele em termos de retorno",
+      "dizer o que vai levantar para responder com número real"
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "prazo-curto-de-mudanca",
+  "titulo": "O cliente tem prazo curto para se mudar",
+  "veioDe": "NOTAS-v1279.md — prazo real do cliente",
+  "porQueImporta": "Oferecer obra com entrega longa para quem precisa mudar em dois meses queima a conversa inteira.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Otávio Mendes.txt",
+  "conversa": [
+    {
+      "date": "14/08/2026",
+      "time": "09:30",
+      "author": "Otávio Mendes",
+      "text": "Preciso estar mudado até outubro, o contrato do aluguel encerra"
+    },
+    {
+      "date": "14/08/2026",
+      "time": "09:50",
+      "author": "Sanchai",
+      "text": "Bom dia, Otávio! Temos um lançamento excelente com entrega em 2029."
+    },
+    {
+      "date": "14/08/2026",
+      "time": "10:05",
+      "author": "Otávio Mendes",
+      "text": "Não dá, preciso de algo pronto"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Otávio Mendes",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "preciso de algo pronto"
+    ],
+    "aIaPrecisaPerceber": [
+      "o cliente tem prazo definido e motivo declarado",
+      "imóvel na planta está descartado por ele"
+    ],
+    "asMensagensNaoPodem": [
+      "insistir em lançamento ou entrega futura",
+      "tratar o prazo dele como flexível"
+    ],
+    "asMensagensPrecisam": [
+      "levar apenas opções prontas para morar",
+      "amarrar o próximo passo ao prazo de outubro"
+    ]
+  }
+}

@@ -467,7 +467,14 @@ regra global de antes das contas separadas; o cadastro criava a empresa pelo nav
 pré-multiempresa. Os três foram retirados e trocados por aviso claro. Quem for mexer nisso: **não
 reintroduza reserva que contorne migração faltando** — o teste da v1185 falha de propósito.
 
-## 4-A. Bateria de conversas comerciais (`evals/`) — v1283
+## 4-A. Bateria de conversas comerciais (`evals/`) — v1283, ampliada na v1327
+
+**v1327:** a bateria passou de 10 para **32 conversas canônicas** (a auditoria de 20/08/2026 pediu
+de 30 a 50) e ganhou **porteiro**: o miolo do prompt (piso comercial + instruções da análise, entre
+os marcadores `INÍCIO/FIM DO MIOLO DO PROMPT` em `api/_pipeline.js`) tem assinatura registrada em
+`evals/assinatura-do-prompt.json`. Mexeu no miolo sem registrar a medição →
+`tests/v1327-porteiro-do-prompt.test.mjs` fica vermelho → publicação parada (v1325). O ritual está
+no `evals/README.md`.
 
 A suíte de `tests/` protege o **código**; ela não sabe dizer se a **análise** está boa. A auditoria
 de 16/08/2026 mediu por quê: dos 437 arquivos de teste da época, **356 apenas liam o código-fonte**

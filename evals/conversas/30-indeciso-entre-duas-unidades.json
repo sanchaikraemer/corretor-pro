@@ -1,0 +1,48 @@
+{
+  "id": "indeciso-entre-duas-unidades",
+  "titulo": "O cliente está entre duas unidades e não decide",
+  "veioDe": "NOTAS-v1279.md — indecisão entre opções",
+  "porQueImporta": "Mandar uma terceira opção para quem já está entre duas é o jeito clássico de travar a decisão.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Patrícia Vasques.txt",
+  "conversa": [
+    {
+      "date": "15/08/2026",
+      "time": "14:00",
+      "author": "Patrícia Vasques",
+      "text": "Gostei da 402 e da 701. A 402 é mais barata, mas a 701 tem a vista"
+    },
+    {
+      "date": "15/08/2026",
+      "time": "14:20",
+      "author": "Sanchai",
+      "text": "Boa tarde, Patrícia! As duas são ótimas escolhas."
+    },
+    {
+      "date": "15/08/2026",
+      "time": "14:35",
+      "author": "Patrícia Vasques",
+      "text": "Pois é, por isso não consigo decidir"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Patrícia Vasques",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "por isso não consigo decidir"
+    ],
+    "aIaPrecisaPerceber": [
+      "a cliente já reduziu a escolha a duas unidades e nomeou o critério de cada uma",
+      "ela pediu ajuda para decidir, não mais opções"
+    ],
+    "asMensagensNaoPodem": [
+      "oferecer uma terceira unidade",
+      "responder que as duas são ótimas sem ajudar a decidir"
+    ],
+    "asMensagensPrecisam": [
+      "ajudar a comparar pelas duas coisas que ela mesma citou",
+      "propor um passo que force a decisão, como ver as duas no mesmo dia"
+    ]
+  }
+}

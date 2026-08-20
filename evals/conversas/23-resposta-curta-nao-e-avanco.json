@@ -1,0 +1,54 @@
+{
+  "id": "resposta-curta-nao-e-avanco",
+  "titulo": "O cliente respondeu só 'ok' e isso não é avanço",
+  "veioDe": "NOTAS-v1277.md — resposta curta confundida com interesse",
+  "porQueImporta": "Tratar um 'ok' como sinal verde faz a próxima mensagem soar desconectada, e o cliente some de vez.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Rafael Nogueira.txt",
+  "conversa": [
+    {
+      "date": "11/08/2026",
+      "time": "09:00",
+      "author": "Sanchai",
+      "text": "Bom dia, Rafael! Mandei por e-mail a tabela completa com as três plantas e as condições."
+    },
+    {
+      "date": "11/08/2026",
+      "time": "13:44",
+      "author": "Rafael Nogueira",
+      "text": "ok"
+    },
+    {
+      "date": "13/08/2026",
+      "time": "09:10",
+      "author": "Sanchai",
+      "text": "Rafael, conseguiu dar uma olhada na tabela?"
+    },
+    {
+      "date": "15/08/2026",
+      "time": "09:05",
+      "author": "Sanchai",
+      "text": "Rafael, consigo segurar a unidade do 9º andar até sexta. Quer que eu reserve?"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Rafael Nogueira",
+    "quemFalouPorUltimo": "corretor",
+    "tentativasSemResposta": 2,
+    "vozDoCorretorNaoPodeConter": [
+      "ok"
+    ],
+    "aIaPrecisaPerceber": [
+      "o 'ok' não disse nada sobre interesse, planta ou valor",
+      "o corretor já cobrou retorno duas vezes sem resposta"
+    ],
+    "asMensagensNaoPodem": [
+      "tratar o 'ok' como se fosse aprovação da proposta",
+      "repetir a mesma cobrança pela terceira vez"
+    ],
+    "asMensagensPrecisam": [
+      "mudar o jeito de abordar depois de duas tentativas sem resposta",
+      "oferecer uma saída fácil e concreta para ele responder"
+    ]
+  }
+}

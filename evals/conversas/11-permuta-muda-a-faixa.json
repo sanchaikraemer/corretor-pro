@@ -1,0 +1,67 @@
+{
+  "id": "permuta-muda-a-faixa",
+  "titulo": "O cliente oferece um bem como entrada e a faixa de compra dele muda por completo",
+  "veioDe": "NOTAS-v1316.md e NOTAS-v1317.md — o fichário da conversa nasceu deste caso",
+  "porQueImporta": "O cliente entra por um anúncio de um valor, mas oferece como entrada um bem que vale outra coisa. Continuar conduzindo pelo produto do anúncio é perder a venda maior que está na mesa.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Helena Fontes.txt",
+  "conversa": [
+    {
+      "date": "18/08/2026",
+      "time": "15:10",
+      "author": "Sanchai",
+      "text": "Boa tarde, Helena! Vi seu interesse no apartamento de 2 dormitórios anunciado por R$ 430.000. Quer que eu mande fotos e condições?"
+    },
+    {
+      "date": "18/08/2026",
+      "time": "15:22",
+      "author": "Helena Fontes",
+      "text": "Quero sim. Mas ele é pequeno pra nós, precisamos de 2 banheiros"
+    },
+    {
+      "date": "18/08/2026",
+      "time": "15:30",
+      "author": "Sanchai",
+      "text": "Temos maiores também. Qual faixa de investimento vocês estão pensando?"
+    },
+    {
+      "date": "18/08/2026",
+      "time": "15:48",
+      "author": "Helena Fontes",
+      "text": "Tenho 2 lotes juntos que valem uns 300 mil, vocês pegariam de entrada?"
+    },
+    {
+      "date": "18/08/2026",
+      "time": "16:02",
+      "author": "Sanchai",
+      "text": "Podemos estudar sim. Permuta em torno de 40 a 50% do valor da compra a gente analisa, desde que avaliados."
+    },
+    {
+      "date": "18/08/2026",
+      "time": "16:20",
+      "author": "Helena Fontes",
+      "text": "Então tá, os dois lotes só saem juntos"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Helena Fontes",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Tenho 2 lotes juntos"
+    ],
+    "aIaPrecisaPerceber": [
+      "a entrada oferecida pela cliente muda a faixa de compra dela para muito acima do anúncio",
+      "a regra de permuta (40 a 50%) foi dita pelo próprio corretor nesta conversa",
+      "os dois lotes só entram juntos, e isso é condição da cliente"
+    ],
+    "asMensagensNaoPodem": [
+      "continuar oferecendo o apartamento do anúncio como se a faixa não tivesse mudado",
+      "prometer que a permuta está aceita antes da avaliação dos lotes"
+    ],
+    "asMensagensPrecisam": [
+      "tratar a faixa nova que a entrada abre",
+      "encaminhar a avaliação dos lotes como próximo passo concreto"
+    ]
+  }
+}

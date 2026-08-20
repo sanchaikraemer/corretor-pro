@@ -48,6 +48,33 @@ node evals/executar.mjs --salvar=antes                # guarda o resultado com u
 node evals/executar.mjs --comparar=antes              # roda de novo e mostra o que mudou
 ```
 
+## O porteiro (v1327) — mexeu no prompt, a suíte cobra a medição
+
+O miolo do prompt (o piso comercial e as instruções da análise) fica cercado por marcadores
+`INÍCIO/FIM DO MIOLO DO PROMPT` dentro de `api/_pipeline.js`. A assinatura desse trecho está
+registrada em **`evals/assinatura-do-prompt.json`**, junto com a data e o resultado da última
+medição.
+
+`tests/v1327-porteiro-do-prompt.test.mjs` compara os dois. **Mexeu no miolo e não atualizou o
+registro → suíte vermelha → publicação parada** (desde a v1325 a Vercel publica com
+`npm test && node build.js`).
+
+Não é para impedir mudança de prompt. É para impedir mudança de prompt **sem medir** — que é
+exatamente o que fez agosto de 2026 virar publicar-piorar-desfazer.
+
+O ritual, quando for mexer:
+
+```
+node evals/executar.mjs --salvar=antes      ← antes de mexer
+   ... a mudança é feita ...
+node evals/executar.mjs --comparar=antes    ← depois de mexer
+   ... atualize evals/assinatura-do-prompt.json (assinatura, data, versão, casos, resultado)
+```
+
+Atualizar a assinatura sem rodar a bateria é mentir para o próprio projeto.
+
+---
+
 ### O uso que importa: antes e depois
 
 Esta é a razão de existir da camada 2. Ao mexer no prompt:
@@ -66,7 +93,8 @@ em ferramenta, em vez de boa intenção.
 
 ## As conversas
 
-Ficam em `evals/conversas/*.json`, uma por arquivo. Todas foram escritas a partir de **situações
+São **32** hoje (v1327 — a auditoria de 20/08/2026 pediu de 30 a 50). Ficam em
+`evals/conversas/*.json`, uma por arquivo. Todas foram escritas a partir de **situações
 reais já registradas nas notas de versão** (o print de 14/08 da oferta repetida, o parceiro, a
 pausa marcada pelo cliente, e por aí). **Nenhuma contém dado de cliente de verdade** — os nomes e
 os valores são inventados; o que é real é a *situação comercial*.

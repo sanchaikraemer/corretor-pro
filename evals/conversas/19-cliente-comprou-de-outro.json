@@ -1,0 +1,42 @@
+{
+  "id": "cliente-comprou-de-outro",
+  "titulo": "O cliente avisa que já comprou com outro corretor",
+  "veioDe": "NOTAS-v1250.md — perda declarada pelo cliente",
+  "porQueImporta": "Insistir na venda depois de uma perda declarada destrói a relação; o que resta é a porta aberta para o futuro.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Douglas Tavares.txt",
+  "conversa": [
+    {
+      "date": "13/08/2026",
+      "time": "08:40",
+      "author": "Sanchai",
+      "text": "Bom dia, Douglas! Consegui uma unidade no andar que você queria."
+    },
+    {
+      "date": "13/08/2026",
+      "time": "09:05",
+      "author": "Douglas Tavares",
+      "text": "Bom dia! Obrigado, mas acabei fechando outro apartamento semana passada"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Douglas Tavares",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "acabei fechando outro apartamento"
+    ],
+    "aIaPrecisaPerceber": [
+      "o cliente comprou com outra pessoa e este atendimento acabou",
+      "a compra já aconteceu, não é uma objeção a contornar"
+    ],
+    "asMensagensNaoPodem": [
+      "insistir na unidade ou tentar reverter a compra já feita",
+      "tratar a informação como dúvida ou objeção"
+    ],
+    "asMensagensPrecisam": [
+      "reconhecer a compra e desejar boa sorte de forma curta",
+      "deixar a porta aberta para uma próxima necessidade, sem cobrança"
+    ]
+  }
+}

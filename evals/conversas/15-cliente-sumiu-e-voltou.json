@@ -1,0 +1,54 @@
+{
+  "id": "cliente-sumiu-e-voltou",
+  "titulo": "Sete meses de silêncio e o cliente volta sozinho",
+  "veioDe": "NOTAS-v1298.md — retomada de conversa parada",
+  "porQueImporta": "Retomar como se fosse um contato novo joga fora tudo que já foi levantado; retomar cobrando o sumiço afasta.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Cléber Antunes.txt",
+  "conversa": [
+    {
+      "date": "12/01/2026",
+      "time": "09:00",
+      "author": "Cléber Antunes",
+      "text": "Oi, queria saber do apartamento de 3 dormitórios perto do colégio"
+    },
+    {
+      "date": "12/01/2026",
+      "time": "09:20",
+      "author": "Sanchai",
+      "text": "Bom dia, Cléber! Temos duas opções nessa região. Posso te mostrar amanhã?"
+    },
+    {
+      "date": "12/01/2026",
+      "time": "09:44",
+      "author": "Cléber Antunes",
+      "text": "Depois eu confirmo"
+    },
+    {
+      "date": "14/08/2026",
+      "time": "20:10",
+      "author": "Cléber Antunes",
+      "text": "Boa noite! Aquele de 3 dormitórios ainda existe? Agora consigo tocar o assunto"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Cléber Antunes",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Agora consigo tocar o assunto"
+    ],
+    "aIaPrecisaPerceber": [
+      "o cliente voltou por conta própria depois de meses parado",
+      "o critério dele (3 dormitórios perto do colégio) já estava registrado desde janeiro"
+    ],
+    "asMensagensNaoPodem": [
+      "começar do zero perguntando o que ele procura",
+      "cobrar o cliente pelo tempo em que ficou sem responder"
+    ],
+    "asMensagensPrecisam": [
+      "retomar de onde parou, usando o critério que ele já tinha dado",
+      "propor um próximo passo concreto agora que ele voltou"
+    ]
+  }
+}

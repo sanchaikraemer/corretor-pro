@@ -1,0 +1,48 @@
+{
+  "id": "pergunta-do-cliente-sem-resposta",
+  "titulo": "O cliente fez uma pergunta direta e ela ficou sem resposta",
+  "veioDe": "NOTAS-v1308.md — pedido do cliente ainda sem resposta direta",
+  "porQueImporta": "Pergunta ignorada é o jeito mais rápido de esfriar um atendimento — e a mais fácil de corrigir.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Fabiana Ruas.txt",
+  "conversa": [
+    {
+      "date": "17/08/2026",
+      "time": "10:05",
+      "author": "Fabiana Ruas",
+      "text": "Bom dia! O condomínio desse apartamento fica em quanto por mês?"
+    },
+    {
+      "date": "17/08/2026",
+      "time": "10:30",
+      "author": "Sanchai",
+      "text": "Bom dia, Fabiana! Que bom te ver por aqui. Consegue visitar na quinta às 15h?"
+    },
+    {
+      "date": "17/08/2026",
+      "time": "11:02",
+      "author": "Fabiana Ruas",
+      "text": "Antes de marcar eu preciso saber do condomínio"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Fabiana Ruas",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "preciso saber do condomínio"
+    ],
+    "aIaPrecisaPerceber": [
+      "a cliente perguntou o valor do condomínio duas vezes e não foi respondida",
+      "ela condicionou a visita a essa resposta"
+    ],
+    "asMensagensNaoPodem": [
+      "insistir na visita antes de tratar a pergunta dela",
+      "inventar um valor de condomínio que não está na conversa"
+    ],
+    "asMensagensPrecisam": [
+      "reconhecer a pergunta e dizer que vai levar o valor exato",
+      "só então retomar a proposta de visita"
+    ]
+  }
+}

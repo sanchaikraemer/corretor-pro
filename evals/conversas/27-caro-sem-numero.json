@@ -1,0 +1,42 @@
+{
+  "id": "caro-sem-numero",
+  "titulo": "O cliente diz que está caro e não diz quanto pode pagar",
+  "veioDe": "NOTAS-v1240.md — objeção de preço sem número",
+  "porQueImporta": "Sem número, qualquer desconto é chute. A conversa precisa transformar 'caro' em faixa.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Gustavo Lemes.txt",
+  "conversa": [
+    {
+      "date": "17/08/2026",
+      "time": "11:00",
+      "author": "Sanchai",
+      "text": "Bom dia, Gustavo! A unidade 501 está R$ 720.000 com duas vagas."
+    },
+    {
+      "date": "17/08/2026",
+      "time": "11:26",
+      "author": "Gustavo Lemes",
+      "text": "Bom dia! Achei caro pra mim"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Gustavo Lemes",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "Achei caro pra mim"
+    ],
+    "aIaPrecisaPerceber": [
+      "a objeção é de preço e não tem número do lado do cliente",
+      "não há faixa declarada por ele em nenhum momento"
+    ],
+    "asMensagensNaoPodem": [
+      "oferecer desconto por conta própria",
+      "insistir no mesmo valor sem nenhuma pergunta"
+    ],
+    "asMensagensPrecisam": [
+      "fazer o cliente dizer a faixa ou a parcela que cabe",
+      "manter uma opção viva em vez de encerrar"
+    ]
+  }
+}
