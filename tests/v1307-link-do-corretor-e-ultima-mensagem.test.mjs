@@ -13,6 +13,10 @@ import {
 // 2) "quero que coloque aqui — última mensagem (minha ou do cliente, tanto faz)", com o lugar
 //    marcado no print: embaixo de "Última análise" e "Último atendimento", no cartão do cliente.
 
+// A partir da v1322 a leitura confere PRA ONDE o nome aponta antes de abrir. Nos testes o nome é
+// resolvido por esta função de mentira (endereço público de verdade), sem depender de rede.
+const dnsPublico = async () => [{ address: "93.184.216.34", family: 4 }];
+
 // ── 1. Que endereço o servidor pode abrir ────────────────────────────────────────────────────
 {
   assert.ok(linkPodeSerLido("https://exemplo.com.br/material/boulevard"), "https público pode");
@@ -66,7 +70,7 @@ import {
     return { model: "mock", choices: [{ message: { content: "Seleção de imóveis. Boulevard Residence — Apto 501 — R$ 1.200.000 — 3 suítes — 145 m²." } }] };
   } } } };
 
-  const { leituras } = await lerLinksDaConversa(["https://exemplo.com.br/boulevard"], "org-teste", { openai: openaiMock, fetchImpl: fetchOk });
+  const { leituras } = await lerLinksDaConversa(["https://exemplo.com.br/boulevard"], "org-teste", { openai: openaiMock, fetchImpl: fetchOk, lookupImpl: dnsPublico });
   assert.equal(leituras["https://exemplo.com.br/boulevard"].status, "lido");
   assert.match(leituras["https://exemplo.com.br/boulevard"].text, /R\$ 1\.200\.000/);
 }
@@ -76,16 +80,16 @@ import {
 {
   const cascaVazia = "<html><head><title>Material</title></head><body><div id='app'></div><script>montar()</script></body></html>";
   const fetchVazio = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, text: async () => cascaVazia });
-  const { leituras } = await lerLinksDaConversa(["https://exemplo.com.br/vazio"], "org-teste", { openai: null, fetchImpl: fetchVazio });
+  const { leituras } = await lerLinksDaConversa(["https://exemplo.com.br/vazio"], "org-teste", { openai: null, fetchImpl: fetchVazio, lookupImpl: dnsPublico });
   assert.equal(leituras["https://exemplo.com.br/vazio"].status, "pagina_sem_texto_legivel");
   assert.equal(leituras["https://exemplo.com.br/vazio"].text, "", "sem texto na página, nada é inventado");
 
   const fetch404 = async () => ({ ok: false, status: 404, headers: { get: () => "text/html" }, text: async () => "" });
-  const r404 = await lerLinksDaConversa(["https://exemplo.com.br/sumiu"], "org-teste", { openai: null, fetchImpl: fetch404 });
+  const r404 = await lerLinksDaConversa(["https://exemplo.com.br/sumiu"], "org-teste", { openai: null, fetchImpl: fetch404, lookupImpl: dnsPublico });
   assert.equal(r404.leituras["https://exemplo.com.br/sumiu"].status, "pagina_respondeu_404");
 
   const fetchQuebrado = async () => { throw new Error("rede caiu"); };
-  const rErro = await lerLinksDaConversa(["https://exemplo.com.br/erro"], "org-teste", { openai: null, fetchImpl: fetchQuebrado });
+  const rErro = await lerLinksDaConversa(["https://exemplo.com.br/erro"], "org-teste", { openai: null, fetchImpl: fetchQuebrado, lookupImpl: dnsPublico });
   assert.equal(rErro.leituras["https://exemplo.com.br/erro"].status, "erro_leitura", "erro vira status, não exceção");
 }
 
