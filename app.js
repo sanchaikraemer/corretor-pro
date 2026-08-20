@@ -12212,17 +12212,34 @@ window.ui670Reanalisar=async function(btn){
   if(btn){btn.disabled=true;btn.classList.add('cp704-ico-loading');}
   const progresso = ui682ProgressReanalise(btn);
   progresso.set(8, "Lendo histórico do lead...");
-  let etapaFake = 0;
-  const etapasFake = [
-    [18, "Identificando intenção, objeção e pendência..."],
-    [34, "Recalculando prioridade comercial..."],
-    [52, "Gerando próxima ação e mensagem..."],
-    [72, "Gravando análise no banco..."],
-    [88, "Conferindo se ficou salvo..." ]
+  // v1319 — A BARRA PARAVA NOS 88% E PARECIA TRAVADA.
+  //
+  // "quando chega em 88% trava e demora para seguir (em todas analises e reanalises)" (dono,
+  // 20/08/2026). Não travava: a barra tinha CINCO frases fixas, uma a cada 1,8 segundo. Em nove
+  // segundos ela acabava as frases, sentava nos 88% e ficava lá até a IA responder — mais 30 a 60
+  // segundos de tela parada. E as frases mentiam: aos 72% dizia "gravando no banco" e aos 88%
+  // "conferindo se ficou salvo" quando, na verdade, o pedido ainda nem tinha voltado da IA.
+  //
+  // Agora as frases contam o que está acontecendo de verdade, e depois da última a barra segue
+  // andando sozinha, devagar, até 85% — nunca fica parada num número. Os 90% e os 100% continuam
+  // vindo do código de verdade, quando a resposta chega e quando a gravação é conferida.
+  let etapaTexto = 0;
+  const etapasTexto = [
+    [16, "Enviando a conversa e o seu Cérebro pra IA..."],
+    [26, "A IA está lendo a conversa inteira, do começo ao fim..."],
+    [34, "A IA está escrevendo a leitura e as três sugestões — costuma levar de 30 a 60 segundos."]
   ];
+  let pctAtual = 8;
   const progressoTimer = setInterval(()=>{
-    if(etapaFake < etapasFake.length){ const e = etapasFake[etapaFake++]; progresso.set(e[0], e[1]); }
-  }, 1800);
+    if(etapaTexto < etapasTexto.length){
+      const e = etapasTexto[etapaTexto++];
+      pctAtual = e[0];
+      progresso.set(pctAtual, e[1]);
+      return;
+    }
+    // Passo lento até 85%: a espera é real, mas a tela não pode parecer morta.
+    if(pctAtual < 85){ pctAtual += 1; progresso.set(pctAtual); }
+  }, 1000);
   const ctrl=new AbortController();
   const timeout=setTimeout(()=>ctrl.abort(),90000);
   try{
@@ -12257,7 +12274,7 @@ window.ui670Reanalisar=async function(btn){
       const erroServidor = data?.detail ? `${data.error || "Não foi possível atualizar a análise."} — ${data.detail}` : (data?.error||"Não foi possível atualizar a análise.");
       throw new Error(erroServidor);
     }
-    progresso.set(90, "Validando gravação no banco...");
+    progresso.set(90, "Resposta recebida. Gravando e conferindo se ficou salvo...");
 
     let analysis=(data?.analysis&&typeof data.analysis==="object")?data.analysis:null;
     let schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
