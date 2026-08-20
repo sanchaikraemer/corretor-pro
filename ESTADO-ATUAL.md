@@ -642,6 +642,12 @@ montar isso:
   de 700 KB acontece **durante** o download e o relógio vale até o último byte. Porta fora da 443 e
   credencial embutida no endereço também deixaram de ser aceitas
   (`baixarPaginaComSeguranca` em `api/_pipeline.js`, `NOTAS-v1322.md`).
+- **(v1326)** O aprendizado reaproveitado entre clientes passa por **limpeza** antes de entrar no
+  pedido (`limparAprendizadoDeOutroCliente`): nome do cliente de origem e de qualquer outro cliente
+  que já tenha ensinado algo, empreendimento, valor em dinheiro, endereço, telefone, e-mail,
+  documento e link saem; forma de escrever, condução, objeção, percentual, prazo e metragem ficam.
+  O pedido explica os marcadores (`[valor]`, `[empreendimento]`, `[endereço]`, `[cliente]`) e
+  proíbe escrevê-los na mensagem do cliente (`NOTAS-v1326.md`).
 - **(v1325)** O isolamento entre empresas deixou de depender de memória: a guarda
   `tests/v1325-isolamento-entre-empresas-na-guarda.test.mjs` varre `api/` e **reprova consulta às
   tabelas com dono** (`whatsapp_processamentos`, `direciona_config`, `ai_usage_events`) que não
