@@ -615,6 +615,11 @@ montar isso:
   de 700 KB acontece **durante** o download e o relógio vale até o último byte. Porta fora da 443 e
   credencial embutida no endereço também deixaram de ser aceitas
   (`baixarPaginaComSeguranca` em `api/_pipeline.js`, `NOTAS-v1322.md`).
+- **(v1323)** Prova nova na tela do lead e na importação: **quantas fotos, PDFs e áudios desta
+  conversa a IA NÃO leu** (`contarMaterialNaoLido` em `api/_pipeline.js`, `materialNaoLido` salvo
+  com a análise, `cp1323MaterialNaoLido` em `app.js`, `materialNaoLidoHtml` em `js/importacao.js`).
+  Antes disso a análise parecia completa mesmo quando a arte com o preço nunca tinha sido vista
+  (`NOTAS-v1323.md`).
 - **(v1322)** `privacidade.html` e `termos.html` voltaram a descrever o produto real: leitura de
   imagem (JPG/PNG/WEBP) e PDF (v1306), leitura do texto da página dos links enviados pelo corretor
   (v1307), e o prazo verdadeiro de apagamento automático da impressão embaralhada da conexão

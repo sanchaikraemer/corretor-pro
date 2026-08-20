@@ -98,3 +98,15 @@ O que você gostaria de ver primeiro?
 [19/08/2026 18:42] Construtora Senger: Permuta em torno de 40 a 50% pode ser analisada sim
 [19/08/2026 18:43] Construtora Senger: Só não conseguimos receber permuta de valor próximo a compra
 [19/08/2026 18:44] Construtora Senger: Então é possível sim, a permuta pelos seus terrenos, desde que avaliados e com cerca de 50% de volta`;
+
+// v1323 — A CONVERSA SEGUIU. Em 20/08/2026 o corretor mandou a virada (a faixa que os três
+// terrenos abrem) e a cliente RESPONDEU — depois de sete meses, a última palavra passou a ser
+// dela. A conversa acima fica intacta de propósito (é o caso "atendimento em aberto, cinco
+// mensagens sem resposta", em que vários testes se apoiam); quem precisa do estado de HOJE usa
+// esta aqui. As duas mensagens novas são reais, copiadas do WhatsApp do dono.
+export const CONVERSA_COM_RESPOSTA = `${CONVERSA}
+[20/08/2026 10:02] Construtora Senger: Bom dia Noemi, tudo bem?
+Estava pensando melhor na sua situação e acho que a gente estava olhando pro lugar errado esse tempo todo.
+Com os três terrenos entrando como parte do pagamento, sua faixa de compra não é a do apartamento do anúncio — é bem acima dela. E aí entram opções no centro e perto da Pátria, que é o que você me disse desde janeiro, com dois banheiros e tamanho grande.
+Me responde só uma coisa pra eu separar as certas: você precisa de algo pronto pra morar agora, ou consegue esperar entrega na planta?
+[20/08/2026 11:04] Noemi Barcarol Evoluti: Não temos pressa`;
