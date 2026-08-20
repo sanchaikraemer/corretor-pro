@@ -23,7 +23,7 @@ assert.doesNotMatch(app, /\[72, "Gravando análise no banco\.\.\."\]/, "não pod
 // 2) A barra precisa continuar andando depois da última frase.
 // ---------------------------------------------------------------------------
 assert.match(app, /if\(pctAtual < 85\)\{ pctAtual \+= 1; progresso\.set\(pctAtual\); \}/, "depois das frases, a barra tem que seguir subindo sozinha");
-assert.match(app, /costuma levar de 30 a 60 segundos/, "e precisa dizer ao corretor quanto tempo a espera costuma durar");
+assert.match(app, /costuma levar de 1 a 2 minutos/, "e precisa dizer ao corretor quanto tempo a espera costuma durar");
 
 // ---------------------------------------------------------------------------
 // 3) Os avisos de gravação continuam existindo — só no momento certo, depois da resposta.
@@ -38,7 +38,7 @@ assert.match(app, /progresso\.done\("Análise concluída e salva\."\)/, "e o 100
 const etapasTexto = [
   [16, "Enviando a conversa e o seu Cérebro pra IA..."],
   [26, "A IA está lendo a conversa inteira, do começo ao fim..."],
-  [34, "A IA está escrevendo a leitura e as três sugestões — costuma levar de 30 a 60 segundos."]
+  [30, "A IA está escrevendo a leitura completa e as três jogadas — costuma levar de 1 a 2 minutos."]
 ];
 let etapa = 0, pct = 8;
 const vistos = [];
