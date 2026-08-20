@@ -21,6 +21,8 @@ assert.match(storage, /Promise\.all\(Array\.from/);
 assert.match(storage, /String\(existente\?\.audioWindowDays \|\| "90"\) === janelaSolicitada/);
 
 // A função de storage tem tempo suficiente configurado.
-assert.equal(vercel.functions['api/processar-storage.js'].maxDuration, 60);
+// v1321 — o teto subiu pra 300s junto com a leitura completa (a intenção do guarda é a mesma:
+// a rota de importação precisa de tempo configurado suficiente, nunca o padrão de 10s).
+assert.ok(vercel.functions['api/processar-storage.js'].maxDuration >= 60);
 
 console.log('v827-4 large ZIP: ok');

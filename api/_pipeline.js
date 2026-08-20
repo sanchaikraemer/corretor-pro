@@ -4416,7 +4416,10 @@ Antes de devolver o JSON, confirme:
     //   2ª tentativa: O MESMO MODELO, com o tempo que sobrou, e só quando a falha foi passageira
     //      (erro da OpenAI que volta rápido) — repetir chamada lenta falha igual;
     //   modelo que a conta não tem: aí, e só aí, usa o anterior conhecido, com aviso em vermelho.
-    const orcamentoAnaliseMs = Number(process.env.DIRECIONA_ANALYSIS_BUDGET_MS || 52000);
+    // v1321 — a leitura completa (v1320) escreve mais e estourava o orçamento de 52s: a reanálise
+    // morria com "Request was aborted" (print do dono, 20/08 08:54). O teto das rotas de análise
+    // subiu de 60s pra 300s no vercel.json; o orçamento interno acompanha, com folga.
+    const orcamentoAnaliseMs = Number(process.env.DIRECIONA_ANALYSIS_BUDGET_MS || 150000);
     const inicioAnaliseTs = Date.now();
     const janelaPrincipalMs = Math.min(
       Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || (orcamentoAnaliseMs - 4000)),

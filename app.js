@@ -12237,7 +12237,7 @@ window.ui670Reanalisar=async function(btn){
   const etapasTexto = [
     [16, "Enviando a conversa e o seu Cérebro pra IA..."],
     [26, "A IA está lendo a conversa inteira, do começo ao fim..."],
-    [34, "A IA está escrevendo a leitura e as três sugestões — costuma levar de 30 a 60 segundos."]
+    [30, "A IA está escrevendo a leitura completa e as três jogadas — costuma levar de 1 a 2 minutos."]
   ];
   let pctAtual = 8;
   const progressoTimer = setInterval(()=>{
@@ -12251,7 +12251,7 @@ window.ui670Reanalisar=async function(btn){
     if(pctAtual < 85){ pctAtual += 1; progresso.set(pctAtual); }
   }, 1000);
   const ctrl=new AbortController();
-  const timeout=setTimeout(()=>ctrl.abort(),90000);
+  const timeout=setTimeout(()=>ctrl.abort(),320000);
   try{
     let leadBaseAtualizado = lead;
     try{ leadBaseAtualizado = (await ui675BuscarDetalhe(lead.id)) || lead; }catch(_){}

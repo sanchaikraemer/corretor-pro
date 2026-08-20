@@ -24,13 +24,13 @@
   ],
   "functions": {
     "api/processar-storage.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/leads-recentes.js": {
       "maxDuration": 60
     },
     "api/reanalisar-lead.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/lead-update.js": {
       "maxDuration": 60
