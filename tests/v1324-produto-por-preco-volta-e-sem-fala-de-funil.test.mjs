@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseWhatsappTxt, guessLeadData, analyzeWithBrain } from "../api/_pipeline.js";
 import { CONVERSA } from "./conversa-fixa-permuta.mjs";
 
-// v1322 — dois defeitos apontados pelo dono no print das 09:51 (v1321):
+// v1324 — dois defeitos apontados pelo dono no print das 09:51 (v1321):
 //
 // 1. "Você tinha entrado pelo apartamento de R$ 430 mil" — linguagem de FUNIL numa mensagem pro
 //    cliente. Cliente não "entra" por nada: ele pergunta, pede, responde. O pedido fixo proibía
@@ -41,4 +41,4 @@ const textoCompleto = chamadas.at(-1).messages.map(m => m.content).join("\n");
 assert.match(textoCompleto, /NÃO DESCREVA O CLIENTE PARA ELE MESMO EM LINGUAGEM DE SISTEMA/);
 assert.match(textoCompleto, /Produto abandonado POR PREÇO volta a valer quando a faixa de compra muda/);
 
-console.log("v1322-produto-por-preco-volta-e-sem-fala-de-funil: ok");
+console.log("v1324-produto-por-preco-volta-e-sem-fala-de-funil: ok");
