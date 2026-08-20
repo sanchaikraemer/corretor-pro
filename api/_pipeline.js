@@ -5172,12 +5172,148 @@ export function linkPodeSerLido(url) {
   let u;
   try { u = new URL(String(url || "")); } catch (_) { return false; }
   if (u.protocol !== "https:") return false;
-  const host = u.hostname.toLowerCase();
-  if (!host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return false;
+  if (u.username || u.password) return false;
+  if (u.port && u.port !== "443") return false;
+  const host = u.hostname.toLowerCase().replace(/\.$/, "");
+  if (!host || host === "localhost" || host.endsWith(".localhost")) return false;
+  if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".home.arpa")) return false;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;
   if (/^\[?[0-9a-f:]+\]?$/i.test(host) && host.includes(":")) return false;
   if (!host.includes(".")) return false;
   return true;
+}
+
+// v1322 — AS TRÊS BRECHAS QUE A AUDITORIA ACHOU NA LEITURA DE LINK.
+//
+// O endereço era conferido uma vez, no começo, e depois o servidor mandava buscar com
+// `redirect: "follow"` e lia a resposta inteira. Sobravam três caminhos abertos:
+//   1) um site público podia responder "vá para outro endereço" e esse destino NÃO era conferido —
+//      dava pra empurrar o servidor pra dentro da rede interna por desvio;
+//   2) um domínio de aparência normal podia APONTAR (no DNS) para um endereço interno — a checagem
+//      antiga só olhava o nome escrito, nunca para onde ele levava;
+//   3) o teto de 700 KB só era aplicado DEPOIS de a página inteira ter sido baixada, e o relógio de
+//      9 segundos era desligado antes de o corpo terminar de chegar.
+// Agora a leitura passa por um caminho só: resolve o nome, recusa endereço privado/reservado, segue
+// redirecionamento na mão conferindo CADA parada, e baixa em pedaços cortando no teto — com o
+// relógio valendo até o último byte.
+const MAX_REDIRECIONAMENTOS_LINK = 3;
+
+// Endereço numérico que nunca pode ser alvo: rede local, loopback, link-local, multicast, reservado.
+export function ipEhPrivadoOuReservado(ip) {
+  const texto = String(ip || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!texto) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(texto)) {
+    const [a, b] = texto.split(".").map(Number);
+    if ([a, b].some(n => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+    if (a === 0 || a === 10 || a === 127) return true;                       // este host, rede privada, loopback
+    if (a === 100 && b >= 64 && b <= 127) return true;                       // CGNAT
+    if (a === 169 && b === 254) return true;                                 // link-local (metadados de nuvem)
+    if (a === 172 && b >= 16 && b <= 31) return true;                        // rede privada
+    if (a === 192 && (b === 168 || b === 0 || b === 88)) return true;        // rede privada e faixas especiais
+    if (a === 198 && (b === 18 || b === 19 || b === 51)) return true;        // teste de banca e documentação
+    if (a === 203 && b === 0) return true;                                   // documentação
+    if (a >= 224) return true;                                               // multicast e reservado
+    return false;
+  }
+  if (texto.includes(":")) {
+    const mapeado = texto.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+    if (mapeado) return ipEhPrivadoOuReservado(mapeado[1]);
+    if (texto === "::" || texto === "::1") return true;                      // indefinido e loopback
+    if (/^f[cd][0-9a-f]{2}:/.test(texto)) return true;                       // rede local única (fc00::/7)
+    if (/^fe[89ab][0-9a-f]:/.test(texto)) return true;                       // link-local (fe80::/10)
+    if (/^ff[0-9a-f]{2}:/.test(texto)) return true;                          // multicast
+    if (/^(64:ff9b|2002):/.test(texto)) return true;                         // NAT64 e 6to4
+    return false;
+  }
+  return true;
+}
+
+// Pra onde esse nome leva de verdade. Devolve true quando leva (ou pode levar) pra rede interna —
+// inclusive quando o nome não resolve, porque aí não dá pra garantir nada e o certo é não abrir.
+export async function hostApontaPraRedePrivada(host, lookupImpl = null) {
+  const nome = String(host || "").trim().toLowerCase();
+  if (!nome) return true;
+  let procurar = lookupImpl;
+  if (!procurar) {
+    try {
+      const dns = await import("node:dns/promises");
+      procurar = (h) => dns.lookup(h, { all: true, verbatim: true });
+    } catch (_) { return true; }
+  }
+  let enderecos;
+  try { enderecos = await procurar(nome); } catch (_) { return true; }
+  const lista = (Array.isArray(enderecos) ? enderecos : [enderecos])
+    .map(e => (typeof e === "string" ? e : e?.address))
+    .filter(Boolean);
+  if (!lista.length) return true;
+  return lista.some(ipEhPrivadoOuReservado);
+}
+
+// Baixa o corpo em pedaços e para no teto — nunca guarda a página inteira antes de cortar.
+async function lerCorpoComTeto(resposta, teto = MAX_BYTES_PAGINA) {
+  const corpo = resposta?.body;
+  if (!corpo || typeof corpo.getReader !== "function") {
+    // Resposta sem fluxo (mocks de teste): mesmo assim nada acima do teto passa adiante.
+    return String(await resposta.text() || "").slice(0, teto);
+  }
+  const leitor = corpo.getReader();
+  const decodificador = new TextDecoder("utf-8");
+  let texto = "";
+  let bytes = 0;
+  try {
+    while (bytes < teto) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      bytes += value?.byteLength || value?.length || 0;
+      texto += decodificador.decode(value, { stream: true });
+    }
+  } finally {
+    try { await leitor.cancel(); } catch (_) {}
+  }
+  return texto.slice(0, teto);
+}
+
+// A ÚNICA porta por onde o servidor abre um endereço de fora. Devolve { status, html }; nunca
+// lança, nunca segue redirecionamento sem conferir, nunca baixa mais que o teto.
+export async function baixarPaginaComSeguranca(url, { fetchImpl = null, lookupImpl = null, timeoutMs = 9000 } = {}) {
+  const buscar = fetchImpl || globalThis.fetch;
+  const controller = new AbortController();
+  const corte = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let atual = String(url || "");
+    for (let salto = 0; salto <= MAX_REDIRECIONAMENTOS_LINK; salto++) {
+      if (!linkPodeSerLido(atual)) return { status: "endereco_bloqueado", html: "" };
+      const alvo = new URL(atual);
+      if (await hostApontaPraRedePrivada(alvo.hostname, lookupImpl)) {
+        return { status: "endereco_bloqueado", html: "" };
+      }
+      const resposta = await buscar(atual, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: { "user-agent": "CorretorPro/1 (leitura de material enviado pelo corretor)", accept: "text/html,text/plain" }
+      });
+      const codigo = Number(resposta?.status || 0);
+      if (codigo >= 300 && codigo < 400) {
+        const destino = resposta?.headers?.get?.("location");
+        if (!destino) return { status: `pagina_respondeu_${codigo}`, html: "" };
+        let proximo;
+        try { proximo = new URL(String(destino), atual).toString(); } catch (_) { return { status: "endereco_bloqueado", html: "" }; }
+        atual = proximo;
+        continue;
+      }
+      if (!resposta?.ok) return { status: `pagina_respondeu_${codigo || "erro"}`, html: "" };
+      const tipo = String(resposta.headers?.get?.("content-type") || "").toLowerCase();
+      if (tipo && !/text\/html|text\/plain|application\/xhtml/.test(tipo)) return { status: "pagina_nao_e_texto", html: "" };
+      const anunciado = Number(resposta.headers?.get?.("content-length") || 0);
+      if (anunciado > MAX_BYTES_PAGINA) return { status: "pagina_grande_demais", html: "" };
+      return { status: "ok", html: await lerCorpoComTeto(resposta, MAX_BYTES_PAGINA) };
+    }
+    return { status: "redirecionou_demais", html: "" };
+  } catch (error) {
+    return { status: "erro_leitura", html: "", error: describeOpenAIError(error) };
+  } finally {
+    clearTimeout(corte);
+  }
 }
 
 // Os links mandados pelo corretor, do mais recente pro mais antigo, sem repetir.
@@ -5223,7 +5359,7 @@ const PEDIDO_LEITURA_LINK = [
 
 // Lê os links escolhidos. Devolve { url: { status, text } }. Nunca lança: erro vira status e a
 // importação segue exatamente como seguia antes desta versão.
-export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO_PADRAO_LEGADA, { deadlineTs = 0, openai = null, fetchImpl = null } = {}) {
+export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO_PADRAO_LEGADA, { deadlineTs = 0, openai = null, fetchImpl = null, lookupImpl = null } = {}) {
   const oa = openai || getOpenAI();
   const leituras = {};
   const lista = (Array.isArray(urls) ? urls : []).filter(linkPodeSerLido);
@@ -5232,21 +5368,9 @@ export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO
   for (const url of lista) {
     if (deadlineTs && Date.now() > deadlineTs) { leituras[url] = { status: "sem_tempo_nesta_importacao", text: "" }; continue; }
     try {
-      const controller = new AbortController();
-      const corte = setTimeout(() => controller.abort(), 9000);
-      let resposta;
-      try {
-        resposta = await buscar(url, {
-          redirect: "follow",
-          signal: controller.signal,
-          headers: { "user-agent": "CorretorPro/1 (leitura de material enviado pelo corretor)", accept: "text/html,text/plain" }
-        });
-      } finally { clearTimeout(corte); }
-      if (!resposta?.ok) { leituras[url] = { status: `pagina_respondeu_${resposta?.status || "erro"}`, text: "" }; continue; }
-      const tipo = String(resposta.headers?.get?.("content-type") || "").toLowerCase();
-      if (tipo && !/text\/html|text\/plain|application\/xhtml/.test(tipo)) { leituras[url] = { status: "pagina_nao_e_texto", text: "" }; continue; }
-      const html = String(await resposta.text() || "").slice(0, MAX_BYTES_PAGINA);
-      const texto = textoVisivelDaPagina(html).slice(0, 6000);
+      const baixada = await baixarPaginaComSeguranca(url, { fetchImpl: buscar, lookupImpl });
+      if (baixada.status !== "ok") { leituras[url] = { status: baixada.status, text: "" }; continue; }
+      const texto = textoVisivelDaPagina(baixada.html).slice(0, 6000);
       if (texto.length < MIN_CHARS_PAGINA_UTIL) {
         // Página montada por JavaScript: a leitura simples só enxerga a casca. Fica registrado
         // como não lido — e nada é inventado no lugar.

@@ -26,7 +26,7 @@
     </div>
     <div class="cartao legal">
       <h1>Política de Privacidade</h1>
-      <p class="atualizado">Última atualização: 07/08/2026 — versão 1164</p>
+      <p class="atualizado">Última atualização: 20/08/2026 — versão 1322</p>
 
       <div class="aviso">
         Este texto foi escrito pra refletir com fidelidade o que o sistema realmente faz hoje.
@@ -61,7 +61,9 @@
       <h3>2.2 Dos leads/clientes do corretor (contidos nas conversas importadas)</h3>
       <ul>
         <li>Nome e telefone, quando aparecem na conversa.</li>
-        <li>O conteúdo da conversa de WhatsApp exportada pelo corretor: mensagens de texto e áudios (com sua transcrição). Imagens, vídeos e documentos enviados na conversa <b>não são analisados</b> — o sistema trabalha apenas com o texto e os áudios.</li>
+        <li>O conteúdo da conversa de WhatsApp exportada pelo corretor: mensagens de texto e áudios (com sua transcrição).</li>
+        <li><b>Imagens (JPG, PNG, WEBP) e documentos em PDF</b> enviados na conversa — de qualquer lado, corretor ou cliente — <b>são lidos pela inteligência artificial</b> quando estão entre os mais recentes da conversa (o sistema lê no máximo alguns por importação, e há um limite diário por conta). O que a IA lê deles vira texto e entra na análise, no lugar da mensagem que trouxe o anexo. <b>Vídeos não são analisados</b>, e nenhum outro tipo de documento (Word, Excel, planilha, contato) é lido.</li>
+        <li><b>Links que o próprio corretor enviou na conversa</b>: o sistema abre o endereço e lê o texto visível da página (por exemplo, a seleção de imóveis com valores que ele mandou pro cliente), no máximo dois por importação. Link enviado pelo cliente ou por terceiros <b>nunca</b> é aberto pelo sistema.</li>
         <li>Informações comerciais mencionadas na conversa: interesse em produto/imóvel, condição de pagamento, objeções, observações que o corretor registra manualmente sobre o atendimento.</li>
       </ul>
       <p>
@@ -73,6 +75,7 @@
       <ul>
         <li>Gerar o diagnóstico comercial de cada atendimento e sugestões de mensagem pro corretor continuar a conversa.</li>
         <li>Transcrever áudios enviados na conversa, pra que o texto entre na análise.</li>
+        <li>Ler imagens e PDFs enviados na conversa, e o texto das páginas dos links enviados pelo corretor, pra que o material comercial (preço, condição, unidade) entre na análise em vez de ficar de fora.</li>
         <li>Organizar a carteira de leads do corretor (histórico, agenda, retomadas).</li>
         <li>Medir o uso do sistema (quantas análises, quanto de IA foi consumido) — inclusive pra fins de cobrança e prevenção de abuso.</li>
         <li>Melhorar a qualidade das sugestões ao longo do tempo, a partir do que o próprio corretor ensina ao Cérebro Comercial (dados de um corretor nunca são usados pra ensinar o Cérebro de outro).</li>
@@ -81,7 +84,7 @@
       <h2>4. Com quem os dados são compartilhados</h2>
       <p>Os dados passam por prestadores de serviço de infraestrutura (nenhum deles pode usar os dados pra fins próprios):</p>
       <ul>
-        <li><b>OpenAI</b> — recebe o <b>conteúdo integral da conversa importada</b> (o texto das mensagens e os áudios, para transcrição) no momento da análise, processa e devolve o resultado. Nunca recebe dados de outros corretores. <b>Importante, para não haver mal-entendido:</b> a ficha do lead que o sistema monta é enviada sem o campo de telefone, mas o <b>texto da conversa vai como está</b> — se uma mensagem contiver telefone, e-mail, CPF, endereço, dado bancário ou o contato de um terceiro, essa informação vai junto. Exporte para o Corretor Pro apenas conversas que você tem base legal para tratar, e evite importar conversas com dados sensíveis que não sejam necessários ao atendimento.</li>
+        <li><b>OpenAI</b> — recebe o <b>conteúdo integral da conversa importada</b> (o texto das mensagens e os áudios, para transcrição) no momento da análise, processa e devolve o resultado. Nunca recebe dados de outros corretores. <b>Importante, para não haver mal-entendido:</b> além do texto e dos áudios, a OpenAI recebe também <b>as imagens e os PDFs da conversa que o sistema decidir ler</b> e o <b>texto das páginas dos links enviados pelo corretor</b>. A ficha do lead que o sistema monta é enviada sem o campo de telefone, mas o <b>texto da conversa vai como está</b> — se uma mensagem contiver telefone, e-mail, CPF, endereço, dado bancário ou o contato de um terceiro, essa informação vai junto. Exporte para o Corretor Pro apenas conversas que você tem base legal para tratar, e evite importar conversas com dados sensíveis que não sejam necessários ao atendimento.</li>
         <li><b>Supabase</b> — armazena o banco de dados, os logins e os arquivos (ZIPs exportados do WhatsApp, áudios extraídos) de forma isolada por corretor.</li>
         <li><b>Vercel</b> — hospeda o aplicativo e executa o processamento no servidor (a infraestrutura por onde os dados trafegam durante o uso).</li>
       </ul>
@@ -99,8 +102,9 @@
       </p>
       <p>
         A impressão embaralhada da conexão usada no cadastro (seção 2.1) é guardada à parte do
-        cadastro do corretor e só é consultada na janela de 24 horas seguinte; hoje ela não é
-        apagada automaticamente depois disso, e pode ser removida a pedido pelo e-mail da seção 1.
+        cadastro do corretor, só é consultada na janela de 24 horas seguinte e é <b>apagada
+        automaticamente até 7 dias depois do cadastro</b>. Também pode ser removida antes disso, a
+        pedido, pelo e-mail da seção 1.
       </p>
 
       <h2>6. Seus direitos (Lei Geral de Proteção de Dados — LGPD)</h2>

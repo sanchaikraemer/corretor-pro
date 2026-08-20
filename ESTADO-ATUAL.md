@@ -210,15 +210,20 @@ imagem lida à mensagem. Guarda: `tests/v1306-importacao-le-imagem-e-pdf.test.mj
 
 _**v1307 — link enviado pelo corretor passa a ser lido; "Última mensagem" volta ao cartão.** (1)
 `linksDoCorretorNaConversa` seleciona até 2 links https recentes enviados PELO CORRETOR (link de
-cliente nunca é aberto; IP, localhost, .local e domínio sem ponto são recusados por
-`linkPodeSerLido`); `lerLinksDaConversa` busca a página (timeout 9s, teto de 700 KB, só
-text/html|plain), extrai o texto visível e faz uma leitura factual pelo modelo simples; o resultado
+cliente nunca é aberto; IP, localhost, .local, porta fora da 443, credencial embutida e domínio sem
+ponto são recusados por `linkPodeSerLido`); `lerLinksDaConversa` busca a página por
+`baixarPaginaComSeguranca` (**endurecido na v1322**: resolve o nome e recusa endereço privado/
+reservado com `ipEhPrivadoOuReservado`/`hostApontaPraRedePrivada`, segue redirecionamento em modo
+`manual` conferindo cada parada — no máximo 3 —, corta o download no teto de 700 KB **enquanto
+baixa** e mantém o relógio de 9s valendo até o último byte; só text/html|plain), extrai o texto
+visível e faz uma leitura factual pelo modelo simples; o resultado
 entra na própria mensagem do link como "[Link lido pela IA]". Página montada por JavaScript devolve
 `pagina_sem_texto_legivel` e nada é inventado. Mesmo teto diário da leitura visual (v1306) e
 fail-open em qualquer erro. (2) O cartão do cliente voltou a mostrar a data da última mensagem da
 conversa, numa linha própria abaixo de "Último atendimento" (a v1266 tinha trocado uma pela outra e a
 data da conversa sumia quando havia atendimento registrado). Guarda:
-`tests/v1307-link-do-corretor-e-ultima-mensagem.test.mjs`. Ver `NOTAS-v1307.md`._
+`tests/v1307-link-do-corretor-e-ultima-mensagem.test.mjs` e
+`tests/v1322-leitura-de-link-blindada.test.mjs`. Ver `NOTAS-v1307.md` e `NOTAS-v1322.md`._
 
 _**v1308 — fim do plano B silencioso, prazo marcado pelo cliente, e as três chaves da análise.**
 Auditoria trazida pelo dono em 19/08/2026, medida executando o próprio código contra uma conversa
@@ -604,6 +609,17 @@ montar isso:
   conhecimento existente nunca é sobrescrito (`NOTAS-v1190.md`).
 - **(v1190)** Notificação do lembrete diário **não leva mais nome de cliente** pra tela bloqueada
   do celular (`NOTAS-v1190.md`).
+- **(v1322)** Leitura de link **blindada contra uso do servidor como ponte pra rede interna**
+  (SSRF): o nome é resolvido antes de abrir e endereço privado/reservado é recusado, o
+  redirecionamento é seguido em modo `manual` com cada parada conferida de novo (máx. 3), o corte
+  de 700 KB acontece **durante** o download e o relógio vale até o último byte. Porta fora da 443 e
+  credencial embutida no endereço também deixaram de ser aceitas
+  (`baixarPaginaComSeguranca` em `api/_pipeline.js`, `NOTAS-v1322.md`).
+- **(v1322)** `privacidade.html` e `termos.html` voltaram a descrever o produto real: leitura de
+  imagem (JPG/PNG/WEBP) e PDF (v1306), leitura do texto da página dos links enviados pelo corretor
+  (v1307), e o prazo verdadeiro de apagamento automático da impressão embaralhada da conexão
+  (7 dias, migração `0018`). O texto anterior era da v1164 e prometia o contrário
+  (`NOTAS-v1322.md`).
 
 ## 8. Pendências conhecidas
 
