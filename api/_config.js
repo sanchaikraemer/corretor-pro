@@ -303,9 +303,18 @@ let jaAvisou = false;
 export function avisarConfiguracaoNoLog(env = process.env) {
   if (jaAvisou) return null;
   jaAvisou = true;
-  const r = conferirConfiguracao(env);
-  for (const p of r.problemas.filter(x => x.nivel === "erro")) {
-    console.error(`[configuração] ${p.mensagem}`);
+  // v1328 — try/catch obrigatório: esta função roda no momento em que o servidor acorda, ANTES de
+  // qualquer rota responder. Se ela lançasse por qualquer motivo (uma variável com formato
+  // esquisito, por exemplo), derrubaria a API inteira em vez de avisar sobre configuração — o
+  // oposto do que ela existe pra fazer. Aviso nunca pode ser mais perigoso que o problema avisado.
+  try {
+    const r = conferirConfiguracao(env);
+    for (const p of r.problemas.filter(x => x.nivel === "erro")) {
+      console.error(`[configuração] ${p.mensagem}`);
+    }
+    return r;
+  } catch (erro) {
+    console.warn("[configuração] não deu pra conferir a configuração ao iniciar:", erro?.message || erro);
+    return null;
   }
-  return r;
 }
