@@ -5134,17 +5134,26 @@ function cp704Css(){
     const L = lead?.analysis?.leituraDaConversa;
     if(!L || typeof L !== 'object') return '';
     const conduzir = cp704Text(L.comoConduzir);
+    // v1320 — a leitura completa (formato aprovado pelo dono): a virada em destaque no topo,
+    // onde o atendimento perdeu força e o plano de agora como listas.
+    const virada = /^nenhuma$/i.test(cp704Text(L.aVirada)) ? '' : cp704Text(L.aVirada);
+    const perdeuForca = Array.isArray(L.ondePerdeuForca) ? L.ondePerdeuForca.map(cp704Text).filter(Boolean) : [];
+    const plano = Array.isArray(L.planoDeAgora) ? L.planoDeAgora.map(cp704Text).filter(Boolean) : [];
     const linhas = [
       ['O que o cliente quer', L.oQueOClienteQuer],
       ['Onde a conversa parou', L.ondeParou],
       ['O que mudou no tempo', L.oQueMudouNoTempo],
       ['Condição que o cliente colocou', /^nenhuma$/i.test(cp704Text(L.condicaoDoCliente)) ? '' : L.condicaoDoCliente]
     ].filter(r => cp704Text(r[1]));
-    if(!conduzir && !linhas.length) return '';
+    if(!conduzir && !linhas.length && !virada && !perdeuForca.length && !plano.length) return '';
+    const listaHtml = (itens, numerada) => itens.map((t,i)=>`<div class="cp704-row"><div>${numerada?`<b style="color:var(--lime)">${i+1}.</b> `:''}${escapeHtml(t)}</div></div>`).join('');
     return `<section class="cp704-card cp704-conducao">
       <div class="cp704-card-title"><h2>Como conduzir este atendimento</h2></div>
+      ${virada?`<div style="border:1px solid rgba(255,98,88,.5);background:rgba(255,98,88,.10);border-radius:12px;padding:11px 12px;margin:0 0 10px"><small style="display:block;text-transform:uppercase;letter-spacing:.13em;font-size:9px;font-weight:950;color:var(--lime);margin-bottom:4px">A virada desta conversa</small><div style="font-size:13.5px;line-height:1.5;color:var(--text);font-weight:700">${escapeHtml(virada)}</div></div>`:''}
       ${conduzir?`<p class="cp704-conducao-txt">${escapeHtml(conduzir)}</p>`:''}
       ${linhas.length?`<div class="cp704-rows">${linhas.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('')}</div>`:''}
+      ${perdeuForca.length?`<div class="cp704-rows" style="margin-top:8px"><div class="cp704-row"><small>Onde o atendimento perdeu força</small></div>${listaHtml(perdeuForca,false)}</div>`:''}
+      ${plano.length?`<div class="cp704-rows" style="margin-top:8px"><div class="cp704-row"><small>O que fazer agora, em ordem</small></div>${listaHtml(plano,true)}</div>`:''}
     </section>`;
   }
   function cp704DetailRows(lead,mc){
@@ -5197,7 +5206,8 @@ function cp704Css(){
       c:cp705SanitizeFactText(cp704Text(m.c || ''), lead),
       aLabel:cp704Text(m.aLabel || 'Recomendada'),
       bLabel:cp704Text(m.bLabel || 'Alternativa'),
-      cLabel:cp704Text(m.cLabel || 'Direta ao ponto')
+      cLabel:cp704Text(m.cLabel || 'Direta ao ponto'),
+      ordemDeEnvio:cp704Text(a?.messages?.ordemDeEnvio || '')
     };
   }
   // v724-6: mostra o motivo real de a mensagem não ter sido gerada, direto na
@@ -5690,7 +5700,7 @@ function renderLeadFoco(lead){
             ${cp1225LinhaDeOndeVeio(a)}
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis">${cp704Text(a.falhaAmigavel)?`<b style="color:var(--risco)">${escapeHtml(cp704Text(a.falhaAmigavel))}</b><span>Preferimos avisar a te entregar uma leitura pior sem você saber.</span>`:`<b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>`}${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
-            <div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}${cp1308ClasseSuja(a,'a')}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button>${cp1308AvisoSugestaoHtml(a,'a')}</div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}${cp1308ClasseSuja(a,'b')}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button>${cp1308AvisoSugestaoHtml(a,'b')}</div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}${cp1308ClasseSuja(a,'c')}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button>${cp1308AvisoSugestaoHtml(a,'c')}</div>`:''}</div>`}
+            ${msgs.ordemDeEnvio?`<div style="border:1px solid rgba(86,199,242,.4);background:rgba(86,199,242,.08);border-radius:10px;padding:9px 11px;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--text)"><b>Ordem de envio:</b> ${escapeHtml(msgs.ordemDeEnvio)}</div>`:''}<div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}${cp1308ClasseSuja(a,'a')}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button>${cp1308AvisoSugestaoHtml(a,'a')}</div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}${cp1308ClasseSuja(a,'b')}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button>${cp1308AvisoSugestaoHtml(a,'b')}</div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}${cp1308ClasseSuja(a,'c')}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button>${cp1308AvisoSugestaoHtml(a,'c')}</div>`:''}</div>`}
           </section>
           ${cp717MudancasHtml(a)}
         </main>

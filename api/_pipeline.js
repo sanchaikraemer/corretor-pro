@@ -4277,10 +4277,13 @@ Formato JSON obrigatório:
   "summary":"resumo comercial curto do estado atual, sem inventar causa",
   "leituraDaConversa":{
     "comoConduzir":"orientação comercial objetiva: melhor condução agora, por quê e o que evitar neste momento",
+    "aVirada":"o fato da conversa que MUDA o atendimento e passou batido, com a conta que ele abre e o que ele reposiciona (ex.: entrada oferecida que muda a faixa; produto antigo que voltou a caber na faixa nova). Use Nenhuma quando realmente não houver",
     "oQueOClienteQuer":"necessidade e critérios atuais confirmados; não misture interesse antigo superado",
     "ondeParou":"último ponto comercial real, pedido, promessa, pendência ou resposta que define a continuidade",
     "oQueMudouNoTempo":"mudanças relevantes de necessidade, produto, prazo, objetivo ou estágio; use Nenhuma mudança relevante quando não houver",
-    "condicaoDoCliente":"restrição, dependência ou condição realmente declarada; use Nenhuma quando não houver"
+    "condicaoDoCliente":"restrição, dependência ou condição realmente declarada; use Nenhuma quando não houver",
+    "ondePerdeuForca":["onde o atendimento perdeu força, com data e fato (convite repetido sem resposta, pedido atendido sem preço, resposta demorada, conversa terminando sem pergunta). Fatos da conversa, sem julgamento de caráter. Lista vazia quando não houver"],
+    "planoDeAgora":["a sequência de jogadas que este atendimento pede agora, em ordem, cada uma em uma frase começando pelo verbo. 2 a 4 itens"]
   },
   "diagnostico":{
     "ultimaPessoaFalar":"contato ou corretor",
@@ -4297,9 +4300,13 @@ Formato JSON obrigatório:
     "faltaDescobrir":["somente informações ainda abertas que realmente podem alterar estratégia/seleção/próximo passo"]
   },
   "mensagens":{
-    "recomendada":"melhor mensagem para este momento",
-    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico",
-    "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite"
+    "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Reposiciona a faixa)",
+    "bLabel":"nome curto da jogada da maisSuave (ex.: Puxa a avaliação)",
+    "cLabel":"nome curto da jogada da maisDireta (ex.: Reabre pelo ponto da objeção)",
+    "ordemDeEnvio":"instrução prática de envio em 1 ou 2 frases: qual mandar primeiro, se sozinha, e o que esperar antes das outras",
+    "recomendada":"melhor mensagem para este momento — a JOGADA PRINCIPAL: quando existe aVirada, é ela que a recomendada entrega ao cliente",
+    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico, que ABRE OUTRA PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu. Nunca a recomendada com palavras mais macias",
+    "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite, propondo um PASSO CONCRETO (o que você vai fazer e o que precisa dele para fazer). Nunca a recomendada encurtada"
   },
   "recomendacaoContato":{
     "aguardar":false,
@@ -4314,10 +4321,27 @@ Formato JSON obrigatório:
 
 REGRAS PARA AS TRÊS MENSAGENS
 - As três nascem da mesma verdade factual e da mesma leitura comercial.
-- RECOMENDADA é a que você enviaria se só pudesse enviar uma.
-- MAIS SUAVE explora/resolve o ponto mais importante com menor pressão.
-- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade.
+- RECOMENDADA é a que você enviaria se só pudesse enviar uma. Quando a leitura encontrou uma
+  aVirada, a recomendada É a virada contada ao cliente: o fato, o que ele abre pra ele, e UMA
+  pergunta que destrava a seleção. Não gaste a recomendada pedindo confirmação burocrática se
+  existe uma virada pra entregar.
+- MAIS SUAVE explora/resolve o ponto mais importante com menor pressão — e o faz ABRINDO OUTRA
+  PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu.
+  Não é a recomendada com as palavras mais macias.
+- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Ela
+  propõe um PASSO CONCRETO — o que você vai fazer, e o que precisa dele para fazer. Não é a
+  recomendada encurtada.
 - Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
+- CONFIRA ANTES DE DEVOLVER: leia a ÚLTIMA FRASE das três. Se as três terminam pedindo a MESMA
+  coisa ao cliente, você devolveu uma mensagem escrita três vezes — refaça duas delas. Pelo menos
+  duas das três precisam pedir coisas diferentes: uma pode confirmar a faixa, outra trazer o que
+  ele não sabe, outra propor o passo concreto.
+- CADA MENSAGEM TEM NOME DE JOGADA (aLabel/bLabel/cLabel): 2 a 4 palavras dizendo O QUE ELA FAZ
+  (ex.: "Reposiciona a faixa", "Puxa a avaliação", "Reabre pelo prazo"). Se você não consegue dar
+  nomes diferentes às três, elas são a mesma jogada — volte e refaça.
+- ORDEM DE ENVIO (ordemDeEnvio): diga qual mandar primeiro e por quê. Três mensagens juntas viram
+  bloco, e cliente que já sumiu duas vezes some de novo — em regra, a principal vai sozinha e as
+  outras esperam a resposta.
 - CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA. Mesmo indo todas para o mesmo próximo passo, as três
   são três CAMINHOS até ele — uma responde o que o cliente pediu, outra traz o que ele ainda não
   sabe, outra trata a objeção que ficou de pé, outra busca o dado que destrava. Se as três terminam
@@ -4330,6 +4354,9 @@ REGRAS PARA AS TRÊS MENSAGENS
 - Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
 - Não despeje catálogo quando os critérios já permitem curadoria.
 - Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
+- TEMPO SE ESCREVE COM O NÚMERO QUE ESTÁ NO CONTEXTO TÉCNICO, nunca por estimativa. Se lá está
+  escrito 1 dia, é errado escrever "já se passaram alguns dias", "faz um tempo" ou "uns dias".
+  Sem o número na mão, não fale de tempo — o cliente lembra quando falou com você.
 - RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE. Se você marcar recomendacaoContato.aguardar,
   as três continuam sendo as mensagens completas e prontas para enviar QUANDO o prazo vencer — com
   cumprimento e com o intervalo reconhecido. Rascunho, frase solta ou mensagem sem cumprimento
@@ -4561,6 +4588,7 @@ Antes de devolver o JSON, confirme:
         aLabel: clean(mensagensRaw.aLabel, "Recomendada"),
         bLabel: clean(mensagensRaw.bLabel, "Alternativa"),
         cLabel: clean(mensagensRaw.cLabel, "Direta ao ponto"),
+        ordemDeEnvio: clean(mensagensRaw.ordemDeEnvio),
         recomendada: "a"
       },
       tipoContato: null,
@@ -4578,10 +4606,14 @@ Antes de devolver o JSON, confirme:
       lembreteSugerido: null,
       leituraDaConversa: {
         comoConduzir: clean(leituraRaw.comoConduzir),
+        // v1320 — as seções da leitura completa (formato aprovado pelo dono em 20/08/2026).
+        aVirada: clean(leituraRaw.aVirada),
         oQueOClienteQuer: clean(leituraRaw.oQueOClienteQuer),
         ondeParou: clean(leituraRaw.ondeParou),
         oQueMudouNoTempo: clean(leituraRaw.oQueMudouNoTempo),
-        condicaoDoCliente: clean(leituraRaw.condicaoDoCliente)
+        condicaoDoCliente: clean(leituraRaw.condicaoDoCliente),
+        ondePerdeuForca: arr(leituraRaw.ondePerdeuForca),
+        planoDeAgora: arr(leituraRaw.planoDeAgora)
       },
       leituraComercial: clean(leituraRaw.comoConduzir),
       mudancas: clean(leituraRaw.oQueMudouNoTempo) ? [clean(leituraRaw.oQueMudouNoTempo)] : [],
