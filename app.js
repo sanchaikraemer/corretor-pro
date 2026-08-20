@@ -5246,7 +5246,10 @@ function cp704Css(){
   function cp1308AvisoSugestaoHtml(a,chave){
     const probs=cp1308ProblemasDaSugestao(a,chave);
     if(!probs.length) return '';
-    return `<div class="cp704-msg-alerta"><b>Confira antes de enviar:</b> ${escapeHtml(probs.join(' · '))}. O app tentou refazer esta mensagem e não conseguiu tirar isso.</div>`;
+    // v1332 — a frase antiga dizia "o app tentou refazer esta mensagem e não conseguiu": não é
+    // verdade desde a v1315, quando a rede que reescrevia saiu. O app confere e mostra; quem
+    // decide o que fazer com a mensagem é o corretor.
+    return `<div class="cp704-msg-alerta"><b>Confira antes de enviar:</b> ${escapeHtml(probs.join(' · '))}.</div>`;
   }
   function cp1308ClasseSuja(a,chave){ return cp1308ProblemasDaSugestao(a,chave).length?' cp704-msg-suja':''; }
   window.cp704SelectedMsg='a';
