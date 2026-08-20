@@ -34,7 +34,11 @@ assert.match(pipeline, /não transforme silêncio em confirmação, aceite, obje
 // ── 2. As três continuam nascendo da mesma leitura, sem virar três pedidos de licença ─────────
 // v1291 — o bloco "AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA" também saiu na reescrita do
 // dono. O que continua escrito, em forma curta, é o papel de cada uma das três.
-const trio = pipeline.slice(pipeline.indexOf('REGRAS PARA AS TRÊS MENSAGENS'), pipeline.indexOf('CONVERSA ${'));
+// v1330 — as regras das três mensagens viraram um bloco próprio (blocoRegrasDasMensagens),
+// declarado antes do prompt e colado na etapa que ESCREVE. Os recortes abaixo passaram a apontar
+// pro bloco, não pro texto solto no meio do pedido.
+const inicioTrio = pipeline.indexOf('const blocoRegrasDasMensagens = `');
+const trio = pipeline.slice(inicioTrio, pipeline.indexOf('`;', inicioTrio));
 assert.ok(trio.length > 200, 'a regra das três mensagens precisa existir');
 assert.match(trio, /RECOMENDADA é a que você enviaria se só pudesse enviar uma/, 'a recomendada continua sendo a melhor de todas');
 assert.match(trio, /MAIS DIRETA é objetiva/, 'a direta continua sendo a objetiva');

@@ -43,8 +43,19 @@ const cerebro = {
 const resultado = await analyzeWithBrain({
   lead: { clientName: "Daniele" }, timeline, openai: openaiMock, cerebroConfig: cerebro
 });
-assert.equal(chamadas.length, 1, "a análise deve usar uma única chamada à IA");
+// v1330 — a análise passou a ter DUAS etapas: ler (chamada 1) e escrever as três mensagens
+// (chamada 2), cada uma fazendo uma coisa só. O que este teste sempre guardou continua de pé, e
+// agora está escrito com todas as letras: nenhuma chamada REESCREVE texto já escrito pela IA — a
+// segunda recebe o diagnóstico, não as mensagens da primeira.
+assert.equal(chamadas.length, 2, "a análise usa duas chamadas: a leitura e a redação das três");
+const pedidoDaRedacao = chamadas[1].messages.find(m => m.role === "user")?.content || "";
+for (const jaEscrita of [resposta.mensagens.recomendada, resposta.mensagens.maisSuave, resposta.mensagens.maisDireta]) {
+  assert.ok(!pedidoDaRedacao.includes(jaEscrita),
+    "a etapa de redação não pode receber mensagem pronta pra reescrever — ela escreve, não conserta");
+}
 const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
+const systemDaRedacao = chamadas[1].messages.find(m => m.role === "system")?.content || "";
+assert.equal(systemDaRedacao, system, "o Cérebro manda igual nas duas etapas");
 // v1291 — o dono reescreveu o texto das instruções: o Cérebro passou de "única autoridade" para
 // "autoridade máxima sobre método, análise, estratégia, tom, objeções e condução". A garantia
 // checada aqui é a mesma de sempre: o Cérebro manda, e nada monta um segundo manual por fora dele.

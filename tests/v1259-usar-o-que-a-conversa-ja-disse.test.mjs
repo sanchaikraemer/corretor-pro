@@ -24,7 +24,11 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
 // ── 1. Os campos novos existem no formato pedido à IA ────────────────────────────────────────
-const schema = src.slice(src.indexOf('Formato JSON obrigatório:'), src.indexOf('REGRAS PARA AS TRÊS MENSAGENS'));
+// v1330 — as regras das três mensagens viraram um bloco próprio (blocoRegrasDasMensagens),
+// declarado antes do prompt e colado na etapa que ESCREVE. Os recortes abaixo passaram a apontar
+// pro bloco, não pro texto solto no meio do pedido.
+const inicioSchema = src.indexOf('Formato JSON obrigatório:');
+const schema = src.slice(inicioSchema, src.indexOf('blocoRegrasDasMensagens', inicioSchema));
 for (const campo of ['jaSabemos', 'faixaDeValor', 'imovelDoCliente', 'motivoDaMudanca', 'quemDecide']) {
   assert.ok(schema.includes(`"${campo}"`), `o formato JSON precisa pedir "${campo}" à IA`);
 }

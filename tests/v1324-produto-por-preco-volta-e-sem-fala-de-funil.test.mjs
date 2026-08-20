@@ -37,7 +37,9 @@ const openaiMock = { chat: { completions: { create: async payload => {
   }) } }] };
 } } } };
 await analyzeWithBrain({ lead, timeline, openai: openaiMock, cerebroConfig: { metodo: "m" } });
-const textoCompleto = chamadas.at(-1).messages.map(m => m.content).join("\n");
+// v1330 — a análise virou duas chamadas (ler, depois escrever). A regra do produto largado por
+// preço vive no formato da LEITURA, que é a primeira; as duas entram na conferência abaixo.
+const textoCompleto = chamadas.flatMap(c => c.messages.map(m => m.content || "")).join("\n");
 assert.match(textoCompleto, /NÃO DESCREVA O CLIENTE PARA ELE MESMO EM LINGUAGEM DE SISTEMA/);
 assert.match(textoCompleto, /Produto abandonado POR PREÇO volta a valer quando a faixa de compra muda/);
 
