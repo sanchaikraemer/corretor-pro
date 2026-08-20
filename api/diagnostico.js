@@ -5,7 +5,7 @@ import { conferirConfiguracao } from "./_config.js";
 //   ?mode=openai          → testa a chave OpenAI de verdade (models.list + chat)
 //   ?mode=bucket          → configura o bucket do Supabase Storage p/ ZIPs grandes
 //   ?mode=banco           → diz quais migrações estão MESMO aplicadas no banco (v1185)
-//   ?mode=config          → confere as variáveis de ambiente contra o catálogo (v1324)
+//   ?mode=config          → confere as variáveis de ambiente contra o catálogo (v1325)
 // Unifica os antigos api/status.js, api/diagnostico-openai.js e api/configurar-bucket.js
 // (economiza vagas de Serverless Function no plano Hobby da Vercel).
 import { createClient } from "@supabase/supabase-js";
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     if (!admin) return json(res, 403, { ok: false, error: "Conferir o banco é uma ação exclusiva do administrador da plataforma." });
     return modoBanco(res);
   }
-  // v1324 — mode=config confere a configuração do servidor inteiro (nome errado, valor no formato
+  // v1325 — mode=config confere a configuração do servidor inteiro (nome errado, valor no formato
   // errado, obrigatória faltando). É retrato da plataforma, não de uma conta: só o administrador.
   if (mode === "config") {
     const admin = await getPlatformAdminUserId(req, getSupabaseAdmin());
@@ -100,7 +100,7 @@ function modoStatus(res, isAdmin) {
   });
 }
 
-// ---------- mode=config (v1324) ----------
+// ---------- mode=config (v1325) ----------
 // Devolve só nome, grupo, se está definida e o problema em português. NUNCA o valor de nada: o
 // catálogo tem chave da OpenAI e do banco no meio.
 function modoConfig(res) {

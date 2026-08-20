@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { timingSafeEqual, createHmac } from "crypto";
 import { avisarConfiguracaoNoLog } from "./_config.js";
 
-// v1324 — a configuração é conferida quando o servidor acorda, e o que estiver ERRADO aparece no
+// v1325 — a configuração é conferida quando o servidor acorda, e o que estiver ERRADO aparece no
 // registro da Vercel na hora — não quando um corretor esbarrar na função que dependia daquilo.
 // Não derruba nada (derrubar tiraria do ar quem está trabalhando) e fica calado nos testes.
 if (process.env.NODE_ENV !== "test") avisarConfiguracaoNoLog();
@@ -387,7 +387,7 @@ export async function registrarCadastroDaConexao(supabase, conexaoHash, organiza
 // v1190 — subiu de 16 pra 18: a 0018 deixou de ser opcional. Desde esta versão, o cadastro de
 // conta nova em produção RECUSA em vez de cair no caminho antigo quando ela não está aplicada
 // (ver api/criar-conta.js), então o diagnóstico precisa apontá-la como pendência de verdade.
-// v1324 — sobe pra 19 (auditoria de 20/08/2026: o código exigia 18 com a 0019 já no repositório,
+// v1325 — sobe pra 19 (auditoria de 20/08/2026: o código exigia 18 com a 0019 já no repositório,
 // e a política ficava desalinhada). A 0019 é aditiva e só reescreve a função de conferência pra
 // ela reportar também o baseline — num banco que já roda, aplicá-la não muda dado nenhum.
 export const MIGRACAO_MINIMA_EXIGIDA = 19;

@@ -312,12 +312,12 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 
 ## 3. Variáveis de ambiente
 
-**Desde a v1324 elas têm catálogo e conferência.** `api/_config.js` descreve TODAS as variáveis que
+**Desde a v1325 elas têm catálogo e conferência.** `api/_config.js` descreve TODAS as variáveis que
 o código lê (o que cada uma faz, formato esperado, obrigatória ou não);
 `/api/diagnostico?mode=config` compara o catálogo com o ambiente que está no ar e o painel
 administrativo mostra o resultado em português no cartão **Saúde da configuração** — inclusive
 nome digitado errado ("você quis dizer…?") e valor em formato que o código não lê ("true" numa
-chave que só liga com "1"). A guarda `tests/v1324-configuracao-catalogada.test.mjs` falha se
+chave que só liga com "1"). A guarda `tests/v1325-configuracao-catalogada.test.mjs` falha se
 aparecer no código uma variável que não está no catálogo, ou se o catálogo guardar uma que ninguém
 lê mais. A lista abaixo continua valendo como resumo das principais.
 
@@ -498,10 +498,10 @@ despedida do corretor deixou de contar como cobrança ignorada — ver v1308).
 
 1. Trabalho feito numa branch, PR aberto pro `main`.
 2. `.github/workflows/ci.yml` roda `npm test` automaticamente em todo push e em todo PR (desde a
-   v1043; desde a v1324 em qualquer branch, com o job chamado `testes`) — é o "x"/"✓" visível
+   v1043; desde a v1325 em qualquer branch, com o job chamado `testes`) — é o "x"/"✓" visível
    antes de mesclar.
 3. Mesclar no `main` → a Vercel publica sozinha (webhook do GitHub já configurado).
-   - **v1324 — suíte vermelha não vai pro ar.** O `vercel.json` publica com
+   - **v1325 — suíte vermelha não vai pro ar.** O `vercel.json` publica com
      `npm test && node build.js` (e instala com `npm ci --include=dev`, senão o `acorn` das
      guardas de código morto não chega lá). Teste quebrado = build da Vercel falha = **a versão
      anterior continua no ar**. Custa ~1min30 a mais por publicação. Emergência: trocar o
@@ -585,7 +585,7 @@ impedir que ele chegue ao `main`, e isso é um ajuste do GitHub, não do código
 1. GitHub → o repositório `corretor-pro` → **Settings** → **Branches** (ou **Rules → Rulesets**).
 2. **Add branch protection rule** / **New ruleset**, com o padrão `main`.
 3. Marcar **Require status checks to pass before merging** e escolher o check chamado **`testes`**
-   (é o nome do job em `.github/workflows/ci.yml` desde a v1324).
+   (é o nome do job em `.github/workflows/ci.yml` desde a v1325).
 4. Salvar. A partir daí o botão de mesclar fica bloqueado enquanto a suíte estiver vermelha.
 
 ## 6. Ambiente de homologação (staging)
@@ -642,21 +642,21 @@ montar isso:
   de 700 KB acontece **durante** o download e o relógio vale até o último byte. Porta fora da 443 e
   credencial embutida no endereço também deixaram de ser aceitas
   (`baixarPaginaComSeguranca` em `api/_pipeline.js`, `NOTAS-v1322.md`).
-- **(v1324)** O isolamento entre empresas deixou de depender de memória: a guarda
-  `tests/v1324-isolamento-entre-empresas-na-guarda.test.mjs` varre `api/` e **reprova consulta às
+- **(v1325)** O isolamento entre empresas deixou de depender de memória: a guarda
+  `tests/v1325-isolamento-entre-empresas-na-guarda.test.mjs` varre `api/` e **reprova consulta às
   tabelas com dono** (`whatsapp_processamentos`, `direciona_config`, `ai_usage_events`) que não
   filtre por `organization_id`. Exceção legítima existe, mas tem que ser **declarada** com o
   comentário `multiempresa-ok: <motivo>` — hoje são 2 (o construtor de consulta da carteira e a
   gravação do backup, que já leva o dono em cada linha), e o teste reprova se passarem de 4
-  (`NOTAS-v1324.md`).
-- **(v1324)** Publicação **não sobe com suíte vermelha**: `vercel.json` publica com
+  (`NOTAS-v1325.md`).
+- **(v1325)** Publicação **não sobe com suíte vermelha**: `vercel.json` publica com
   `npm test && node build.js`. Teste quebrado = build falha = versão anterior continua no ar
-  (`NOTAS-v1324.md`, e o clique que falta no GitHub está na seção 5-C).
-- **(v1324)** Configuração conferida quando o servidor acorda (`avisarConfiguracaoNoLog`) e na
+  (`NOTAS-v1325.md`, e o clique que falta no GitHub está na seção 5-C).
+- **(v1325)** Configuração conferida quando o servidor acorda (`avisarConfiguracaoNoLog`) e na
   tela do painel — o erro de configuração deixa de aparecer só quando um corretor esbarra na
-  função que dependia dele (`NOTAS-v1324.md`).
-- **(v1324)** `MIGRACAO_MINIMA_EXIGIDA` subiu de 18 para **19**, alinhando a política à migração
-  mais recente do repositório (`NOTAS-v1324.md`).
+  função que dependia dele (`NOTAS-v1325.md`).
+- **(v1325)** `MIGRACAO_MINIMA_EXIGIDA` subiu de 18 para **19**, alinhando a política à migração
+  mais recente do repositório (`NOTAS-v1325.md`).
 - **(v1323)** Prova nova na tela do lead e na importação: **quantas fotos, PDFs e áudios desta
   conversa a IA NÃO leu** (`contarMaterialNaoLido` em `api/_pipeline.js`, `materialNaoLido` salvo
   com a análise, `cp1323MaterialNaoLido` em `app.js`, `materialNaoLidoHtml` em `js/importacao.js`).

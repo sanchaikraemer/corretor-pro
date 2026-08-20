@@ -3,7 +3,7 @@ name: CI
 # Roda a suíte do projeto (npm test — node --check em toda a API + os arquivos tests/*.test.mjs)
 # em toda alteração enviada ao GitHub.
 #
-# v1324 — a auditoria de 20/08/2026 apontou que "teste vermelho ≠ produção bloqueada": este
+# v1325 — a auditoria de 20/08/2026 apontou que "teste vermelho ≠ produção bloqueada": este
 # workflow avisava, mas não impedia nada. O bloqueio de verdade passou a ser feito no ponto que
 # ninguém consegue contornar sem querer: a PUBLICAÇÃO. O vercel.json agora publica com
 # `npm test && node build.js`, então suíte vermelha = build da Vercel falha = a versão anterior

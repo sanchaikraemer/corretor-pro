@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-// v1324 — TESTE VERMELHO NÃO VAI PRO AR.
+// v1325 — TESTE VERMELHO NÃO VAI PRO AR.
 //
 // Auditoria de 20/08/2026: "o CI executa, mas NÃO bloqueia o merge; push em main faz a Vercel
 // publicar automaticamente. Ou seja: teste vermelho ≠ produção bloqueada."
@@ -33,4 +33,4 @@ assert.match(doc, /suíte vermelha não vai pro ar/i, "o processo de publicaçã
 assert.match(doc, /Require status checks to pass before merging/,
   "e o passo que depende do dono precisa estar escrito, com o caminho dos cliques");
 
-console.log("v1324-publicacao-nao-sobe-com-teste-vermelho: ok");
+console.log("v1325-publicacao-nao-sobe-com-teste-vermelho: ok");

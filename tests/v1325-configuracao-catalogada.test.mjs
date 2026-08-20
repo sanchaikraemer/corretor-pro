@@ -2,7 +2,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { CATALOGO_ENV, conferirConfiguracao, nomeParecidoNoCatalogo } from "../api/_config.js";
 
-// v1324 — TODA CONFIGURAÇÃO DO SERVIDOR TEM NOME, DONO E CONFERÊNCIA.
+// v1325 — TODA CONFIGURAÇÃO DO SERVIDOR TEM NOME, DONO E CONFERÊNCIA.
 //
 // Auditoria de 20/08/2026: "há 55 variáveis de ambiente referenciadas no projeto. Isso já pede
 // validação centralizada de configuração ao iniciar/deployar, em vez de descobrir uma variável
@@ -130,4 +130,4 @@ assert.equal(new Set(CATALOGO_ENV.map(v => v.nome)).size, CATALOGO_ENV.length, "
   assert.match(painel, /carregarConfig\(\)/, "e com botão de conferir agora");
 }
 
-console.log(`v1324-configuracao-catalogada: ok (${CATALOGO_ENV.length} variáveis catalogadas)`);
+console.log(`v1325-configuracao-catalogada: ok (${CATALOGO_ENV.length} variáveis catalogadas)`);

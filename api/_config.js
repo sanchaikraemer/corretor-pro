@@ -1,4 +1,4 @@
-// api/_config.js — v1324
+// api/_config.js — v1325
 //
 // A CONFIGURAÇÃO DO SERVIDOR CONFERIDA NUM LUGAR SÓ, ANTES DE ALGUÉM TROPEÇAR NELA.
 //
@@ -18,7 +18,7 @@
 // ambiente que está no ar e devolve os problemas em português. Quem mostra isso é o painel
 // administrativo (Saúde da configuração), pela rota /api/diagnostico?mode=config.
 //
-// O catálogo não pode envelhecer sozinho: `tests/v1324-configuracao-catalogada.test.mjs` varre o
+// O catálogo não pode envelhecer sozinho: `tests/v1325-configuracao-catalogada.test.mjs` varre o
 // código atrás de `process.env.X` e falha se aparecer uma variável que não está aqui — ou se aqui
 // sobrar uma que o código não lê mais.
 

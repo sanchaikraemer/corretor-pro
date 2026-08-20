@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-// v1324 — O ISOLAMENTO ENTRE EMPRESAS DEIXA DE DEPENDER DE ALGUÉM LEMBRAR.
+// v1325 — O ISOLAMENTO ENTRE EMPRESAS DEIXA DE DEPENDER DE ALGUÉM LEMBRAR.
 //
 // Auditoria de 20/08/2026, e é o achado mais importante dela para vender o app pra muita gente:
 //
@@ -83,4 +83,4 @@ for (const c of declaradas) {
   assert.ok(!/organization_id/.test(bloco), "a varredura precisa reprovar uma consulta sem filtro por empresa");
 }
 
-console.log(`v1324-isolamento-entre-empresas-na-guarda: ok (${consultas.length} consultas conferidas, ${declaradas.length} exceções declaradas)`);
+console.log(`v1325-isolamento-entre-empresas-na-guarda: ok (${consultas.length} consultas conferidas, ${declaradas.length} exceções declaradas)`);
