@@ -78,11 +78,11 @@ export async function julgarCaso({ openai, caso, analise, organizationId = null 
 
 // Roda UMA conversa da bateria: análise de verdade + julgamento. Nunca lança — erro vira resultado
 // com a explicação, porque a bateria inteira não pode morrer por causa de uma conversa.
-export async function rodarCaso({ openai, caso, cerebroConfig = null, organizationId = null }) {
+export async function rodarCaso({ openai, caso, cerebroConfig = null, organizationId = null, etapas = null }) {
   const timeline = caso.conversa.map(m => ({ ...m, type: m.type || "text" }));
   const lead = guessLeadData(timeline, caso.corretorNome, caso.nomeArquivo);
   try {
-    const analise = await analyzeWithBrain({ lead, timeline, openai, cerebroConfig, ...(organizationId ? { organizationId } : {}) });
+    const analise = await analyzeWithBrain({ lead, timeline, openai, cerebroConfig, etapas, ...(organizationId ? { organizationId } : {}) });
     const itens = await julgarCaso({ openai, caso, analise, organizationId });
     return {
       id: caso.id,

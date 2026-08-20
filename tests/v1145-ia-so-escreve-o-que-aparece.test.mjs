@@ -22,7 +22,12 @@ assert.ok(inicio > -1, "sanidade: o formato pedido à IA existe");
 // v1291 — o dono reescreveu o pedido e o bloco da conversa deixou de ser sempre "CONVERSA
 // COMPLETA:" (agora o título muda conforme o que a IA recebeu). O recorte do formato vai até as
 // regras das três mensagens, que é o que vem logo depois do JSON.
-const formato = pipeline.slice(inicio, pipeline.indexOf("REGRAS PARA AS TRÊS MENSAGENS", inicio));
+// v1330 — as regras das três mensagens saíram do meio do prompt e viraram um bloco próprio
+// (blocoRegrasDasMensagens), colado na etapa que escreve. O formato JSON da LEITURA agora termina
+// onde esse bloco é interpolado — e, no modo de duas etapas, ele nem entra aqui.
+const fimDoFormato = pipeline.indexOf("blocoRegrasDasMensagens", inicio);
+assert.ok(fimDoFormato > -1, "sanidade: o formato termina antes das regras das três mensagens");
+const formato = pipeline.slice(inicio, fimDoFormato);
 
 // ── 1. O que a IA ESCREVE é só o que chega à tela ──────────────────────────────────────────────
 const PEDIDOS = [
@@ -74,8 +79,16 @@ assert.match(gravado, /mensagemQueEuEnviariaHoje: clean\(msgA \|\| d\.mensagemQu
   "o campo continua gravado com a mensagem A — que é o que o código já usava, mesmo quando a IA escrevia outra");
 
 // ── 3. As três mensagens e o resto do que a tela usa continuam sendo pedidos ───────────────────
-for (const campo of ["summary", "mensagens", "recomendada", "maisSuave", "maisDireta", "recomendacaoContato", "produtoInteresse", "produtosInteresse", "etapaSugerida", "clientProfile", "nextAction"]) {
-  assert.ok(formato.includes(`"${campo}"`), `${campo} é usado na tela e precisa continuar sendo pedido`);
+// v1330 — o que a tela usa continua sendo pedido, só que agora em duas etapas: a LEITURA pede o
+// diagnóstico, a REDAÇÃO pede as três mensagens. Nenhum campo de tela pode sumir das duas.
+for (const campo of ["summary", "recomendacaoContato", "produtoInteresse", "produtosInteresse", "etapaSugerida", "clientProfile", "nextAction"]) {
+  assert.ok(formato.includes(`"${campo}"`), `${campo} é usado na tela e precisa continuar sendo pedido na leitura`);
+}
+const inicioEsquemaMensagens = pipeline.indexOf("const blocoEsquemaMensagens = `");
+assert.ok(inicioEsquemaMensagens > -1, "sanidade: o esquema das três mensagens existe");
+const esquemaMensagens = pipeline.slice(inicioEsquemaMensagens, pipeline.indexOf("`;", inicioEsquemaMensagens));
+for (const campo of ["mensagens", "recomendada", "maisSuave", "maisDireta", "aLabel", "bLabel", "cLabel", "ordemDeEnvio"]) {
+  assert.ok(esquemaMensagens.includes(`"${campo}"`), `${campo} é usado na tela e precisa continuar sendo pedido na redação`);
 }
 
 console.log("v1145-ia-so-escreve-o-que-aparece: ok");

@@ -55,11 +55,19 @@ assert.match(analyzeSrc, /falhaAmigavel/,
 // v1308 — a janela da 1ª tentativa deixou de reservar 16s ociosos "por garantia": ela leva quase o
 // orçamento inteiro, e a 2ª tentativa só acontece quando o erro foi PASSAGEIRO (volta em segundos e
 // deixa o tempo de sobra sozinho). Timeout não é repetido — repetir chamada lenta falha igual.
+// v1331 — a janela da leitura passou a depender do modo: no pedido único (o padrão) ela leva quase
+// o orçamento inteiro, como sempre; no modo de duas etapas ela leva 62% e o resto fica pra etapa
+// que escreve as três mensagens.
 const budgetMatch = analyzeSrc.match(/DIRECIONA_ANALYSIS_BUDGET_MS \|\| (\d+)/);
-const folgaMatch = analyzeSrc.match(/DIRECIONA_ANALYSIS_TIMEOUT_MS \|\| \(orcamentoAnaliseMs - (\d+)\)/);
-assert.ok(budgetMatch && folgaMatch, 'orçamento/janela default da análise não encontrados');
+const tetoMatch = analyzeSrc.match(/const tetoLeituraMs = duasEtapas \? Math\.round\(orcamentoAnaliseMs \* ([\d.]+)\) : \(orcamentoAnaliseMs - (\d+)\)/);
+assert.ok(budgetMatch && tetoMatch, 'orçamento/janela default da análise não encontrados');
 const orcamentoMs = Number(budgetMatch[1]);
-const janelaMs = orcamentoMs - Number(folgaMatch[1]);
+const janelaMs = orcamentoMs - Number(tetoMatch[2]);
+const janelaLeituraDuasEtapas = Math.round(orcamentoMs * Number(tetoMatch[1]));
+assert.ok(janelaLeituraDuasEtapas < orcamentoMs,
+  'no modo de duas etapas, a leitura não pode comer o orçamento inteiro — a redação precisa de fatia');
+assert.ok(orcamentoMs - janelaLeituraDuasEtapas >= 30000,
+  'e o que sobra pra escrever as três precisa ser tempo de verdade (>= 30s)');
 assert.ok(janelaMs < orcamentoMs,
   `a janela principal (${janelaMs}ms) precisa caber dentro do orçamento (${orcamentoMs}ms)`);
 assert.ok(janelaMs >= 40000,

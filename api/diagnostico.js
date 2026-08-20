@@ -87,12 +87,15 @@ async function modoBateria(req, res, organizationId) {
   const de = Math.max(0, Math.min(total, Number(req.query?.de) || 0));
   const quantos = Math.max(1, Math.min(MAX_CASOS_POR_CHAMADA, Number(req.query?.quantos) || 1));
   const ate = Math.min(total, de + quantos);
+  // v1331 — dá pra medir o modo novo (análise em duas etapas) sem ligá-lo pra ninguém: o modo
+  // viaja só nesta medição, e o que o corretor usa continua como está até a comparação decidir.
+  const etapas = String(req.query?.etapas || "").trim() === "2" ? "2" : null;
   const pedaco = CASOS.slice(de, ate);
   if (!pedaco.length) return json(res, 200, { ok: true, total, de, ate, resultados: [], fim: true });
 
   const resultados = [];
   for (const caso of pedaco) {
-    resultados.push(await rodarCaso({ openai, caso, organizationId }));
+    resultados.push(await rodarCaso({ openai, caso, organizationId, etapas }));
   }
   return json(res, 200, {
     ok: true,
@@ -100,6 +103,7 @@ async function modoBateria(req, res, organizationId) {
     de,
     ate,
     fim: ate >= total,
+    modo: etapas === "2" ? "duas-etapas" : "pedido-unico",
     modeloJuiz: modeloJuiz(),
     resultados
   });

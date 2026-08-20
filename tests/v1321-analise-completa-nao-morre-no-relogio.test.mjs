@@ -23,8 +23,11 @@ assert.equal(vercel.functions["api/reanalisar-lead.js"].maxDuration, 300, "a rot
 assert.equal(vercel.functions["api/processar-storage.js"].maxDuration, 300, "a rota da importação precisa do teto de 300s");
 
 // Orçamento interno: 150s por padrão, ainda ajustável por variável de ambiente sem publicar.
-assert.match(pipeline, /DIRECIONA_ANALYSIS_BUDGET_MS \|\| 150000/, "o orçamento interno da análise precisa ser 150s por padrão");
-assert.ok(150000 + 20000 < 300 * 1000, "o orçamento interno precisa caber com folga dentro do teto do servidor");
+// v1331 — de 150s para 240s: numa conversa de 176 mensagens (print do dono, 20/08 19h) a análise
+// não coube no orçamento e a tela caiu no aviso "estas três mensagens são da análise ANTERIOR".
+// A rota aceita 300s desde a v1321; o orçamento interno é que tinha ficado curto.
+assert.match(pipeline, /DIRECIONA_ANALYSIS_BUDGET_MS \|\| 240000/, "o orçamento interno da análise precisa ser 240s por padrão");
+assert.ok(240000 + 20000 < 300 * 1000, "o orçamento interno precisa caber com folga dentro do teto do servidor");
 
 // Navegador: espera mais que o servidor — nunca desiste antes dele.
 assert.match(app, /setTimeout\(\(\)=>ctrl\.abort\(\),320000\)/, "o navegador precisa esperar mais que o teto do servidor");

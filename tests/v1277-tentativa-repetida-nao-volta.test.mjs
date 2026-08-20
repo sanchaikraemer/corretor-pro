@@ -143,7 +143,10 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
   assert.ok(/Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil\./.test(src),
     'a regra da tentativa repetida precisa existir no pedido enviado à IA');
   // A revisão final continua existindo (10 itens) e continua sendo a última coisa lida.
-  assert.ok(src.indexOf('REVISÃO FINAL SILENCIOSA') > src.indexOf('${timelineText}'),
+  // v1330 — o texto da revisão virou constante (revisaoSoDaLeitura/revisaoCompleta), declarada
+  // antes do prompt; o que precisa continuar vindo depois da conversa é o PONTO em que ela é
+  // colada no pedido.
+  assert.ok(src.indexOf('${duasEtapas ? revisaoSoDaLeitura : revisaoCompleta}') > src.indexOf('${timelineText}'),
     'a revisão final precisa vir depois da conversa');
 }
 

@@ -50,7 +50,9 @@ assert.match(
 );
 // E a revisão final tem que ser mesmo a ÚLTIMA coisa do prompt, depois da conversa.
 const posTimeline = pipeline.indexOf('${timelineText}');
-const posConferencia = pipeline.indexOf('REVISÃO FINAL SILENCIOSA');
+// v1331 — o texto da revisão virou constante (revisaoSoDaLeitura/revisaoCompleta), declarada antes
+// do prompt; o que precisa continuar vindo depois da conversa é o PONTO em que ela é colada.
+const posConferencia = pipeline.indexOf('${duasEtapas ? revisaoSoDaLeitura : revisaoCompleta}');
 assert.ok(posConferencia > posTimeline,
   'a conferência final precisa vir DEPOIS da conversa — é o último item lido antes de a IA escrever');
 

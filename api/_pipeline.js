@@ -4313,7 +4313,7 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
   }
 }
 
-export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, contextoIncremental = null, cerebroConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA }) {
+export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, contextoIncremental = null, cerebroConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA, etapas = null }) {
   const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
   const nowIso = new Date().toISOString();
   const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
@@ -4682,6 +4682,167 @@ inventar diferenças artificiais.
 
 Responda somente com JSON válido no formato solicitado.`;
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // v1330 — ENTENDER PRIMEIRO, ESCREVER DEPOIS.
+  //
+  // Até aqui um pedido só fazia tudo: ler a conversa inteira, entender sete meses de histórico,
+  // diagnosticar, achar a virada, montar o plano E escrever as três mensagens — com o modelo
+  // pulando de "compreender" para "redigir" no meio da mesma resposta. Foi por isso que o
+  // orçamento precisou ir de 52s para 150s na v1321: o pedido tinha ficado grande demais para uma
+  // tacada. E a comparação do dono, em 20/08/2026, entre a análise do app e a leitura da MESMA
+  // conversa feita à mão mostrou onde isso doía: a leitura à mão é feita em duas etapas, e sai
+  // melhor nas duas.
+  //
+  // Agora são duas chamadas:
+  //   ETAPA 1 (leitura) — a conversa inteira, o Cérebro e o fichário entram; sai o diagnóstico,
+  //     sem nenhuma mensagem escrita. O modelo só entende.
+  //   ETAPA 2 (redação) — entra o diagnóstico JÁ PRONTO da etapa 1, o Cérebro, o fichário e a
+  //     cauda recente da conversa (pro fio e o tom); saem as três jogadas. O modelo só escreve.
+  //
+  // NENHUMA REGRA DO PROMPT FOI REMOVIDA OU AFROUXADA: os blocos abaixo são o texto de sempre,
+  // recortado inteiro e mandado para a etapa em que ele manda. O piso comercial continua valendo
+  // para quem TEM Cérebro (a regra da v1247 segue de pé).
+  //
+  // v1331 — ENTRA DESLIGADO, DE PROPÓSITO. A primeira medição da bateria (feita pelo dono no
+  // painel em 20/08/2026: 156 de 191 pontos) é do PEDIDO ÚNICO. Ligar as duas etapas sem medir
+  // seria repetir agosto — publicar mudança no coração da análise no escuro. Então o pedido único
+  // continua sendo o padrão, e as duas etapas só entram quando alguém pede:
+  //   • o botão "Medir o modo novo" do painel manda etapas=2 só naquela medição;
+  //   • DIRECIONA_ANALISE_ETAPAS=2 na hospedagem liga pra valer, sem publicar código, quando a
+  //     medição mostrar que o modo novo é melhor.
+  const duasEtapas = String(etapas ?? process.env.DIRECIONA_ANALISE_ETAPAS ?? "1").trim() === "2";
+
+  const blocoPisoDeForma = `PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE. O Cérebro decide o QUE dizer, o TOM e QUAL
+saudação usar em cada faixa de horário; se ele definir faixas próprias, são as dele que valem, não
+a linha calculada acima. O que o Cérebro não decide é se a mensagem sai inteira — isso é obrigação
+do produto, porque o corretor COPIA E COLA no WhatsApp e não fica consertando rascunho:
+- toda mensagem abre cumprimentando a pessoa, pelo primeiro nome dela;
+- havendo dias parados desde a última mensagem, a mensagem recomendada reconhece esse intervalo
+  antes de pedir qualquer coisa;
+- toda mensagem termina de um jeito que a pessoa consiga responder.
+Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não devolva rascunho.`;
+
+  const blocoEsquemaMensagens = `  "mensagens":{
+    "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Reposiciona a faixa)",
+    "bLabel":"nome curto da jogada da maisSuave (ex.: Puxa a avaliação)",
+    "cLabel":"nome curto da jogada da maisDireta (ex.: Reabre pelo ponto da objeção)",
+    "ordemDeEnvio":"instrução prática de envio em 1 ou 2 frases: qual mandar primeiro, se sozinha, e o que esperar antes das outras",
+    "recomendada":"melhor mensagem para este momento — a JOGADA PRINCIPAL: quando existe aVirada, é ela que a recomendada entrega ao cliente",
+    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico, que ABRE OUTRA PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu. Nunca a recomendada com palavras mais macias",
+    "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite, propondo um PASSO CONCRETO (o que você vai fazer e o que precisa dele para fazer). Nunca a recomendada encurtada"
+  },`;
+
+  const blocoRegrasDasMensagens = `REGRAS PARA AS TRÊS MENSAGENS
+- As três nascem da mesma verdade factual e da mesma leitura comercial.
+- RECOMENDADA é a que você enviaria se só pudesse enviar uma. Quando a leitura encontrou uma
+  aVirada, a recomendada É a virada contada ao cliente: o fato, o que ele abre pra ele, e UMA
+  pergunta que destrava a seleção. Não gaste a recomendada pedindo confirmação burocrática se
+  existe uma virada pra entregar.
+- MAIS SUAVE explora/resolve o ponto mais importante com menor pressão — e o faz ABRINDO OUTRA
+  PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu.
+  Não é a recomendada com as palavras mais macias.
+- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Ela
+  propõe um PASSO CONCRETO — o que você vai fazer, e o que precisa dele para fazer. Não é a
+  recomendada encurtada.
+- Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
+- CONFIRA ANTES DE DEVOLVER: leia a ÚLTIMA FRASE das três. Se as três terminam pedindo a MESMA
+  coisa ao cliente, você devolveu uma mensagem escrita três vezes — refaça duas delas. Pelo menos
+  duas das três precisam pedir coisas diferentes: uma pode confirmar a faixa, outra trazer o que
+  ele não sabe, outra propor o passo concreto.
+- CADA MENSAGEM TEM NOME DE JOGADA (aLabel/bLabel/cLabel): 2 a 4 palavras dizendo O QUE ELA FAZ
+  (ex.: "Reposiciona a faixa", "Puxa a avaliação", "Reabre pelo prazo"). Se você não consegue dar
+  nomes diferentes às três, elas são a mesma jogada — volte e refaça.
+- ORDEM DE ENVIO (ordemDeEnvio): diga qual mandar primeiro e por quê. Três mensagens juntas viram
+  bloco, e cliente que já sumiu duas vezes some de novo — em regra, a principal vai sozinha e as
+  outras esperam a resposta.
+- CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA. Mesmo indo todas para o mesmo próximo passo, as três
+  são três CAMINHOS até ele — uma responde o que o cliente pediu, outra traz o que ele ainda não
+  sabe, outra trata a objeção que ficou de pé, outra busca o dado que destrava. Se as três terminam
+  na mesma pergunta, com as mesmas palavras, você não escreveu três caminhos: escreveu uma mensagem
+  três vezes. Trocar palavra não é trocar caminho.
+- Não repita pergunta já respondida nem transforme falta de dado em interrogatório.
+- Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil.
+- Não invente ação já realizada, novidade, disponibilidade, prazo, condição, urgência ou escassez.
+- Não prometa fazer no passado algo que ainda será feito. Diferencie "vou verificar" de "verifiquei".
+- Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
+- Não despeje catálogo quando os critérios já permitem curadoria.
+- Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
+- NÃO DESCREVA O CLIENTE PARA ELE MESMO EM LINGUAGEM DE SISTEMA. "Você tinha entrado pelo
+  apartamento", "você demonstrou interesse", "seu perfil de busca", "sua jornada", "na sua
+  captação" — isso é conversa de corretor com o sistema, não de corretor com gente. Fale do
+  IMÓVEL e do que a pessoa DISSE: "o apartamento de R$ (valor) que você perguntou", "você me
+  disse que (metragem) ficou pequeno" — com o número REAL desta conversa no lugar do parêntese.
+  O cliente não "entra" por nada — ele pergunta, pede, responde.
+- TEMPO SE ESCREVE COM O NÚMERO QUE ESTÁ NO CONTEXTO TÉCNICO, nunca por estimativa. Se lá está
+  escrito 1 dia, é errado escrever "já se passaram alguns dias", "faz um tempo" ou "uns dias".
+  Sem o número na mão, não fale de tempo — o cliente lembra quando falou com você.
+- RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE. Se você marcar recomendacaoContato.aguardar,
+  as três continuam sendo as mensagens completas e prontas para enviar QUANDO o prazo vencer — com
+  cumprimento e com o intervalo reconhecido. Rascunho, frase solta ou mensagem sem cumprimento
+  nunca são resposta válida.
+
+${chaveRegrasEscrita ? `LINGUAGEM DE IA — PROIBIDO. O Cérebro define o tom; estas construções, porém, não são tom, são a
+marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita uma a uma: "espero
+que esteja bem/indo bem", "faz sentido", "se fizer sentido", "faça sentido", "fico à disposição",
+"estou à disposição", "me coloco à disposição", "qualquer dúvida estou aqui", "espero ter ajudado",
+"não hesite em", "sinta-se à vontade para", "conforme conversamos" sem conversa real, "gostaria de
+saber se você teria interesse". Também não escreva no passado o que você quer agora ("quis saber
+se...") — no WhatsApp se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto,
+sem repetir em outras palavras o que a mensagem já disse.
+
+PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO. Quem escreve é um corretor no WhatsApp, falando
+com uma pessoa que está comprando um imóvel: valem as palavras que ele usaria no telefone, e só
+elas. É PROIBIDO escrever "overview", "insight", "feedback", "budget", "call", "briefing",
+"follow-up", "case", "timing", "mindset", "expertise", "know-how", "player", "target", "deal",
+"lead", "prospect", "pipeline", "background", "update", "board", "meeting" — e qualquer outra
+palavra em inglês que tenha equivalente óbvio em português. Escreva em português: overview = uma
+ideia geral / um resumo; feedback = retorno; call = ligação; budget = quanto pretende investir;
+follow-up = retomar o contato; timing = momento; update = novidade; meeting = reunião. Jargão
+corporativo em português cai na mesma regra: "alinhar expectativas", "validar com você",
+"estruturar o processo", "mapear as possibilidades", "de forma assertiva", "agregar valor",
+"solução personalizada", "análise detalhada do seu perfil". Palavra que o cliente teria que
+traduzir na cabeça denuncia na hora que quem escreveu não foi o corretor.
+A EXCEÇÃO, e só ela: nome próprio (empreendimento, construtora, bairro, rua) e o vocabulário que
+já é assim no mercado imobiliário brasileiro — studio, loft, duplex, garden, closet, playground,
+home office, coworking, hall, fitness — continuam escritos como são, quando a conversa ou o Cérebro
+usarem essas palavras. Isso não abre a porta pro resto do inglês.` : ""}`;
+
+  const revisaoCompleta = `REVISÃO FINAL SILENCIOSA
+Antes de devolver o JSON, confirme:
+1. O que você chamou de fato está realmente sustentado?
+2. Você distinguiu histórico ainda válido de informação superada?
+3. Alguma hipótese virou objeção, orçamento ou intenção sem confirmação?
+4. Você repetiu pergunta ou material já resolvido?
+5. O nextAction é realmente o menor passo útil agora?
+6. As três mensagens executam essa leitura, em vez de seguir um roteiro automático?
+7. Alguma mensagem força visita/encontro/proposta sem maturidade?
+8. Alguma mensagem inventa novidade, urgência ou ação do corretor?
+9. A análise considerou o começo, o meio e o fim do histórico fornecido?
+10. A resposta está fiel ao Cérebro Comercial atual?
+11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
+
+  const revisaoSoDaLeitura = `REVISÃO FINAL SILENCIOSA
+Antes de devolver o JSON, confirme:
+1. O que você chamou de fato está realmente sustentado?
+2. Você distinguiu histórico ainda válido de informação superada?
+3. Alguma hipótese virou objeção, orçamento ou intenção sem confirmação?
+4. Você repetiu pergunta ou material já resolvido?
+5. O nextAction é realmente o menor passo útil agora?
+6. A análise considerou o começo, o meio e o fim do histórico fornecido?
+7. A leitura está fiel ao Cérebro Comercial atual?`;
+
+  const revisaoSoDasMensagens = `REVISÃO FINAL SILENCIOSA
+Antes de devolver o JSON, confirme:
+1. As três mensagens executam a leitura acima, em vez de seguir um roteiro automático?
+2. Alguma mensagem força visita/encontro/proposta sem maturidade?
+3. Alguma mensagem inventa novidade, urgência ou ação do corretor?
+4. Alguma mensagem repete pergunta que a leitura marcou como já respondida, ou pede o que o
+   cliente já informou?
+5. As três estão fiéis ao Cérebro Comercial atual?
+6. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+   alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
+
   const prompt = `Execute a análise usando o Cérebro Comercial e TODO o contexto fornecido abaixo.
 
 CONTEXTO TÉCNICO DA ANÁLISE
@@ -4700,16 +4861,8 @@ Lead: ${JSON.stringify(leadIA)}
 A saudação, o reconhecimento ou não do intervalo e o tipo de próximo passo devem seguir o Cérebro.
 Os dados acima são contexto, não ordens para forçar visita, pergunta, encontro ou retomada.
 
-PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE. O Cérebro decide o QUE dizer, o TOM e QUAL
-saudação usar em cada faixa de horário; se ele definir faixas próprias, são as dele que valem, não
-a linha calculada acima. O que o Cérebro não decide é se a mensagem sai inteira — isso é obrigação
-do produto, porque o corretor COPIA E COLA no WhatsApp e não fica consertando rascunho:
-- toda mensagem abre cumprimentando a pessoa, pelo primeiro nome dela;
-- havendo dias parados desde a última mensagem, a mensagem recomendada reconhece esse intervalo
-  antes de pedir qualquer coisa;
-- toda mensagem termina de um jeito que a pessoa consiga responder.
-Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não devolva rascunho.
-
+${duasEtapas ? "" : `${blocoPisoDeForma}
+`}
 LEITURA OBRIGATÓRIA
 ${cortadaPorLimiteTecnico
   ? "A conversa excedeu o limite técnico desta chamada. Leia integralmente TODO o trecho fornecido e não finja conhecer o que foi omitido. Não use análise antiga para preencher lacunas."
@@ -4769,16 +4922,7 @@ Formato JSON obrigatório:
     "pedidoEspontaneo":"pedido/critério que partiu do cliente por iniciativa própria, ou Não identificado",
     "faltaDescobrir":["somente informações ainda abertas que realmente podem alterar estratégia/seleção/próximo passo"]
   },
-  "mensagens":{
-    "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Reposiciona a faixa)",
-    "bLabel":"nome curto da jogada da maisSuave (ex.: Puxa a avaliação)",
-    "cLabel":"nome curto da jogada da maisDireta (ex.: Reabre pelo ponto da objeção)",
-    "ordemDeEnvio":"instrução prática de envio em 1 ou 2 frases: qual mandar primeiro, se sozinha, e o que esperar antes das outras",
-    "recomendada":"melhor mensagem para este momento — a JOGADA PRINCIPAL: quando existe aVirada, é ela que a recomendada entrega ao cliente",
-    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico, que ABRE OUTRA PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu. Nunca a recomendada com palavras mais macias",
-    "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite, propondo um PASSO CONCRETO (o que você vai fazer e o que precisa dele para fazer). Nunca a recomendada encurtada"
-  },
-  "recomendacaoContato":{
+${duasEtapas ? "" : blocoEsquemaMensagens}  "recomendacaoContato":{
     "aguardar":false,
     "motivo":"preencher somente quando o cliente pediu espaço/tempo ou houver razão concreta para não contatar agora"
   },
@@ -4789,97 +4933,12 @@ Formato JSON obrigatório:
   "nextAction":"menor próximo passo útil coerente com a leitura"
 }
 
-REGRAS PARA AS TRÊS MENSAGENS
-- As três nascem da mesma verdade factual e da mesma leitura comercial.
-- RECOMENDADA é a que você enviaria se só pudesse enviar uma. Quando a leitura encontrou uma
-  aVirada, a recomendada É a virada contada ao cliente: o fato, o que ele abre pra ele, e UMA
-  pergunta que destrava a seleção. Não gaste a recomendada pedindo confirmação burocrática se
-  existe uma virada pra entregar.
-- MAIS SUAVE explora/resolve o ponto mais importante com menor pressão — e o faz ABRINDO OUTRA
-  PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu.
-  Não é a recomendada com as palavras mais macias.
-- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Ela
-  propõe um PASSO CONCRETO — o que você vai fazer, e o que precisa dele para fazer. Não é a
-  recomendada encurtada.
-- Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
-- CONFIRA ANTES DE DEVOLVER: leia a ÚLTIMA FRASE das três. Se as três terminam pedindo a MESMA
-  coisa ao cliente, você devolveu uma mensagem escrita três vezes — refaça duas delas. Pelo menos
-  duas das três precisam pedir coisas diferentes: uma pode confirmar a faixa, outra trazer o que
-  ele não sabe, outra propor o passo concreto.
-- CADA MENSAGEM TEM NOME DE JOGADA (aLabel/bLabel/cLabel): 2 a 4 palavras dizendo O QUE ELA FAZ
-  (ex.: "Reposiciona a faixa", "Puxa a avaliação", "Reabre pelo prazo"). Se você não consegue dar
-  nomes diferentes às três, elas são a mesma jogada — volte e refaça.
-- ORDEM DE ENVIO (ordemDeEnvio): diga qual mandar primeiro e por quê. Três mensagens juntas viram
-  bloco, e cliente que já sumiu duas vezes some de novo — em regra, a principal vai sozinha e as
-  outras esperam a resposta.
-- CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA. Mesmo indo todas para o mesmo próximo passo, as três
-  são três CAMINHOS até ele — uma responde o que o cliente pediu, outra traz o que ele ainda não
-  sabe, outra trata a objeção que ficou de pé, outra busca o dado que destrava. Se as três terminam
-  na mesma pergunta, com as mesmas palavras, você não escreveu três caminhos: escreveu uma mensagem
-  três vezes. Trocar palavra não é trocar caminho.
-- Não repita pergunta já respondida nem transforme falta de dado em interrogatório.
-- Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil.
-- Não invente ação já realizada, novidade, disponibilidade, prazo, condição, urgência ou escassez.
-- Não prometa fazer no passado algo que ainda será feito. Diferencie "vou verificar" de "verifiquei".
-- Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
-- Não despeje catálogo quando os critérios já permitem curadoria.
-- Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
-- NÃO DESCREVA O CLIENTE PARA ELE MESMO EM LINGUAGEM DE SISTEMA. "Você tinha entrado pelo
-  apartamento", "você demonstrou interesse", "seu perfil de busca", "sua jornada", "na sua
-  captação" — isso é conversa de corretor com o sistema, não de corretor com gente. Fale do
-  IMÓVEL e do que a pessoa DISSE: "o apartamento de R$ 430 mil que você perguntou", "você me
-  disse que 43 m² ficou pequeno". O cliente não "entra" por nada — ele pergunta, pede, responde.
-- TEMPO SE ESCREVE COM O NÚMERO QUE ESTÁ NO CONTEXTO TÉCNICO, nunca por estimativa. Se lá está
-  escrito 1 dia, é errado escrever "já se passaram alguns dias", "faz um tempo" ou "uns dias".
-  Sem o número na mão, não fale de tempo — o cliente lembra quando falou com você.
-- RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE. Se você marcar recomendacaoContato.aguardar,
-  as três continuam sendo as mensagens completas e prontas para enviar QUANDO o prazo vencer — com
-  cumprimento e com o intervalo reconhecido. Rascunho, frase solta ou mensagem sem cumprimento
-  nunca são resposta válida.
-
-${chaveRegrasEscrita ? `LINGUAGEM DE IA — PROIBIDO. O Cérebro define o tom; estas construções, porém, não são tom, são a
-marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita uma a uma: "espero
-que esteja bem/indo bem", "faz sentido", "se fizer sentido", "faça sentido", "fico à disposição",
-"estou à disposição", "me coloco à disposição", "qualquer dúvida estou aqui", "espero ter ajudado",
-"não hesite em", "sinta-se à vontade para", "conforme conversamos" sem conversa real, "gostaria de
-saber se você teria interesse". Também não escreva no passado o que você quer agora ("quis saber
-se...") — no WhatsApp se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto,
-sem repetir em outras palavras o que a mensagem já disse.
-
-PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO. Quem escreve é um corretor no WhatsApp, falando
-com uma pessoa que está comprando um imóvel: valem as palavras que ele usaria no telefone, e só
-elas. É PROIBIDO escrever "overview", "insight", "feedback", "budget", "call", "briefing",
-"follow-up", "case", "timing", "mindset", "expertise", "know-how", "player", "target", "deal",
-"lead", "prospect", "pipeline", "background", "update", "board", "meeting" — e qualquer outra
-palavra em inglês que tenha equivalente óbvio em português. Escreva em português: overview = uma
-ideia geral / um resumo; feedback = retorno; call = ligação; budget = quanto pretende investir;
-follow-up = retomar o contato; timing = momento; update = novidade; meeting = reunião. Jargão
-corporativo em português cai na mesma regra: "alinhar expectativas", "validar com você",
-"estruturar o processo", "mapear as possibilidades", "de forma assertiva", "agregar valor",
-"solução personalizada", "análise detalhada do seu perfil". Palavra que o cliente teria que
-traduzir na cabeça denuncia na hora que quem escreveu não foi o corretor.
-A EXCEÇÃO, e só ela: nome próprio (empreendimento, construtora, bairro, rua) e o vocabulário que
-já é assim no mercado imobiliário brasileiro — studio, loft, duplex, garden, closet, playground,
-home office, coworking, hall, fitness — continuam escritos como são, quando a conversa ou o Cérebro
-usarem essas palavras. Isso não abre a porta pro resto do inglês.` : ""}
-
+${duasEtapas ? "" : `${blocoRegrasDasMensagens}
+`}
 CONVERSA ${entradaIncremental ? "— RESUMO ANTERIOR + NOVIDADE" : cortadaPorLimiteTecnico ? "— TRECHO DISPONÍVEL APÓS LIMITE TÉCNICO" : "COMPLETA"}:
 ${timelineText}
 
-REVISÃO FINAL SILENCIOSA
-Antes de devolver o JSON, confirme:
-1. O que você chamou de fato está realmente sustentado?
-2. Você distinguiu histórico ainda válido de informação superada?
-3. Alguma hipótese virou objeção, orçamento ou intenção sem confirmação?
-4. Você repetiu pergunta ou material já resolvido?
-5. O nextAction é realmente o menor passo útil agora?
-6. As três mensagens executam essa leitura, em vez de seguir um roteiro automático?
-7. Alguma mensagem força visita/encontro/proposta sem maturidade?
-8. Alguma mensagem inventa novidade, urgência ou ação do corretor?
-9. A análise considerou o começo, o meio e o fim do histórico fornecido?
-10. A resposta está fiel ao Cérebro Comercial atual?
-11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
-    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
+${duasEtapas ? revisaoSoDaLeitura : revisaoCompleta}`;
   // ===== FIM DO MIOLO DO PROMPT =====
 
   try {
@@ -4895,11 +4954,20 @@ Antes de devolver o JSON, confirme:
     // v1321 — a leitura completa (v1320) escreve mais e estourava o orçamento de 52s: a reanálise
     // morria com "Request was aborted" (print do dono, 20/08 08:54). O teto das rotas de análise
     // subiu de 60s pra 300s no vercel.json; o orçamento interno acompanha, com folga.
-    const orcamentoAnaliseMs = Number(process.env.DIRECIONA_ANALYSIS_BUDGET_MS || 150000);
+    // v1331 — de 150s para 240s. A rota já aceita 300s desde a v1321, mas o orçamento interno
+    // tinha ficado em 150 — e numa conversa de 176 mensagens (print do dono, 20/08 19h) a análise
+    // não coube: a tela caiu no aviso "estas três mensagens são da análise ANTERIOR". Perder a
+    // análise por relógio é o pior dos dois mundos: gastou a IA e não entregou. Continua com 60s
+    // de folga até o teto da rota.
+    const orcamentoAnaliseMs = Number(process.env.DIRECIONA_ANALYSIS_BUDGET_MS || 240000);
     const inicioAnaliseTs = Date.now();
+    // v1330 — com duas etapas, a leitura não pode comer o orçamento inteiro: a redação precisa de
+    // uma fatia garantida. A etapa 2 recebe um pedido MUITO menor (o diagnóstico já pronto + a
+    // cauda da conversa), então ela cabe folgada no que sobra.
+    const tetoLeituraMs = duasEtapas ? Math.round(orcamentoAnaliseMs * 0.62) : (orcamentoAnaliseMs - 4000);
     const janelaPrincipalMs = Math.min(
-      Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || (orcamentoAnaliseMs - 4000)),
-      Math.max(15000, orcamentoAnaliseMs - 4000)
+      Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || tetoLeituraMs),
+      Math.max(15000, tetoLeituraMs)
     );
     const maxTokensAnalise = Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 3600);
     let r = null, erroPrincipal = null, modeloTrocadoPorIndisponibilidade = "";
@@ -4948,6 +5016,94 @@ Antes de devolver o JSON, confirme:
     const parsedRaw = r.parsed;
     const completion = r.response;
     await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloAnalise(), rota: "analise", usage: completion?.usage });
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    // v1330 — ETAPA 2: AS TRÊS JOGADAS, ESCRITAS EM CIMA DO DIAGNÓSTICO JÁ PRONTO.
+    //
+    // O que entra aqui é diferente do que entrou na etapa 1: em vez da conversa inteira, vai a
+    // LEITURA já concluída (que é o resumo mais fiel que existe dela) mais a cauda recente, pro fio
+    // e pro tom. O Cérebro continua inteiro, no mesmo systemPrompt. As regras das três mensagens
+    // são as mesmas de sempre, palavra por palavra — só que agora o modelo chega nelas sem ter que
+    // ler sete meses de conversa na mesma respiração.
+    if (duasEtapas && parsedRaw && typeof parsedRaw === "object") {
+      const caudaChars = Number(process.env.DIRECIONA_CAUDA_MENSAGENS_CHARS || 14000);
+      const caudaDaConversa = timelineText.length > caudaChars ? timelineText.slice(-caudaChars) : timelineText;
+      const leituraParaEscrever = JSON.stringify({
+        summary: parsedRaw.summary,
+        leituraDaConversa: parsedRaw.leituraDaConversa,
+        diagnostico: parsedRaw.diagnostico,
+        produtoInteresse: parsedRaw.produtoInteresse,
+        produtosInteresse: parsedRaw.produtosInteresse,
+        etapaSugerida: parsedRaw.etapaSugerida,
+        clientProfile: parsedRaw.clientProfile,
+        nextAction: parsedRaw.nextAction,
+        recomendacaoContato: parsedRaw.recomendacaoContato
+      });
+      const promptMensagens = `Você JÁ LEU esta conversa e já concluiu a leitura comercial dela (vem pronta abaixo). Agora faça
+uma coisa só: ESCREVER AS TRÊS MENSAGENS. Não refaça a leitura, não contradiga o que ela concluiu,
+não devolva diagnóstico.
+
+CONTEXTO TÉCNICO
+Data e hora atuais no Brasil: ${dataHoraAtualAnalise}${hojeSemana ? ` (${hojeSemana})` : ""}
+Fuso: ${fusoAnalise}
+Saudação correspondente ao horário neste instante: ${saudacaoDoHorario}
+Data da última mensagem identificada: ${contextoTemporal.ultimaData}
+Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
+Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
+${blocoTentativasSemResposta}
+${ficharioDaConversa ? `
+${ficharioDaConversa}
+` : ""}Corretor: ${corretorNome}
+Lead: ${JSON.stringify(leadIA)}
+
+A LEITURA QUE VOCÊ JÁ FEZ DESTA CONVERSA (é a sua, está fechada; as três mensagens executam ELA):
+${leituraParaEscrever}
+
+OBSERVAÇÕES MANUAIS DO CORRETOR
+${observacoesManuaisTexto || "Nenhuma observação manual registrada."}
+
+${blocoPisoDeForma}
+
+${blocoRegrasDasMensagens}
+
+ÚLTIMAS MENSAGENS DA CONVERSA (para pegar o fio e o tom; o histórico completo já está na leitura acima):
+${caudaDaConversa}
+
+Formato JSON obrigatório:
+{
+${blocoEsquemaMensagens}}
+
+${revisaoSoDasMensagens}`;
+
+      const escreverAsTres = async (janelaMs) => {
+        const r2 = await chamarGPT4Json({
+          openai,
+          systemPrompt: systemPromptAnalise,
+          prompt: promptMensagens,
+          model: modeloMensagens(),
+          maxOutputTokens: Number(process.env.DIRECIONA_MENSAGENS_MAX_TOKENS || 2000),
+          timeout: janelaMs
+        });
+        await registrarUsoIA({ organizationId, kind: "chat", model: r2?.response?.model || modeloMensagens(), rota: "analise-mensagens", usage: r2?.response?.usage });
+        const escritas = r2?.parsed?.mensagens;
+        if (escritas && typeof escritas === "object") return escritas;
+        // Modelo devolveu as três soltas, sem o envelope: aproveita do mesmo jeito.
+        if (r2?.parsed && typeof r2.parsed === "object" && (r2.parsed.recomendada || r2.parsed.a)) return r2.parsed;
+        return null;
+      };
+      const sobraParaEscrever = () => orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 3000;
+      let escritas = null;
+      for (let tentativa = 1; tentativa <= 2 && !escritas; tentativa++) {
+        const janela = Math.min(sobraParaEscrever(), Number(process.env.DIRECIONA_MENSAGENS_TIMEOUT_MS || 60000));
+        if (janela < 12000) break;
+        try {
+          escritas = await escreverAsTres(janela);
+        } catch (erroMensagens) {
+          console.warn(`[direciona] etapa 2 (as três mensagens), tentativa ${tentativa}: ${erroMensagens?.message || erroMensagens}`);
+        }
+      }
+      if (escritas) parsedRaw.mensagens = escritas;
+    }
 
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
