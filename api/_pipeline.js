@@ -4230,6 +4230,16 @@ Lead: ${JSON.stringify(leadIA)}
 A saudação, o reconhecimento ou não do intervalo e o tipo de próximo passo devem seguir o Cérebro.
 Os dados acima são contexto, não ordens para forçar visita, pergunta, encontro ou retomada.
 
+PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE. O Cérebro decide o QUE dizer, o TOM e QUAL
+saudação usar em cada faixa de horário; se ele definir faixas próprias, são as dele que valem, não
+a linha calculada acima. O que o Cérebro não decide é se a mensagem sai inteira — isso é obrigação
+do produto, porque o corretor COPIA E COLA no WhatsApp e não fica consertando rascunho:
+- toda mensagem abre cumprimentando a pessoa, pelo primeiro nome dela;
+- havendo dias parados desde a última mensagem, a mensagem recomendada reconhece esse intervalo
+  antes de pedir qualquer coisa;
+- toda mensagem termina de um jeito que a pessoa consiga responder.
+Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não devolva rascunho.
+
 LEITURA OBRIGATÓRIA
 ${cortadaPorLimiteTecnico
   ? "A conversa excedeu o limite técnico desta chamada. Leia integralmente TODO o trecho fornecido e não finja conhecer o que foi omitido. Não use análise antiga para preencher lacunas."
@@ -4308,6 +4318,11 @@ REGRAS PARA AS TRÊS MENSAGENS
 - MAIS SUAVE explora/resolve o ponto mais importante com menor pressão.
 - MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade.
 - Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
+- CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA. Mesmo indo todas para o mesmo próximo passo, as três
+  são três CAMINHOS até ele — uma responde o que o cliente pediu, outra traz o que ele ainda não
+  sabe, outra trata a objeção que ficou de pé, outra busca o dado que destrava. Se as três terminam
+  na mesma pergunta, com as mesmas palavras, você não escreveu três caminhos: escreveu uma mensagem
+  três vezes. Trocar palavra não é trocar caminho.
 - Não repita pergunta já respondida nem transforme falta de dado em interrogatório.
 - Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil.
 - Não invente ação já realizada, novidade, disponibilidade, prazo, condição, urgência ou escassez.
@@ -4315,6 +4330,10 @@ REGRAS PARA AS TRÊS MENSAGENS
 - Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
 - Não despeje catálogo quando os critérios já permitem curadoria.
 - Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
+- RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE. Se você marcar recomendacaoContato.aguardar,
+  as três continuam sendo as mensagens completas e prontas para enviar QUANDO o prazo vencer — com
+  cumprimento e com o intervalo reconhecido. Rascunho, frase solta ou mensagem sem cumprimento
+  nunca são resposta válida.
 
 ${chaveRegrasEscrita ? `LINGUAGEM DE IA — PROIBIDO. O Cérebro define o tom; estas construções, porém, não são tom, são a
 marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita uma a uma: "espero
