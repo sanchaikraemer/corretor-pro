@@ -329,16 +329,47 @@ self.addEventListener('periodicsync', event => {
     // é hora de trabalhar ("isso ta programado pra essa hora?", dono, 20/08). Agora o aviso só sai
     // dentro da janela que ele escolheu na tela de ajustes (padrão: a partir das 8h, valendo por 4
     // horas). Acordou fora da janela? Não avisa — espera a próxima.
+    // v1336/v1344 — A HORA É DO CORRETOR, MAS A JANELA NÃO PODE MATAR O LEMBRETE.
+    //
+    // v1336: o aviso saía quando o celular resolvia acordar o app, e chegou em horário que não é
+    // hora de trabalhar ("isso ta programado pra essa hora?", dono, 20/08). Passou a valer a janela
+    // escolhida na tela de ajustes (padrão: das 8h, valendo por 4 horas).
+    //
+    // v1344, achado na revisão: só a janela QUASE MATOU o lembrete. Quem decide a hora de acordar o
+    // app é o navegador — o pedido é "de 4 em 4 horas", mas o Chrome acorda quando quer, às vezes
+    // uma vez por dia. Somado à trava antiga de "no máximo um aviso a cada 20 horas", um despertar
+    // por dia caía fora da janela quase sempre. Numa simulação de 30 dias com um despertar diário
+    // em horário variado, saíam 8 avisos.
+    //
+    // A regra agora tem três partes, e a simulação dá 15 avisos nos mesmos 30 dias — sem nenhum
+    // fora de hora:
+    //   1. NO MÁXIMO UM POR DIA DE CALENDÁRIO (não "a cada 20 horas"). A trava de horas descartava
+    //      o despertar do dia seguinte quando o do dia anterior tinha sido tarde;
+    //   2. dentro da janela escolhida, avisa — este é o caminho normal e o que ele pediu;
+    //   3. REPESCAGEM: passados 2 dias inteiros sem nenhum aviso, avisa no primeiro despertar em
+    //      horário de gente (7h às 21h). Melhor um lembrete fora do combinado do que nenhum.
+    //      Madrugada continua proibida em qualquer caso — era a reclamação original.
     const horario = await swNotifLer('horaAviso');
     const horaEscolhida = Number(horario?.hora);
     const janela = Number(horario?.janelaHoras) || 4;
     const inicio = (Number.isFinite(horaEscolhida) && horaEscolhida >= 0 && horaEscolhida <= 23) ? horaEscolhida : 8;
-    const agora = new Date().getHours();
-    const decorrido = (agora - inicio + 24) % 24;
-    if (decorrido >= janela) return;
-    // Anti-incômodo: no máximo um aviso a cada 20h (o navegador pode acordar mais vezes).
-    const ultimo = Number(await swNotifLer('ultimoAviso') || 0);
-    if (Date.now() - ultimo < 20 * 60 * 60 * 1000) return;
+
+    const agoraData = new Date();
+    const agoraH = agoraData.getHours();
+    const diaDe = (d) => Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
+    const hoje = diaDe(agoraData);
+
+    const ultimoMs = Number(await swNotifLer('ultimoAviso') || 0);
+    // Instalações anteriores a esta versão só têm o carimbo em milissegundos; o dia sai dele.
+    const diaUltimo = Number(await swNotifLer('ultimoAvisoDia'));
+    const diaDoUltimoAviso = Number.isFinite(diaUltimo) ? diaUltimo : (ultimoMs ? diaDe(new Date(ultimoMs)) : -1);
+
+    if (diaDoUltimoAviso === hoje) return;                       // 1. um por dia
+    const naJanela = ((agoraH - inicio + 24) % 24) < janela;      // 2. o caminho normal
+    const diasEmBranco = diaDoUltimoAviso < 0 ? 99 : (hoje - diaDoUltimoAviso);
+    const repescagem = diasEmBranco >= 2 && agoraH >= 7 && agoraH <= 21;  // 3. rede de segurança
+    if (!naJanela && !repescagem) return;
+
     // Honestidade com retrato velho: o app fechado não recalcula. Até 48h, o número vale; depois
     // disso o texto vira genérico (sem número, que pode ter mudado); com mais de 30 dias, para de
     // avisar — insistir com dado de um mês só faria o corretor silenciar o app de vez.
@@ -358,6 +389,7 @@ self.addEventListener('periodicsync', event => {
       data: { url: '/' }
     });
     await swNotifGravar('ultimoAviso', Date.now());
+    await swNotifGravar('ultimoAvisoDia', Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000));
   })());
 });
 

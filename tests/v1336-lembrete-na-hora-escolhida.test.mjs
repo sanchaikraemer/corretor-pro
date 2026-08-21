@@ -31,13 +31,19 @@ assert.match(app, /await cpLembreteDiarioGravarHoraNoWorker\(\);/,
 
 // ── 3. O worker respeita a janela ────────────────────────────────────────────────────────────
 assert.match(sw, /const horario = await swNotifLer\('horaAviso'\);/);
-assert.match(sw, /if \(decorrido >= janela\) return;/,
-  "acordou fora da janela escolhida: não avisa, espera a próxima");
-assert.ok(sw.indexOf("if (decorrido >= janela) return;") < sw.indexOf("swNotifGravar('ultimoAviso'"),
+// v1344 — a conferência mudou de forma (ver v1344-lembrete-nao-morre-pela-janela): a trava passou a
+// ser "um por DIA DE CALENDÁRIO" e a janela ganhou uma repescagem, porque só a janela quase matou o
+// lembrete. O que este teste guarda continua sendo o mesmo: existe conferência de horário, e ela
+// acontece ANTES de mostrar a notificação.
+assert.match(sw, /const naJanela = \(\(agoraH - inicio \+ 24\) % 24\) < janela;/,
+  "a janela escolhida continua sendo o caminho normal do aviso");
+assert.match(sw, /if \(!naJanela && !repescagem\) return;/,
+  "acordou fora da janela e sem repescagem: não avisa, espera a próxima");
+assert.ok(sw.indexOf("if (!naJanela && !repescagem) return;") < sw.indexOf("swNotifGravar('ultimoAviso'"),
   "a conferência do horário vem ANTES de mostrar a notificação e de carimbar o último aviso");
-// A trava de uma vez por dia continua onde estava — é ela que garante a frequência.
-assert.match(sw, /if \(Date\.now\(\) - ultimo < 20 \* 60 \* 60 \* 1000\) return;/,
-  "a trava de 20h entre avisos não pode sair: é ela que impede dois avisos no mesmo dia");
+// A trava de um aviso por dia continua existindo — é ela que garante a frequência.
+assert.match(sw, /if \(diaDoUltimoAviso === hoje\) return;/,
+  "a trava de um aviso por dia não pode sair: é ela que impede dois avisos no mesmo dia");
 
 // A janela roda a virada do dia sem quebrar: escolher 22h precisa valer até 2h da manhã.
 const dentroDaJanela = (inicio, agora, janela = 4) => ((agora - inicio + 24) % 24) < janela;
