@@ -167,8 +167,14 @@ assert.equal(contarMaterialNaoLido(null).total, 0, "e nada quebra com entrada va
     "📎 Foto enviada — a IA não leu o conteúdo\n📎 Foto enviada — a IA não leu o conteúdo");
 
   // E as duas telas que mostram mensagem precisam usar o encurtador.
-  assert.match(app, /<p>\$\{escapeHtml\(cp1348TextoNaTela\(cp704Text\(m\.text\)\)\)\}<\/p>/,
+  assert.match(app, /const textoNaTela = cp1348TextoNaTela\(cp704Text\(m\.text\)\);/,
     'o card "Últimas mensagens" precisa mostrar a versão curta');
+  // v1350 — e a linha do arquivo que não veio virou o próprio conserto: toca e manda o arquivo.
+  assert.match(app, /const arquivoFaltando = \/não veio no envio da conversa\/\.test\(textoNaTela\);/,
+    'a linha do arquivo que não veio precisa ser reconhecida na hora de desenhar');
+  assert.match(app, /class="cp1350-faltou" onclick='event\.stopPropagation\(\);cp1350EnviarArquivoQueFaltou\(\)'/,
+    'e virar botão que abre o seletor de arquivos');
+  assert.match(app, /function cp1350EnviarArquivoQueFaltou\(\)\{/, 'com a função que faz isso');
   assert.match(app, /const texto = cp1348TextoNaTela\(m\.text\)\.replace/,
     "o bloco das 2 últimas mensagens dentro da ficha também");
 }

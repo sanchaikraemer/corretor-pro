@@ -22,7 +22,9 @@ assert.doesNotMatch(fn, /\.slice\(0,\s*520\)/, 'a mensagem não pode mais ser co
 // a função só troca o marcador que o PRÓPRIO app escreve quando um arquivo não pôde ser lido
 // ("[Arquivo enviado nesta mensagem: … — conteúdo não analisado pela IA]") por uma linha curta.
 // Fala de gente não é tocada. A regra desta versão continua valendo e está conferida logo abaixo.
-assert.match(fn, /<p>\$\{escapeHtml\(cp1348TextoNaTela\(cp704Text\(m\.text\)\)\)\}<\/p>/,
+assert.match(fn, /const textoNaTela = cp1348TextoNaTela\(cp704Text\(m\.text\)\);/,
+  'o texto da mensagem sai inteiro do registro, sem corte');
+assert.match(fn, /: `<p>\$\{escapeHtml\(textoNaTela\)\}<\/p>`;/,
   'a mensagem precisa ser renderizada por completo, sem corte de tamanho');
 {
   const curtaMatch = app.match(/function cp1348TextoNaTela\(texto\)\{[\s\S]*?\n  \}/);

@@ -6924,7 +6924,7 @@ export async function transcreverArquivosExtraidos(arquivos = [], organizationId
 
 // Monta a timeline a partir de mensagens já filtradas + transcrições já prontas
 // (não chama OpenAI). transcriptionMap: { nomeBaseDoAudio: {status, text} }
-function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap, audioFilesForaDaJanela = [], leiturasVisuais = {}, leiturasLinks = {}) {
+export function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap, audioFilesForaDaJanela = [], leiturasVisuais = {}, leiturasLinks = {}) {
   const audioNames = (audioFilesRelevantes || []).map(normalizeName);
   const foraDaJanela = new Set((audioFilesForaDaJanela || []).map(normalizeName));
   // v1306 — o que a IA leu das imagens e dos PDFs entra AQUI, na mensagem que trouxe o anexo, e
