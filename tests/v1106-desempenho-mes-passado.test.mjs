@@ -15,7 +15,14 @@ const DIA = 86400000;
 
 // ── 1. As métricas aceitam um período FECHADO e separam os meses direito ──────────────────────
 {
-  const fonte = app.match(/function cpDesempenhoMetricas\(items, all, periodo\)\{[\s\S]*?\n\}/)[0];
+  // v1340 — cpDesempenhoMetricas passou a chamar cpResultadoDasSugestoes (a medição de "as
+  // sugestões estão funcionando?"), que por sua vez usa cpMensagemEhDoCliente. As três vêm juntas,
+  // senão este teste roda um recorte que não existe no app.
+  const fonte = [
+    app.match(/function cpMensagemEhDoCliente\(l, m\)\{[\s\S]*?\n\}/)[0],
+    app.match(/function cpResultadoDasSugestoes\(todos, dentro\)\{[\s\S]*?\n\}/)[0],
+    app.match(/function cpDesempenhoMetricas\(items, all, periodo\)\{[\s\S]*?\n\}/)[0]
+  ].join("\n");
   const agora = Date.now();
   const iniMesAtual = agora - 10 * DIA;   // simula: estamos no dia 10 do mês
   const iniMesPassado = iniMesAtual - 30 * DIA;
@@ -31,6 +38,7 @@ const DIA = 86400000;
     const cpTempoAppSegundosHoje = () => 0;
     const cpTempoAppMediaSegundos7d = () => 0;
     const produtosLabel = () => "";
+    const cpNomeCorretorCerebro = () => "";
     ${fonte}
     ({ cpDesempenhoMetricas });
   `);
