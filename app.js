@@ -5876,7 +5876,7 @@ function renderLeadFoco(lead){
                dois ou três arquivos é trabalho demais: ele escolhe os arquivos aqui, o app lê e o
                texto cai no campo acima pra ele conferir e salvar. Aceita vários de uma vez, e
                aceita PDF — a leitura de print (v1250) é uma imagem só, e só de conversa. -->
-          <input type="file" id="cp1349ArquivosInput" accept="image/png,image/jpeg,image/webp,image/heic,application/pdf,audio/*,.opus,.ogg,.m4a,.mp3" multiple hidden onchange="cp1349LerArquivos(this)">
+          <input type="file" id="cp1349ArquivosInput" accept="image/*,application/pdf,audio/*,.opus,.ogg,.m4a,.mp3,.pdf" multiple hidden onchange="cp1349LerArquivos(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
             <button type="button" id="cp1250PrintBtn" onclick="document.getElementById('cp1250PrintInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler print da resposta</button>
             <button type="button" id="cp1349ArquivosBtn" onclick="document.getElementById('cp1349ArquivosInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler fotos, PDFs e áudios</button>
