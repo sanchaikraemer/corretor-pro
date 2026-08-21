@@ -11472,7 +11472,16 @@ document.addEventListener("visibilitychange", () => {
    Estrutura visual definitiva, alimentada pelos dados reais.
    ============================================================= */
 function cpEscape(v){ return escapeHtml(String(v == null ? "" : v)); }
-function cpInitials(name){ return String(name||"C").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "C"; }
+// v1341 — as iniciais entram direto no HTML do avatar, e o nome vem do WhatsApp do CLIENTE (é ele
+// quem escolhe o próprio nome de exibição). Um nome começando com "<" fazia a inicial virar "<" no
+// meio da página — começo de etiqueta HTML onde deveria haver letra. Agora só letra e número
+// passam; qualquer outra coisa vira o "C" de cliente.
+function cpInitials(name){
+  const iniciais = String(name||"C").trim().split(/\s+/).slice(0,2)
+    .map(x => (String(x||"").match(/[\p{L}\p{N}]/u) || [""])[0])
+    .join("").toUpperCase();
+  return iniciais || "C";
+}
 function cpPriorityMeta(lead){
   const categoria=typeof cp786Categoria==='function'?cp786Categoria(lead):'';
   if(categoria==='agora') return {label:'Fazer agora',cls:'hot',cor:'var(--cp-coral)'};
