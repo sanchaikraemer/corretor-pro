@@ -12531,6 +12531,15 @@ async function cp1349LerArquivos(input){
         }, 30000);
         const d2 = await r2.json().catch(()=>({ ok:false }));
         if(d2?.ok){
+          // v1354 — TROCA A LINHA NA CÓPIA QUE ESTÁ NA TELA, ANTES DE RECARREGAR.
+          //
+          // Sem isto, dava certo e não aparecia. recarregarLeadFoco tem uma proteção antiga: se a
+          // cópia local tem MAIS mensagens que a que voltou do servidor, ela FICA com a local (a
+          // lista traz só um recorte, e sem isso a barra de interesse despencava de 108 pra 4).
+          // Com o histórico completo aberto — 16 mensagens contra 4 — a proteção vencia sempre e
+          // o texto novo era jogado fora na hora de desenhar. O corretor mandava o arquivo, o
+          // servidor gravava certo, e a tela continuava com a mesma linha vermelha.
+          cp1352TrocaNaTimelineLocal(alvo.leadId, alvo.iso, d2.mensagem);
           try{ invalidarLeadsCache(); }catch(_){}
           try{ invalidarLeadDetail(alvo.leadId); }catch(_){}
           aviso("--acao", tipo === "audio" ? "Áudio transcrito e colocado no histórico." : "Arquivo lido e colocado no histórico.");
@@ -12585,6 +12594,18 @@ window.cp1350EnviarArquivoQueFaltou = cp1350EnviarArquivoQueFaltou;
 // O botão do campo de observação manda pra observação, como antes — então limpa qualquer alvo
 // que um toque anterior na linha do histórico tenha deixado guardado.
 function cp1352LimparAlvo(){ cp1352Alvo = null; }
+// Espelha o que o servidor acabou de gravar dentro da cópia que está desenhada na tela. Mesma
+// ideia do cp7TiraDaTimelineLocal (v1238), que existe pelo mesmo motivo — só que trocando em vez
+// de apagar.
+function cp1352TrocaNaTimelineLocal(leadId, iso, mensagem){
+  if(!mensagem || !state.lead || String(state.lead.id) !== String(leadId)) return;
+  const msgs = Array.isArray(state.lead.recentMessages) ? state.lead.recentMessages : [];
+  const i = msgs.findIndex(m => String(m?.iso || "") === String(iso));
+  if(i < 0) return;
+  msgs[i] = { ...msgs[i], ...mensagem };
+  state.lead.recentMessages = msgs.slice();
+  try{ renderLeadFoco(state.lead); }catch(_){ }
+}
 window.cp1352LimparAlvo = cp1352LimparAlvo;
 
 // Colar a imagem direto no campo (Ctrl+V no computador — é como o corretor recorta a tela e cola).
