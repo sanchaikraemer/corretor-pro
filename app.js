@@ -5088,7 +5088,7 @@ function cp704Css(){
           ? `<button type="button" class="cp704-tmsg-undo" title="Apagar esta observação" aria-label="Apagar esta observação" onclick='event.stopPropagation();cp704ApagarObservacao(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>✕</button>`
           : `<button type="button" class="cp704-tmsg-undo" title="Não enviei essa mensagem — desfazer" aria-label="Desfazer esta mensagem" onclick='event.stopPropagation();cp704DesfazerMensagemEnviada(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>✕</button>`)
         : '';
-      return `<div class="cp704-tmsg${wrapCls}${podeDesfazer?' cp704-tmsg-comundo':''}"${propAttr}><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text))}</p><small>${escapeHtml(cp704DataHora(m))}</small>${propHint}</div>${btnDesfazer}</div>`;
+      return `<div class="cp704-tmsg${wrapCls}${podeDesfazer?' cp704-tmsg-comundo':''}"${propAttr}><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp1348TextoNaTela(cp704Text(m.text)))}</p><small>${escapeHtml(cp704DataHora(m))}</small>${propHint}</div>${btnDesfazer}</div>`;
     }).join('') + btn;
   }
   // v1238 — TIRA A LINHA APAGADA DA CÓPIA QUE ESTÁ NA TELA, na hora.
@@ -5293,6 +5293,29 @@ function cp704Css(){
     });
     return trocadas.slice(-quantas);
   }
+  // v1348 — O MARCADOR DE ARQUIVO, DITO EM DUAS PALAVRAS EM VEZ DE VINTE E SEIS.
+  //
+  // Print do dono (21/08/2026, 15h22): três das quatro últimas mensagens da conversa eram a MESMA
+  // frase de 26 palavras, "[Arquivo enviado nesta mensagem: arquivo — conteúdo não analisado pela
+  // IA]", empilhada. O card das últimas mensagens existe pra ele bater o olho e lembrar onde a
+  // conversa parou — e ali não dava pra ler nada.
+  //
+  // Isto é SÓ APARÊNCIA: o texto guardado não muda, e "Copiar histórico" continua copiando a frase
+  // inteira, que é o registro. O que muda é o que cabe na tela.
+  const CP1348_MARCADOR = /\[Arquivo enviado nesta mensagem:\s*([^\]—]+?)\s*—\s*conteúdo não analisado pela IA\]/gi;
+  const CP1348_CURTO = {
+    imagem: "📎 Foto enviada — a IA não leu o conteúdo",
+    "vídeo": "📎 Vídeo enviado — a IA não lê vídeo",
+    video: "📎 Vídeo enviado — a IA não lê vídeo",
+    "áudio": "📎 Áudio enviado — não virou texto",
+    audio: "📎 Áudio enviado — não virou texto",
+    "documento/pdf": "📎 PDF enviado — a IA não leu o conteúdo"
+  };
+  function cp1348TextoNaTela(texto){
+    return String(texto || "").replace(CP1348_MARCADOR, (_todo, tipo) =>
+      CP1348_CURTO[String(tipo).trim().toLowerCase()] || "📎 Arquivo enviado — não veio no envio da conversa");
+  }
+
   function cp1345UltimasMensagensHTML(lead){
     const ultimas = cp1345UltimasMensagens(lead, 2);
     if(!ultimas.length) return "";
@@ -5300,7 +5323,7 @@ function cp704Css(){
       const doCliente = (typeof cpMensagemEhDoCliente === "function") ? cpMensagemEhDoCliente(lead, m) : false;
       const quem = doCliente ? (String(lead?.name || "Cliente").trim().split(/\s+/)[0] || "Cliente") : "Você";
       const quando = [String(m.date || "").trim(), String(m.time || "").trim()].filter(Boolean).join(" ");
-      const texto = String(m.text || "").replace(/\s+/g, " ").trim();
+      const texto = cp1348TextoNaTela(m.text).replace(/\s+/g, " ").trim();
       return `<div class="cp1345-msg${doCliente ? " do-cliente" : ""}">
         <b>${escapeHtml(quem)}${quando ? ` · ${escapeHtml(quando)}` : ""}</b>
         <span>${escapeHtml(texto)}</span>
@@ -5674,7 +5697,11 @@ function cp1323MaterialNaoLido(a){
   const m = (a && typeof a.materialNaoLido === "object" && a.materialNaoLido) ? a.materialNaoLido : null;
   if(!m) return "";
   const fotos = Number(m.imagens) || 0, docs = Number(m.documentos) || 0, audios = Number(m.audios) || 0;
-  if(fotos + docs + audios <= 0) return "";
+  // v1348 — os arquivos que NÃO VIERAM no envio (o "<Mídia oculta>" da exportação sem mídia). São
+  // um caso diferente dos de cima e precisam de outra frase: aqui não adianta reimportar a mesma
+  // conversa, porque o arquivo não está dentro dela. O conserto é reexportar COM mídia.
+  const semVir = Number(m.arquivos) || 0;
+  if(fotos + docs + audios + semVir <= 0) return "";
   const partes = [];
   if(fotos) partes.push(`${fotos} ${pl(fotos, "foto", "fotos")}`);
   if(docs) partes.push(`${docs} ${pl(docs, "PDF", "PDFs")}`);
@@ -5685,7 +5712,13 @@ function cp1323MaterialNaoLido(a){
   // lê no máximo alguns arquivos por importação (os mais recentes), e o que passou disso, ou o que
   // entrou antes de o app aprender a ler imagem e PDF (v1306), fica sem leitura. Mandar o corretor
   // refazer a exportação era empurrar pra ele um trabalho que não resolve nada.
-  return ` · <b style="color:var(--risco)">a IA ainda não leu ${lista} desta conversa</b> (o app lê alguns arquivos por importação, os mais recentes — reimporte a conversa pra ele seguir lendo o que ficou)`;
+  const naoLidos = partes.length
+    ? ` · <b style="color:var(--risco)">a IA ainda não leu ${lista} desta conversa</b> (o app lê alguns arquivos por importação, os mais recentes — reimporte a conversa pra ele seguir lendo o que ficou)`
+    : "";
+  const naoVieram = semVir
+    ? ` · <b style="color:var(--risco)">${semVir} ${pl(semVir, "arquivo não veio", "arquivos não vieram")} nesta conversa</b> (ela foi enviada SEM os arquivos — a IA sabe que ${semVir === 1 ? "houve um envio" : "houve envios"} ali, mas não o que tinha ${semVir === 1 ? "dentro" : "dentro deles"}. Reexporte no WhatsApp com <b>"Incluir mídia"</b> e importe de novo)`
+    : "";
+  return naoLidos + naoVieram;
 }
 
 // v1304 — a porcentagem colorida da linha de prova: verde quando fechou 100%, vermelho quando

@@ -55,9 +55,13 @@ const fonte = [
   app.match(/function cp1345UltimasMensagens\(lead, quantas = 2\)\{[\s\S]*?\n  \}/)[0],
   app.match(/function cp1345UltimasMensagensHTML\(lead\)\{[\s\S]*?\n  \}/)[0]
 ].join("\n");
+// v1348 — o bloco passou a encurtar o marcador de arquivo na hora de mostrar (cp1348TextoNaTela);
+// aqui ele entra igual ao do app, pra o teste rodar o código de verdade e não uma versão de araque.
+const cp1348 = app.match(/function cp1348TextoNaTela\(texto\)\{[\s\S]*?\n  \}/)[0];
+const cp1348Consts = app.match(/const CP1348_MARCADOR = [\s\S]*?\n  \};/)[0];
 const { cp1345UltimasMensagens, cp1345UltimasMensagensHTML } = new Function(
   "escapeHtml", "cpMensagemEhDoCliente",
-  `${fonte}\nreturn { cp1345UltimasMensagens, cp1345UltimasMensagensHTML };`
+  `${cp1348Consts}\n${cp1348}\n${fonte}\nreturn { cp1345UltimasMensagens, cp1345UltimasMensagensHTML };`
 )(
   (t) => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
   (l, m) => String(m.author || "").toLowerCase().includes(String(l.name || "").toLowerCase().split(" ")[0])
