@@ -1509,6 +1509,112 @@ export function contarMaterialNaoLido(timeline) {
   return { imagens, documentos, audios, total: imagens + documentos + audios };
 }
 
+// ─── v1334 — OS QUATRO DEFEITOS QUE A MEDIÇÃO APONTOU, VIRADOS EM FATO ───────────────────────
+//
+// A primeira medição da bateria com IA de verdade (feita pelo dono no painel em 20/08/2026: 156 de
+// 191 pontos) mostrou que as falhas não eram aleatórias — eram QUATRO, repetidas em conversa após
+// conversa, e todas na hora de escrever:
+//   1. as mensagens não mudam de abordagem depois de tentativas sem resposta;
+//   2. não propõem passo concreto com DIA e HORA ("quando você puder" não é passo);
+//   3. não reconhecem o atraso do próprio corretor quando ele prometeu e não voltou;
+//   4. não perguntam a faixa quando o cliente diz que está caro.
+// E o print do Jamil (20/08, 19h) trouxe o quinto: cliente que diz não ter capital HOJE mas ter em
+// dois anos é tratado como "não vai comprar" — quando a resposta comercial é imóvel em obra, com
+// entrada parcelada até a entrega.
+//
+// Nenhum deles vira "instrução nova de escrita" no miolo do prompt (o dono mandou congelar isso, e
+// mais regra não estava funcionando). Cada um vira FATO CALCULADO no fichário, com o número e a
+// data na mão — que é o remédio que funcionou na v1317 e na v1329.
+
+// 1. Que TIPO de coisa já foi pedido e ignorado. Repetir o mesmo tipo é o que a bateria pegou.
+const _TIPOS_DE_PEDIDO = [
+  { tipo: "encontro (visita/café/reunião)", re: /\b(visit\w+|caf[ée]|reuni[ãa]o|passar (a[íi]|na|no)|te levar|conhecer o (im[óo]vel|apartamento|empreendimento))\b/i },
+  { tipo: "material (fotos/planta/vídeo/PDF)", re: /\b(fotos?|plantas?|v[íi]deo|material|catalogo|cat[áa]logo|pdf|apresenta[çc][ãa]o)\b/i },
+  { tipo: "valor/condição de pagamento", re: /\b(valor|pre[çc]o|condi[çc][õo]es|financiamento|entrada|parcela|simula[çc][ãa]o|desconto)\b/i },
+  { tipo: "confirmação/retorno (me diz, o que acha)", re: /\b(o que (voc[êe] )?ach\w+|me (diz|diga|retorna|responde)|confirma|posso (seguir|avan[çc]ar)|continuidade)\b/i }
+];
+
+export function tiposDePedidoJaIgnorados(textosSemResposta = []) {
+  const achados = [];
+  for (const texto of (Array.isArray(textosSemResposta) ? textosSemResposta : [])) {
+    for (const { tipo, re } of _TIPOS_DE_PEDIDO) {
+      if (re.test(String(texto || "")) && !achados.includes(tipo)) achados.push(tipo);
+    }
+  }
+  return achados;
+}
+
+// 2. Dia e hora de verdade pra propor. "Quando você puder" não marca nada.
+const _DIA_DA_SEMANA = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+export function diasUteisParaPropor(agora = new Date(), quantos = 3) {
+  const saida = [];
+  const base = agora instanceof Date ? agora : new Date();
+  for (let i = 1; saida.length < quantos && i <= 10; i++) {
+    const d = new Date(base.getTime() + i * 86400000);
+    const partes = partesDataBR(d);
+    if (!partes) continue;
+    const semana = new Date(Date.UTC(partes.y, partes.m - 1, partes.d)).getUTCDay();
+    if (semana === 0 || semana === 6) continue;
+    saida.push(`${_DIA_DA_SEMANA[semana]} ${String(partes.d).padStart(2, "0")}/${String(partes.m).padStart(2, "0")}`);
+  }
+  return saida;
+}
+
+// 3. O cliente disse que está caro — e nunca disse quanto pode pagar.
+const _CLIENTE_DIZ_CARO = /\b(caro|car[íi]ssim\w+|acima do que (eu )?(queria|pretendia|posso)|fora do (meu )?or[çc]amento|n[ãa]o cabe no (meu|nosso)|salgad\w+|pesad\w+ (pra|para) mim)\b/i;
+const _CLIENTE_DIZ_FAIXA = /\b(at[ée]\s*r?\$?\s*\d|posso (pagar|investir|ir at[ée])|meu (teto|or[çc]amento|limite)|na faixa de|em torno de\s*r?\$?\s*\d)/i;
+
+export function clienteDisseCaroSemDizerFaixa(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  let achado = null;
+  let disseFaixa = false;
+  for (const m of arr) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "cliente") continue;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    if (_CLIENTE_DIZ_FAIXA.test(texto)) disseFaixa = true;
+    if (_CLIENTE_DIZ_CARO.test(texto)) {
+      const p = dataCivilDeMensagem(m);
+      achado = { data: p?.texto || "data não identificada", diasAtras: _diasDesde(p?.dia ?? null, hojeDia), fala: _trechoCurto(texto, 140) };
+    }
+  }
+  if (!achado || disseFaixa) return null;
+  return achado;
+}
+
+// 4. Cliente sem capital HOJE, com prazo pra ter — e produto em obra citado na conversa.
+const _SEM_CAPITAL_AGORA = /\b(n[ãa]o tenho (o )?(capital|dinheiro|condi[çc][õo]es)|n[ãa]o consigo (formar|juntar)|sem capital|n[ãa]o tenho como comprar (agora|hoje))\b/i;
+const _PRAZO_PRA_TER = /\b(em (uns? )?(\d+|um|dois|tr[êe]s) anos?|daqui (a )?(\d+|um|dois|tr[êe]s) anos?|ano que vem|depois que (eu )?(vender|receber|fechar))\b/i;
+const _PRODUTO_EM_OBRA = /\b(na planta|em obra|em constru[çc][ãa]o|entrega em \d{4}|lan[çc]amento|pr[ée]-lan[çc]amento|durante a (obra|constru[çc][ãa]o))\b/i;
+
+export function clienteSemCapitalHojeComPrazo(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  let fala = null;
+  let prazo = "";
+  let obraNaConversa = "";
+  for (const m of arr) {
+    const lado = _ladoDaMensagem(m, corretorNome, lead);
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    if (_PRODUTO_EM_OBRA.test(texto)) obraNaConversa = _trechoCurto(texto, 140);
+    if (lado !== "cliente") continue;
+    if (_SEM_CAPITAL_AGORA.test(texto)) {
+      const p = dataCivilDeMensagem(m);
+      fala = { data: p?.texto || "data não identificada", diasAtras: _diasDesde(p?.dia ?? null, hojeDia), trecho: _trechoCurto(texto, 200) };
+      const achadoPrazo = _PRAZO_PRA_TER.exec(texto);
+      if (achadoPrazo) prazo = achadoPrazo[0];
+    } else if (fala && !prazo) {
+      const achadoPrazo = _PRAZO_PRA_TER.exec(texto);
+      if (achadoPrazo) prazo = achadoPrazo[0];
+    }
+  }
+  if (!fala) return null;
+  return { ...fala, prazo, obraNaConversa };
+}
+
 // ─── O FICHÁRIO INTEIRO, JÁ EM TEXTO PRO PEDIDO ──────────────────────────────────────────────
 export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date()) {
   const blocos = [];
@@ -1579,7 +1685,56 @@ O motivo manda. Produto recusado por TAMANHO não volta porque a faixa de preço
     const linhas = promessas.map(q => `- ${q.data} (${_haQuantoTempo(q.diasAtras)}): "${q.trecho}"`);
     blocos.push(`O QUE O CORRETOR DISSE QUE IA ENVIAR E NÃO APARECE ENVIADO NESTA CONVERSA:
 ${linhas.join("\n")}
-Esta é a pendência REAL do atendimento — e costuma ser o motivo do silêncio do cliente: quem pede informação e não recebe, para de responder. Cumprir isto vale mais que qualquer pergunta nova. NÃO invente pendência que não está nesta lista.`);
+Esta é a pendência REAL do atendimento — e costuma ser o motivo do silêncio do cliente: quem pede informação e não recebe, para de responder. Cumprir isto vale mais que qualquer pergunta nova. NÃO invente pendência que não está nesta lista.
+COMO ISSO ENTRA NA MENSAGEM (foi o pior caso da medição de 20/08/2026, 2 de 6 pontos): reconheça o
+atraso na PRIMEIRA frase, curto e sem justificativa comprida ("ficou de ir e não foi", "demorei pra
+te voltar"), ENTREGUE o que ficou faltando ali mesmo — ou, se não tiver como entregar agora, diga o
+DIA em que entrega. Prometer de novo sem data é repetir o erro que causou o silêncio.`);
+  }
+
+  // v1334 — os quatro defeitos medidos na bateria, cada um virando fato com número e data.
+  const semRespostaFichario = tentativasSemRespostaDoCorretor(timeline, corretorNome, lead || {});
+  const tiposIgnorados = tiposDePedidoJaIgnorados(semRespostaFichario?.textos || []);
+  if (tiposIgnorados.length) {
+    blocos.push(`O TIPO DE PEDIDO QUE JÁ FOI FEITO E IGNORADO (${semRespostaFichario.tentativas} tentativa(s) sem resposta):
+${tiposIgnorados.map(t => `- ${t}`).join("\n")}
+Mandar o MESMO TIPO de pedido de novo tende a colher o mesmo silêncio. Mude o que você está pedindo:
+se já foi pedido encontro e ninguém marcou, entregue algo (material, número, resposta pendente); se já
+foi mandado material e ninguém respondeu, peça UMA informação simples de responder. Isto não proíbe
+insistir — obriga a insistir por outro caminho.`);
+  }
+
+  // Só faz sentido oferecer dia pra marcar quando existe conversa: sem mensagem nenhuma, o
+  // fichário continua vazio (e a análise segue como se ele não existisse).
+  const temConversa = (Array.isArray(timeline) ? timeline : []).some(ehMensagemRealParaTempo);
+  const diasParaPropor = temConversa ? diasUteisParaPropor(agora, 3) : [];
+  if (diasParaPropor.length) {
+    blocos.push(`DIAS ÚTEIS PARA PROPOR (calculados pelo app a partir de hoje): ${diasParaPropor.join(", ")}.
+Quando a jogada for encontro, visita, avaliação, simulação ou ligação, PROPONHA DIA E HORA com nome
+("${diasParaPropor[0]} de manhã?"), não "quando você puder" nem "me avisa quando der". Passo sem data
+marcada não é passo — foi o que a medição da bateria mais apontou. Se o Cérebro definir os dias e
+horários que esta organização atende, são os dele que valem.`);
+  }
+
+  const caroSemFaixa = clienteDisseCaroSemDizerFaixa(timeline, corretorNome, lead, agora);
+  if (caroSemFaixa) {
+    blocos.push(`O CLIENTE DISSE QUE ESTÁ CARO E NUNCA DISSE QUANTO PODE PAGAR:
+- ${caroSemFaixa.data} (${_haQuantoTempo(caroSemFaixa.diasAtras)}): "${caroSemFaixa.fala}"
+Sem a faixa dele, qualquer opção nova é chute — e mandar outra opção sem saber o teto costuma
+repetir a mesma objeção. A pergunta que destrava é a faixa (ou a parcela que cabe), feita de forma
+simples e sem constranger.`);
+  }
+
+  const semCapital = clienteSemCapitalHojeComPrazo(timeline, corretorNome, lead, agora);
+  if (semCapital) {
+    const prazo = semCapital.prazo ? ` Prazo que ele mesmo deu para ter: "${semCapital.prazo}".` : "";
+    const obra = semCapital.obraNaConversa ? `\nNesta conversa já apareceu produto que não exige o dinheiro hoje: "${semCapital.obraNaConversa}".` : "";
+    blocos.push(`O CLIENTE DISSE QUE NÃO TEM O CAPITAL AGORA (${semCapital.data}, ${_haQuantoTempo(semCapital.diasAtras)}):
+"${semCapital.trecho}"${prazo}${obra}
+CUIDADO COM A LEITURA FÁCIL: "não tenho capital hoje" não é "não vou comprar" — é uma restrição de
+CALENDÁRIO. Imóvel em obra/planta é exatamente o produto que não exige o dinheiro hoje: entra pagando
+durante a construção e recebe as chaves lá na frente. Antes de aceitar que a compra saiu de cena,
+verifique na conversa e no Cérebro se existe opção assim; só trate como fora se não existir.`);
   }
 
   const permuta = permutaOferecidaPeloCliente(timeline, corretorNome, lead, agora);
