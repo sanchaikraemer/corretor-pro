@@ -699,6 +699,19 @@ montar isso:
 
 ## 8. Pendências conhecidas
 
+- **[DECISÃO REGISTRADA, v1342] Quebrar `app.js` (13 mil linhas) e `api/_pipeline.js` (7 mil) em
+  arquivos menores fica para quando houver UMA linha de trabalho só no repositório.** A auditoria
+  pediu a divisão e o motivo dela é legítimo (arquivo desse tamanho é difícil de revisar). O que
+  impede hoje não é preguiça, é aritmética de conflito: em 20/08/2026 duas frentes editaram
+  `api/_pipeline.js` no mesmo dia — o catálogo aprendido/fuso (v1335–v1337) e o estado comercial
+  determinístico (v1337 da outra frente, enviado direto pelo dono). Mover blocos grandes de lugar
+  no meio disso transforma cada junção seguinte num conflito manual linha a linha, e conflito
+  resolvido na pressa é como se perde código que já estava certo. A divisão só compensa quando for
+  a única mudança em curso naquele arquivo. Quando for feita, o primeiro corte natural é o
+  **fichário** (as funções puras que leem a conversa e não conversam com banco nem com IA) para
+  `api/_fichario.js`, com `_pipeline.js` reexportando tudo — assim nenhum teste e nenhuma rota
+  precisam mudar de import no mesmo passo.
+
 - **[DECISÃO REGISTRADA, v1341] `script-src 'unsafe-inline'` na política de segurança da página
   (CSP) fica como está, e o motivo está escrito aqui pra não virar item de auditoria a cada
   revisão.** A interface é feita de botões com o comportamento escrito no próprio atributo
