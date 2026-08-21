@@ -699,6 +699,25 @@ montar isso:
 
 ## 8. Pendências conhecidas
 
+- **[DECISÃO REGISTRADA, v1341] `script-src 'unsafe-inline'` na política de segurança da página
+  (CSP) fica como está, e o motivo está escrito aqui pra não virar item de auditoria a cada
+  revisão.** A interface é feita de botões com o comportamento escrito no próprio atributo
+  (`onclick="funcao()"`): são **145** entre `index.html` e `app.js`, e todos os HTMLs gerados em
+  string por `app.js` seguem o mesmo padrão. Tirar o `unsafe-inline` obriga a converter todos eles
+  para ouvintes de evento registrados em JavaScript, de uma vez — porque um `onclick` esquecido
+  vira um botão que simplesmente não faz nada, em silêncio, em produção. Numa base de 13 mil linhas
+  isso é uma reescrita da interface inteira, e o custo/benefício não fecha: a exposição real do
+  `unsafe-inline` é XSS, e **XSS aqui depende de texto de fora chegar ao HTML sem escape** — que é
+  o ponto atacado de verdade na v1341. Se um dia for feito, o caminho é: (1) delegação de eventos
+  por `data-acao` num ouvinte único no `document`; (2) converter tela por tela, com teste de clique
+  em cada uma; (3) só então tirar o `unsafe-inline`. Não antes.
+- **[v1341] Texto vindo do cliente não vira HTML.** A varredura de `app.js` e `js/*.js` atrás de
+  campo do lead/conversa interpolado em HTML sem escape achou **um** furo real: as iniciais do
+  avatar (`cpInitials`) entravam cruas, e o nome do contato é escolhido pelo próprio cliente no
+  WhatsApp dele — um nome começando com `<` punha um `<` solto no meio da página. Corrigido: só
+  letra e número viram inicial. Guarda: `tests/v1341-nome-de-cliente-nao-vira-html.test.mjs`, que
+  também impede `cpInitials` de ser usado dentro de atributo HTML no futuro.
+
 - ~~[MAIOR PENDÊNCIA TÉCNICA] A listagem lê a conversa inteira de todos os leads a cada carga~~ —
   **resolvida na v1136** (era o achado nº 1 da auditoria de 05/08/2026 e a causa quase certa da
   cota de egress estourada desde a v1122). A listagem normal **não pede mais `timeline_json`**: o
