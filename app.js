@@ -222,7 +222,10 @@ import './js/pwa-install.js?v=__VERSION__';
   };
 })();
 
-export const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac)$/i;
+// v1353 — foto e PDF voltam a viajar no envio. Eles eram apagados aqui, no celular, e por isso a
+// leitura de imagem/PDF do servidor (v1306) nunca teve o que ler numa importação de verdade.
+// Vídeo continua de fora: o app não lê vídeo, por decisão do dono.
+export const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac|jpe?g|png|webp|heic|bmp|tiff|gif|pdf)$/i;
 
 // ===== v929 — atividade de uso (Desempenho): análises, importações e tempo no app =====
 // Fica só no localStorage DESTE aparelho (não sincroniza celular↔PC) — é contagem de USO, não

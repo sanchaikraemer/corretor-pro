@@ -251,6 +251,73 @@ export function planejarConteudoDoZip({
   };
 }
 
+// ============================================================================================
+// v1353 — A IMAGEM E O PDF PRECISAM CHEGAR NO SERVIDOR.
+//
+// Defeito real, e grande: desde sempre o aparelho jogava fora imagem, vídeo e documento antes de
+// enviar a conversa ("nunca entram na análise", dizia o comentário). Só que na v1306 o servidor
+// APRENDEU a ler foto e PDF, e na v1307 a abrir link — a pedido do dono. A regra do celular nunca
+// foi atualizada junto. Resultado: o servidor sabia ler, mas os arquivos nunca chegavam nele. A
+// leitura de imagem e PDF esteve morta em toda importação feita pelo celular.
+//
+// A escolha é conservadora de propósito: o texto e o áudio continuam mandando (não perde nada do
+// que já funcionava), e as fotos/PDFs entram DEPOIS deles, do mais recente pro mais antigo, com
+// dois limites — a quantidade que o servidor lê por importação e o espaço que sobrar do envio.
+// Vídeo continua fora: o app não lê vídeo, por decisão do dono.
+export const VISUAL_KEEP_RE = /\.(jpe?g|png|webp|heic|bmp|tiff|gif|pdf)$/i;
+// O servidor lê alguns arquivos por importação (maxVisuaisPorImportacao, api/_pipeline.js).
+// Mandar muito mais que isso é gastar internet do corretor com arquivo que não vai ser lido.
+export const MAX_VISUAIS_NO_ENVIO = 12;
+
+export function escolherVisuaisDoZip({
+  txt = "",
+  visuais = [],
+  bytesJaUsados = 0,
+  limiteBytes = LIMITE_ENVIO_BYTES,
+  margemBytes = MARGEM_ENVIO_BYTES,
+  maxItens = MAX_VISUAIS_NO_ENVIO
+} = {}) {
+  const lista = (visuais || []).map(v => ({
+    caminho: String(v?.caminho || ""),
+    bytes: Number(v?.bytes) || 0
+  })).filter(v => v.caminho && VISUAL_KEEP_RE.test(v.caminho));
+  if (!lista.length) return { manter: [], fora: [], resumo: { total: 0, mantidos: 0, cortados: 0 } };
+
+  // "Mais recente" = citado mais pra frente no texto da conversa. É a ordem que o corretor
+  // enxerga, e não depende do nome do arquivo (que muda de aparelho pra aparelho).
+  const comparavel = textoComparavel(txt);
+  const posicaoNoTexto = (caminho) => {
+    const nome = textoComparavel(nomeSimples(caminho));
+    const semExt = nome.replace(/\.[a-z0-9]{1,5}$/i, "");
+    let pos = comparavel.lastIndexOf(nome);
+    if (pos < 0 && semExt.length >= 6) pos = comparavel.lastIndexOf(semExt);
+    return pos;
+  };
+  const ordenada = lista
+    .map((v, i) => ({ ...v, pos: posicaoNoTexto(v.caminho), ordem: i }))
+    // Citado no texto vem primeiro (do mais recente pro mais antigo); o que não é citado no texto
+    // vai pro fim — o servidor não teria como ligar esse arquivo a nenhuma mensagem.
+    .sort((a, b) => (b.pos - a.pos) || (b.ordem - a.ordem));
+
+  const alvoBytes = Math.max(0, limiteBytes - margemBytes);
+  const manter = [];
+  const fora = [];
+  let usados = Math.max(0, Number(bytesJaUsados) || 0);
+  for (const v of ordenada) {
+    const custo = v.bytes + CUSTO_POR_ARQUIVO_BYTES;
+    if (manter.length >= maxItens || v.pos < 0 || usados + custo > alvoBytes) { fora.push(v.caminho); continue; }
+    usados += custo;
+    manter.push(v.caminho);
+  }
+  // Devolve na ordem do ZIP, como o resto do enxugamento faz.
+  const manterSet = new Set(manter);
+  return {
+    manter: lista.filter(v => manterSet.has(v.caminho)).map(v => v.caminho),
+    fora,
+    resumo: { total: lista.length, mantidos: manter.length, cortados: fora.length, bytesEstimados: usados, alvoBytes }
+  };
+}
+
 // Frase pra tela, no idioma do corretor. Vazia quando não houve corte nenhum digno de nota.
 export function fraseDoCorte(resumo) {
   if (!resumo || !resumo.totalAudios) return "";
