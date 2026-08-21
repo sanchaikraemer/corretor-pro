@@ -79,29 +79,33 @@ try {
     return { statusCode, payload: response ? JSON.parse(response) : null };
   }
 
+  // As datas abaixo usam o ANO DE HOJE. Cravadas em 2026, viravam bomba-relógio: a rota recusa
+  // ano anterior ao atual, então na virada do ano este teste ficaria vermelho sozinho — e, desde a
+  // v1338, suíte vermelha PARA A PUBLICAÇÃO. O que se testa aqui é o horário do lembrete, não o
+  // calendário.
   // 1. Com hora válida: grava o horário certo (fuso de Brasília) e devolve na resposta.
   {
-    const { statusCode, payload } = await chamar({ action: "reagendar-lembrete", id: "lead-1", data: "2026-08-11", hora: "14:00" });
+    const { statusCode, payload } = await chamar({ action: "reagendar-lembrete", id: "lead-1", data: `${new Date().getUTCFullYear()}-08-11`, hora: "14:00" });
     assert.equal(statusCode, 200, `esperava 200, veio ${statusCode}`);
     assert.equal(payload?.hora, "14:00", "a resposta precisa devolver a hora gravada");
-    assert.equal(payload.quando, new Date("2026-08-11T14:00:00-03:00").toISOString(), "quando precisa refletir a hora escolhida, no fuso de Brasília");
+    assert.equal(payload.quando, new Date(`${new Date().getUTCFullYear()}-08-11T14:00:00-03:00`).toISOString(), "quando precisa refletir a hora escolhida, no fuso de Brasília");
     const gravado = registros.at(-1);
     assert.equal(gravado.resultado_analise.lembrete.hora, "14:00", "o registro salvo no banco precisa guardar a hora");
   }
 
   // 2. Sem hora: comportamento idêntico ao de sempre (meio-dia UTC, hora nula).
   {
-    const { statusCode, payload } = await chamar({ action: "reagendar-lembrete", id: "lead-1", data: "2026-08-12" });
+    const { statusCode, payload } = await chamar({ action: "reagendar-lembrete", id: "lead-1", data: `${new Date().getUTCFullYear()}-08-12` });
     assert.equal(statusCode, 200);
     assert.equal(payload?.hora, null, "sem hora informada, a resposta precisa vir com hora nula");
-    assert.equal(payload.quando, new Date(Date.UTC(2026, 7, 12, 12, 0, 0)).toISOString(), "sem hora, continua usando meio-dia UTC (mesma data no Brasil)");
+    assert.equal(payload.quando, new Date(Date.UTC(new Date().getUTCFullYear(), 7, 12, 12, 0, 0)).toISOString(), "sem hora, continua usando meio-dia UTC (mesma data no Brasil)");
     const gravado = registros.at(-1);
     assert.equal(gravado.resultado_analise.lembrete.hora, null, "sem hora, o registro salvo precisa limpar uma hora antiga (não vazar de um agendamento anterior)");
   }
 
   // 3. Hora em formato inválido é ignorada (nunca quebra o agendamento por causa da hora).
   {
-    const { statusCode, payload } = await chamar({ action: "reagendar-lembrete", id: "lead-1", data: "2026-08-13", hora: "25:99" });
+    const { statusCode, payload } = await chamar({ action: "reagendar-lembrete", id: "lead-1", data: `${new Date().getUTCFullYear()}-08-13`, hora: "25:99" });
     assert.equal(statusCode, 200, "hora inválida não pode derrubar o agendamento");
     assert.equal(payload?.hora, null, "hora inválida é tratada como se não tivesse vindo");
   }

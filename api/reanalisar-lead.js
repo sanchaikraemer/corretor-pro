@@ -439,8 +439,22 @@ async function reanalisarLeadHandler702(req, res) {
     const dataStr = String(body?.data || ""); // formato yyyy-mm-dd do seletor de data
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) return json(res, 400, { ok: false, error: "Data inválida." });
     const [y, mo, d] = dataStr.split("-").map(Number);
-    const anoAtual = new Date().getUTCFullYear();
-    if (y < anoAtual || y > anoAtual + 5 || mo < 1 || mo > 12 || d < 1 || d > 31) {
+    // v1343 — O ANO NÃO PODE SER LIDO NO RELÓGIO DE LONDRES.
+    //
+    // Era `new Date().getUTCFullYear()`. No dia 31 de dezembro, a partir das 21h no horário de
+    // Brasília, em Londres já é 1º de janeiro — então o servidor achava que o ano atual era o
+    // seguinte e RECUSAVA ("Data fora do intervalo válido") um compromisso marcado pro dia 31 de
+    // dezembro, que o corretor estava tentando remarcar naquele exato momento. No Acre a janela de
+    // erro é ainda maior: começa às 19h.
+    //
+    // Agora o piso é o ano do fuso brasileiro mais atrasado (UTC-5, Rio Branco): em qualquer
+    // ponto do país o ano que o corretor está vivendo é aceito. O teto continua o mesmo (5 anos à
+    // frente), contado pelo relógio UTC.
+    const agoraData = new Date();
+    const anoAtual = agoraData.getUTCFullYear();
+    const anoMaisAtrasadoDoBrasil = new Date(agoraData.getTime() - 5 * 3600000).getUTCFullYear();
+    const anoMinimo = Math.min(anoAtual, anoMaisAtrasadoDoBrasil);
+    if (y < anoMinimo || y > anoAtual + 5 || mo < 1 || mo > 12 || d < 1 || d > 31) {
       return json(res, 400, { ok: false, error: "Data fora do intervalo válido." });
     }
     // v1199 — horário do compromisso, OPCIONAL (pedido do dono: "minha reunião com Mateus é às

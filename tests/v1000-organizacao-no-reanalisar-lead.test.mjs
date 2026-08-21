@@ -62,7 +62,11 @@ try {
     { action: "remover-item", id: "lead-1", iso: "2026-07-01T10:00:00-03:00" },
     { action: "marcar-atendido", id: "lead-1" },
     { action: "desmarcar-atendido", id: "lead-1" },
-    { action: "reagendar-lembrete", id: "lead-1", data: "2026-08-01" },
+    // A data do reagendamento é montada com o ANO DE HOJE de propósito. Cravada ("2026-08-01"),
+    // ela vira uma bomba-relógio: a rota recusa ano anterior ao atual, então na virada de 2026 pra
+    // 2027 este teste ficaria vermelho sozinho — e, desde a v1338, suíte vermelha PARA A
+    // PUBLICAÇÃO. Aqui o que se testa é o isolamento por empresa, não o calendário.
+    { action: "reagendar-lembrete", id: "lead-1", data: `${new Date().getUTCFullYear()}-08-01` },
     { action: "remover-lembrete", id: "lead-1" }
   ];
 
