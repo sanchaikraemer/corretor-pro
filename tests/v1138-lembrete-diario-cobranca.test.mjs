@@ -102,7 +102,11 @@ assert.match(retratoSrc[0], /calculadoEm: Date\.now\(\)/,
 // ---------------------------------------------------------------------------
 assert.match(sw, /addEventListener\('periodicsync'/, 'o worker precisa ouvir o periodicsync');
 assert.match(sw, /event\.tag !== 'cp-cobranca-diaria'/, 'só o tag do lembrete dispara');
-assert.match(sw, /20 \* 60 \* 60 \* 1000/, 'no máximo um aviso a cada 20h — o navegador pode acordar mais vezes');
+// v1344 — a trava deixou de ser "a cada 20 horas" e passou a ser "um por DIA DE CALENDÁRIO". A de
+// horas descartava o despertar do dia seguinte quando o do dia anterior tinha sido tarde, e junto
+// com a janela de horário da v1336 quase matou o lembrete (ver v1344-lembrete-nao-morre-pela-janela).
+// A garantia guardada aqui é a mesma de sempre: nunca dois avisos no mesmo dia.
+assert.match(sw, /if \(diaDoUltimoAviso === hoje\) return;/, 'no máximo um aviso por dia de calendário');
 assert.match(sw, /idade > 30 \* 24 \* 60 \* 60 \* 1000/, 'retrato com mais de 30 dias PARA de avisar — insistir com dado morto só faz silenciar o app');
 assert.match(sw, /idade > 48 \* 60 \* 60 \* 1000/, 'retrato com mais de 48h vira texto genérico (o número pode ter mudado)');
 assert.match(sw, /ações comerciais para revisar/, 'o texto do aviso fala de ação comercial, não de cliente esperando');
@@ -130,7 +134,7 @@ assert.match(app, /await Notification\.requestPermission\(\)/, 'a permissão é 
 // v1336 — o intervalo pedido ao navegador caiu de 20h pra 4h. O que este teste guarda é o que
 // sempre importou aqui: o TAG pedido é o mesmo que o worker escuta (errar o tag deixa o lembrete
 // mudo sem ninguém perceber). A frequência de um aviso por dia mudou de lugar: quem garante isso é
-// a trava de 20h dentro do service worker, conferida em v1336-lembrete-na-hora-escolhida.
+// a trava por dia de calendário dentro do service worker (v1344).
 assert.match(app, /periodicSync\.register\("cp-cobranca-diaria", \{ minInterval: \d+ \* 60 \* 60 \* 1000 \}\)/,
   'o sync periódico é registrado com o mesmo tag que o worker escuta');
 assert.match(app, /o aviso em segundo plano não é suportado/,

@@ -1808,7 +1808,7 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
 //
 // PARA QUE SERVE — E PARA QUE NÃO SERVE. O catálogo NÃO entra no pedido que escreve as três
 // mensagens, e não pode entrar. Foi exatamente uma fonte assim que fez a IA escrever pra Vanessa o
-// nome de um empreendimento que nunca apareceu na conversa dela ("nós nem falamos de Evolute",
+// nome de um empreendimento que nunca tinha aparecido na conversa dela ("nós nem falamos desse,
 // dono, 20/08) — a mesma doença que a v1301 tratou tirando os casos de outros clientes ("tira as
 // duas fontes"). O catálogo serve pra UMA coisa: quando a conferência das sugestões (v1332) acha
 // um nome que não está na conversa, ela agora sabe distinguir invenção pura de produto REAL da
@@ -1819,25 +1819,67 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
 //     limpeza do aprendizado, v1326);
 //   • trecho que fala de UM cliente ("proposta para", "para o cliente") não vira catálogo;
 //   • só material que O CORRETOR mandou entra: o que o cliente mandou é do cliente.
+//
+// ATENÇÃO AO QUE ISTO **NÃO** GUARDA: a mesma limpeza que tira dado pessoal também troca valores
+// por "[valor]" e endereços por "[endereço]". Ou seja, o catálogo NÃO guarda preço — e não deve
+// guardar mesmo: preço velho é a fonte de erro mais cara que existe neste app (v1305). O que fica
+// é o nome do produto e a descrição do que ele é.
 const CATALOGO_CHAVE = "corretor-catalogo";
 const MAX_ITENS_CATALOGO = 40;
 const MAX_CHARS_ITEM_CATALOGO = 320;
 const _TRECHO_DE_CLIENTE = /\b(proposta (para|pra|de)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ]|para o cliente|do cliente|comprador|CPF|assinatura)\b/i;
-const _LINHA_COM_PRODUTO = /\b(apartamento|apto|casa|sobrado|cobertura|studio|terreno|lote|sala|loja|dormit[óo]rio|su[íi]te|m²|m2|metros|entrada|parcela|financia|permuta|entrega|R\$)/i;
+// v1344 — a limpeza de dado pessoal (limparAprendizadoDeOutroCliente) troca valores por "[valor]"
+// ANTES desta peneira rodar. Sem "[valor]" e "dorm" abreviado na lista, uma seleção de imóveis
+// legítima ("Residencial <nome> - 2 dorm - R$ ...") era descartada inteira: o "R$" já tinha virado
+// "[valor]" e nada mais casava. Era o material MAIS útil sendo jogado fora.
+const _LINHA_COM_PRODUTO = /(\b(apartamento|apto|casa|sobrado|cobertura|studio|terreno|lote|sala|loja|dormit[óo]rios?|dorms?\b|su[íi]tes?|metros|entrada|parcela|financia|permuta|entrega|torre|andar|unidades?|garagem|vaga)|m²|m2|R\$|\[valor\])/i;
+
+// v1344 — NOME GENÉRICO DE ANÚNCIO NÃO É NOME DE PRODUTO.
+//
+// A varredura da revisão mostrou o estrago: uma arte com a chamada "OPORTUNIDADE ÚNICA" no topo
+// entrava no catálogo com esse nome, e um print de portal virava o produto "IMÓVEL À VENDA". Isso
+// não é inofensivo: é justamente esse nome que a conferência das sugestões usa pra dizer "é
+// produto seu". Com lixo aí dentro, uma mensagem que dissesse "Oportunidade" seria carimbada como
+// produto real da carteira — o app afirmando bobagem, que é o oposto do que ele serve.
+const _NOME_GENERICO = /^(oportunidade|im[óo]vel|im[óo]veis|apartamento|apartamentos|apto|casa|casas|terreno|terrenos|lote|lotes|lan[çc]amento|lan[çc]amentos|promo[çc][ãa]o|novidade|confira|aten[çc][ãa]o|exclusivo|exclusiva|[úu]nica|[úu]nico|venda|vende|aluga|alugue|plant[ãa]o|destaque|dispon[íi]vel|dispon[íi]veis|[úu]ltimas|unidades?|imperd[íi]vel|newsletter|whatsapp|contato)\b/i;
 
 // Nome do produto: o que o próprio texto lido chama de empreendimento/edifício, ou a primeira
 // linha curta em maiúsculas — que é como as artes de venda escrevem o nome.
 export function nomeDeProdutoNoMaterial(texto) {
   const t = String(texto || "").replace(/\r/g, "");
-  const porPalavra = /\b(?:[Ee]mpreendimento|[Ee]dif[íi]cio|[Rr]esidencial|[Cc]ondom[íi]nio)\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}\d'’-]*(?:\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}\d'’-]*){0,2})/u.exec(t);
-  if (porPalavra) return porPalavra[1].trim();
+  // v1344 — `\s+` casava a QUEBRA DE LINHA e colava a linha seguinte dentro do nome: de
+  // "Empreendimento X\nTorre única" saía o produto "X<quebra de linha>Torre". Espaço da mesma
+  // linha, só — por isso `[^\S\n]+`.
+  const porPalavra = /\b(?:[Ee]mpreendimento|[Ee]dif[íi]cio|[Rr]esidencial|[Cc]ondom[íi]nio)[^\S\n]+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}\d'’-]*(?:[^\S\n]+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}\d'’-]*){0,2})/u.exec(t);
+  if (porPalavra && !_NOME_GENERICO.test(porPalavra[1])) return porPalavra[1].trim();
+  // v1344 — A REGRA "PRIMEIRA LINHA CURTA COMEÇANDO COM MAIÚSCULA" FOI EMBORA. Ela parecia
+  // razoável e produzia lixo: de uma arte de venda de verdade saíam produtos chamados
+  // "Entrada facilitada, financiamento direto" e "R$ 750.000". E esse nome é justamente o que a
+  // conferência das sugestões usa pra dizer "é produto seu" — ou seja, o app passaria a afirmar
+  // bobagem com cara de fato.
+  //
+  // Sobrou o sinal que não erra: a LINHA-LOGOTIPO da peça, escrita toda em maiúsculas, curta, sem
+  // número e sem chamada de anúncio — a linha do logotipo. Não achou? Melhor ficar SEM nome: o
+  // material entra no catálogo como "(material sem nome de empreendimento)" e simplesmente não
+  // contribui com nenhum nome pra conferência. Nome errado é pior do que nome nenhum.
   for (const linha of t.split(/\n+/).slice(0, 4)) {
-    const limpa = linha.replace(/[*_#>-]/g, " ").trim();
+    const limpa = linha.replace(/[*_#>|]/g, " ").replace(/\s+/g, " ").trim();
     if (limpa.length < 3 || limpa.length > 40) continue;
+    if (/\d/.test(limpa)) continue;                       // preço, metragem, data: não é nome
+    if (/[.,;:!?()/]/.test(limpa)) continue;              // frase de anúncio, não logotipo
+    if (_NOME_GENERICO.test(limpa)) continue;             // chamada de anúncio: não é nome
     if (!/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(limpa)) continue;
-    if (/\d{2}\/\d{2}/.test(limpa)) continue;
     const palavras = limpa.split(/\s+/);
     if (palavras.length > 4) continue;
+    // Nome de empreendimento é escrito em CAIXA ALTA ou com Todas As Iniciais Maiúsculas — só os
+    // conectivos ficam minúsculos. Frase de anúncio
+    // ("Entrada facilitada, financiamento direto") sempre quebra essa forma, e é por aí que ela é
+    // recusada: "facilitada" começa minúsculo.
+    const CONECTIVO = /^(de|do|da|dos|das|e|em|no|na)$/i;
+    const todasIniciaisMaiusculas = palavras.every(
+      (w, i) => CONECTIVO.test(w) ? i > 0 : /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(w)
+    );
+    if (!todasIniciaisMaiusculas) continue;
     return limpa;
   }
   return "";
@@ -1892,14 +1934,29 @@ export async function guardarNoCatalogo(organizationId, itens = []) {
       .eq("chave", CATALOGO_CHAVE).eq("organization_id", organizationId).maybeSingle();
     const atual = Array.isArray(data?.valor?.itens) ? data.valor.itens : [];
     const fundido = fundirCatalogo(atual, novos);
-    await upsertConfigComOrganizacao(supabase, organizationId, {
+    // v1344 — O ERRO DA GRAVAÇÃO NÃO PODE MAIS SER ENGOLIDO.
+    //
+    // upsertConfigComOrganizacao DEVOLVE o erro; ela não lança. Sem conferir isso, uma gravação
+    // recusada pelo banco (migração faltando, permissão) fazia esta função devolver "guardei" e
+    // seguir a vida — o catálogo nunca aprenderia nada e ninguém, nunca, ficaria sabendo. É o pior
+    // tipo de defeito: o que não aparece.
+    const { error } = (await upsertConfigComOrganizacao(supabase, organizationId, {
       chave: CATALOGO_CHAVE,
       valor: { itens: fundido, atualizadoEm: new Date().toISOString() },
       atualizado_em: new Date().toISOString()
-    });
-    return { guardados: fundido.length - atual.length };
-  } catch (_) {
-    return { guardados: 0 };
+    })) || {};
+    if (error) {
+      console.warn("[direciona] catálogo aprendido NÃO foi salvo:", error.message || error);
+      return { guardados: 0, erro: error.message || String(error) };
+    }
+    // Quantos itens realmente entraram — não `fundido.length - atual.length`, que devolve 0 quando
+    // o catálogo já está no teto e mente sobre o que aconteceu.
+    const jaExistia = new Set(atual.map(i => _semAcentoMinuscula(`${i?.nome}|${i?.texto}`).replace(/\s+/g, " ").trim()));
+    const guardados = novos.filter(i => !jaExistia.has(_semAcentoMinuscula(`${i?.nome}|${i?.texto}`).replace(/\s+/g, " ").trim())).length;
+    return { guardados };
+  } catch (erro) {
+    console.warn("[direciona] catálogo aprendido falhou:", erro?.message || erro);
+    return { guardados: 0, erro: erro?.message || String(erro) };
   }
 }
 
@@ -2810,7 +2867,7 @@ function _nomesForaDaConversa(texto, contextoConhecido) {
   const catalogo = new Set(
     (typeof contextoConhecido === "string" ? [] : (Array.isArray(contextoConhecido?.catalogo) ? contextoConhecido.catalogo : []))
       .flatMap(nome => _semAcentoMinuscula(nome).split(/\s+/))
-      .filter(p => p.length > 2)
+      .filter(p => p.length >= 4) // palavra curta demais casaria com meio mundo
   );
   const inventados = [];
   const deOutraConversa = [];

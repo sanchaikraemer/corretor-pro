@@ -68,6 +68,15 @@ assert.match(html, /America\/Manaus/, "com as opções do Brasil que não são B
 assert.match(html, /id="cerebroFusoDetectado"/, "e a linha que mostra o que o aparelho diz");
 assert.match(app, /const fusoAtivo = cpFusoDefinir\(config\.fusoHorario\) \|\| cpFuso\(\);/,
   "o fuso salvo precisa passar a valer no app inteiro ao carregar o Cérebro, não só no seletor");
+// v1344 — e, principalmente, JÁ NA ABERTURA DO APP. Só na tela do Cérebro não bastava: quem atende
+// em Manaus via todas as datas em horário de Brasília até entrar naquela tela.
+{
+  const sincronia = app.match(/async function cp7SincronizarCerebroConfigInicial\(\)\{[\s\S]*?\n\}/)[0];
+  assert.match(sincronia, /cpFusoDefinir\(fresco\.fusoHorario\)/,
+    "a sincronização de abertura precisa aplicar o fuso salvo da conta");
+  assert.match(sincronia, /mudouRegraDeFila \|\| mudouFuso/,
+    "fuso diferente muda toda data na tela: precisa mandar redesenhar, como as regras de fila fazem");
+}
 assert.equal((app.match(/fusoHorario: cpFusoDefinir\(qs\("#cerebroFusoHorario"\)\?\.value\)/g) || []).length, 3,
   "os três caminhos que salvam o Cérebro precisam mandar o fuso — senão salvar por um deles apaga a escolha");
 assert.match(cerebro, /fusoHorario: normalizarFuso\(v\.fusoHorario\)/, "a rota do Cérebro lê o fuso");

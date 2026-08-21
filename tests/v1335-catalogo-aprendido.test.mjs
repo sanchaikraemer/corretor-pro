@@ -30,6 +30,31 @@ assert.equal(nomeDeProdutoNoMaterial("EVOLUTTI\nApartamentos de 2 dormitórios\n
   "arte de venda escreve o nome sozinho na primeira linha");
 assert.equal(nomeDeProdutoNoMaterial("apenas um texto solto qualquer sem nome nenhum"), "");
 
+// ── 1-B. v1344 — CHAMADA DE ANÚNCIO NÃO É NOME DE PRODUTO ───────────────────────────────────
+//
+// Na revisão de 21/08 eu rodei o catálogo contra material de venda de verdade e ele aprendeu lixo:
+// de uma arte comum saía o produto "OPORTUNIDADE ÚNICA"; de um print de portal, "IMÓVEL À VENDA";
+// e, depois da primeira tentativa de conserto, coisas como "Entrada facilitada, financiamento
+// direto" e "R$ 750.000". Isso não é inofensivo: esse nome é justamente o que a conferência das
+// sugestões usa pra dizer "é produto seu". Com lixo aí dentro, o app carimbaria bobagem como fato.
+//
+// A regra passou a ser conservadora de propósito: nome só sai de um sinal explícito
+// ("Empreendimento X") ou de uma linha-logotipo (curta, sem número, sem pontuação, com todas as
+// iniciais maiúsculas). Não achou? Fica SEM nome. Nome errado é pior do que nome nenhum.
+for (const [rotulo, material] of [
+  ["chamada de arte", "OPORTUNIDADE ÚNICA\nApartamento de 2 dormitórios com suíte\nEntrada facilitada, financiamento direto\nR$ 430.000"],
+  ["print de portal", "IMÓVEL À VENDA\nCasa 3 dormitórios, 140m², bairro Centro\nR$ 750.000"],
+  ["frase solta", "Confira as opções selecionadas\nApartamentos com entrada facilitada e parcelas que cabem no bolso"]
+]) {
+  const nome = nomeDeProdutoNoMaterial(material);
+  assert.equal(nome, "", `"${rotulo}" não pode virar nome de produto — veio "${nome}"`);
+}
+// E os nomes de verdade continuam sendo reconhecidos, nas três formas que aparecem no material.
+assert.equal(nomeDeProdutoNoMaterial("EVOLUTTI RESIDENCE\n2 e 3 dormitórios, 68m²"), "EVOLUTTI RESIDENCE", "linha-logotipo em caixa alta");
+assert.equal(nomeDeProdutoNoMaterial("Vista Verde\nApartamentos de 2 dormitórios"), "Vista Verde", "logotipo com iniciais maiúsculas");
+assert.equal(nomeDeProdutoNoMaterial("Empreendimento Quality Life\nTorre única, 14 andares."), "Quality Life",
+  "sinal explícito — e sem colar a linha de baixo no nome, que era outro defeito (\"Quality Life\\nTorre\")");
+
 // ── 2. Material vira item; conversa de cliente, não ──────────────────────────────────────────
 const arte = `EVOLUTTI
 Apartamentos de 2 dormitórios com box de garagem.

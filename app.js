@@ -7393,11 +7393,22 @@ async function cp7SincronizarCerebroConfigInicial(){
     try{ anterior = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
     const fresco = sanitizeCerebroConfigV762(data.config);
     localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(fresco));
+    // v1344 — O FUSO SALVO PRECISA VALER DESDE A ABERTURA DO APP. Erro meu na v1337, achado na
+    // revisão: o fuso da conta só passava a valer quando o corretor ABRIA a tela do Cérebro
+    // (carregarCerebro). Quem atende em Manaus e escolheu o fuso de lá continuava vendo todas as
+    // datas do app no horário de Brasília — Home, Agenda, Desempenho, contagem de dias — até
+    // entrar naquela tela, e só naquela sessão. É aqui, na sincronização de abertura, que a
+    // configuração da conta chega ao aparelho; é aqui que o fuso tem que passar a valer.
+    const fusoAntes = (typeof cpFuso === "function") ? cpFuso() : "";
+    const fusoAgora = (typeof cpFusoDefinir === "function") ? cpFusoDefinir(fresco.fusoHorario) : fusoAntes;
+    const mudouFuso = !!fusoAgora && fusoAgora !== fusoAntes;
     const mudouRegraDeFila = !anterior
       || Number(anterior.diasDescansoPosAtendimento) !== Number(fresco.diasDescansoPosAtendimento)
       || Number(anterior.atendimentosPorDia) !== Number(fresco.atendimentosPorDia)
       || Number(anterior.resgatesPorDia) !== Number(fresco.resgatesPorDia); // v1139 — muda a ordem da dose
-    if(mudouRegraDeFila && typeof refreshAllSections === "function") refreshAllSections();
+    // Fuso diferente muda TODA data já desenhada na tela (dias parados, "hoje", agenda) — por isso
+    // ele também manda redesenhar, junto com as regras de fila.
+    if((mudouRegraDeFila || mudouFuso) && typeof refreshAllSections === "function") refreshAllSections();
   }catch(_){ /* sem rede/sessão ainda — a Home continua com o que já tinha */ }
 }
 cp7SincronizarCerebroConfigInicial();
@@ -10128,7 +10139,30 @@ async function cpLembreteDiario(){
   cpLembreteDiarioRender();
 }
 window.cpLembreteDiario = cpLembreteDiario;
+
+// v1344 — QUEM JÁ TINHA O LEMBRETE LIGADO PRECISA RECEBER AS MUDANÇAS SEM CLICAR EM NADA.
+//
+// Erro meu na v1336, achado na revisão: o pedido de "acorde o app" (periodicSync) só era refeito
+// quando o corretor CLICAVA no botão de ativar. Quem já estava com o lembrete ligado continuava
+// com o pedido antigo, de uma vez a cada 20 horas — enquanto o service worker, esse sim atualizado
+// na hora, já só deixava o aviso sair dentro da janela de 4 horas escolhida. Resultado prático: o
+// celular acordava uma vez por dia, num horário qualquer, e na maioria dos dias esse horário caía
+// FORA da janela. O lembrete simplesmente parava de chegar, sem ninguém entender por quê.
+//
+// Agora, a cada abertura do app: se o lembrete está ligado e a permissão está de pé, o pedido é
+// refeito (é idempotente — o navegador só atualiza o intervalo) e a hora escolhida é regravada
+// onde o service worker consegue ler.
+async function cpLembreteDiarioReconciliar(){
+  try{
+    if(!("Notification" in window)) return;
+    if(!cpLembreteDiarioLigado() || Notification.permission !== "granted") return;
+    await cpLembreteDiarioGravarHoraNoWorker();
+    await cpLembreteDiarioRegistrarSync();
+  }catch(_){ /* nunca pode derrubar a abertura do app */ }
+}
+
 try{ cpLembreteDiarioRender(); }catch(_){ }
+try{ cpLembreteDiarioReconciliar(); }catch(_){ }
 // v1268 (2ª passada) — leadEhQuente saiu junto com abrirAtendimentosFiltro, a única que a usava.
 
 function cp786Modelo(l){
