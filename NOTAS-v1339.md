@@ -1,18 +1,17 @@
-# v1339 — a trava da publicação nunca vai travar o site por culpa da máquina
+# v1339 — merge seguro: Motor Comercial + fuso do corretor
 
-Complemento imediato da 1338. A trava nova impede que app quebrado vá pro ar — mas eu precisava
-garantir uma coisa antes de dormir tranquilo: **ela não pode repetir o estrago da 1325**, que foi
-deixar o site preso numa versão velha por um motivo que não tinha nada a ver com o app.
+Duas linhas de trabalho chegaram a usar o número v1337 ao mesmo tempo. Ao aplicar o novo estado
+comercial determinístico, `api/_pipeline.js` substituiu a versão que já continha a integração do
+fuso horário do corretor. O projeto ficou inconsistente: o app e o Cérebro salvavam o fuso, mas o
+pipeline não exportava `fusoDoCorretor` e a análise continuava usando Brasília.
 
-Duas garantias:
+## Correção
 
-1. **Problema de máquina não para a publicação.** Se a conferência não conseguir sequer rodar
-   (faltou um pacote na máquina que publica, o Node não subiu), isso não é app quebrado. A trava
-   avisa em letras garrafais no registro e **deixa passar** — a conferência de verdade continua
-   acontecendo a cada envio, na máquina limpa do GitHub. Só teste realmente vermelho segura a
-   publicação.
+- preservado o estado comercial determinístico da v1337;
+- restaurado `fusoDoCorretor(configCerebro)` no pipeline;
+- data, hora e saudação da análise usam o fuso salvo no Cérebro;
+- fuso ausente/inválido continua caindo em `America/Sao_Paulo`;
+- mantida a trava de publicação da v1338.
 
-2. **O pacote que a conferência usa saiu da lista "só pra desenvolvimento"** e passou pra lista
-   principal, pra nunca faltar na hora de publicar.
-
-Tudo isso está conferido por teste — inclusive rodando a trava de verdade.
+A regressão é coberta em conjunto pelos testes `v1337-estado-comercial-deterministico` e
+`v1337-fuso-do-corretor`.
