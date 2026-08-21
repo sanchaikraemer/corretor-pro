@@ -49,8 +49,15 @@ const resultado = await analyzeWithBrain({
 // v1332 — o modo de duas etapas passou a ser o PADRÃO: a IA entende primeiro (chamada 1) e
 // escreve as três depois (chamada 2). O que este teste sempre guardou continua: nenhuma chamada
 // REESCREVE texto já escrito — a segunda recebe o diagnóstico, nunca as mensagens da primeira.
-assert.equal(chamadas.length, 2, "a análise usa duas chamadas: a leitura e a redação das três");
-const pedidoDaRedacao = chamadas[1].messages.find(m => m.role === "user")?.content || "";
+// v1346 — a análise voltou a ser UMA chamada por padrão: o modo de duas etapas, que eu liguei na
+// v1332 sem medir, dobrava a espera do corretor ("está demorando MUITO! DEMAIS!!!", 21/08/2026).
+// Ele continua disponível por variável de ambiente (DIRECIONA_ANALISE_ETAPAS=2). Por isso este
+// teste parou de cravar o NÚMERO de chamadas: o que ele guarda é o conteúdo do pedido, que vale
+// nos dois modos.
+assert.ok(chamadas.length >= 1, "a análise precisa chamar a IA pelo menos uma vez");
+// A chamada que ESCREVE é a última, em qualquer modo. Ela nunca pode receber mensagem pronta
+// pra "melhorar": reescrever texto da IA foi o que deixou as sugestões robóticas (v1315).
+const pedidoDaRedacao = chamadas.at(-1).messages.find(m => m.role === "user")?.content || "";
 for (const jaEscrita of [resposta.mensagens.recomendada, resposta.mensagens.maisSuave, resposta.mensagens.maisDireta]) {
   assert.ok(!pedidoDaRedacao.includes(jaEscrita),
     "a etapa de redação não pode receber mensagem pronta pra reescrever");
