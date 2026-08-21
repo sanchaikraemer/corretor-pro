@@ -121,7 +121,7 @@ assert.equal(contarMaterialNaoLido(null).total, 0, "e nada quebra com entrada va
   assert.match(aviso, /if\(fotos \+ docs \+ audios \+ semVir <= 0\) return "";/,
     "e o aviso precisa aparecer também quando só há arquivo sem tipo");
   assert.match(aviso, /arquivos não vieram/, "com a frase do caso 'não veio no envio'");
-  assert.match(aviso, /Incluir mídia/, "e a instrução que resolve ESTE caso");
+  assert.match(aviso, /Ler fotos, PDFs e áudios/, "e a instrução que resolve ESTE caso, na própria tela (v1349)");
   assert.match(aviso, /reimporte a conversa/, "sem perder a instrução do outro caso, que é diferente");
 }
 {

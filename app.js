@@ -5715,8 +5715,10 @@ function cp1323MaterialNaoLido(a){
   const naoLidos = partes.length
     ? ` · <b style="color:var(--risco)">a IA ainda não leu ${lista} desta conversa</b> (o app lê alguns arquivos por importação, os mais recentes — reimporte a conversa pra ele seguir lendo o que ficou)`
     : "";
+  // v1349 — a frase parou de mandar reexportar a conversa inteira. O conserto agora é de dois
+  // toques, nesta mesma tela: "Ler fotos e PDFs", escolhe os arquivos no aparelho, salva.
   const naoVieram = semVir
-    ? ` · <b style="color:var(--risco)">${semVir} ${pl(semVir, "arquivo não veio", "arquivos não vieram")} nesta conversa</b> (ela foi enviada SEM os arquivos — a IA sabe que ${semVir === 1 ? "houve um envio" : "houve envios"} ali, mas não o que tinha ${semVir === 1 ? "dentro" : "dentro deles"}. Reexporte no WhatsApp com <b>"Incluir mídia"</b> e importe de novo)`
+    ? ` · <b style="color:var(--risco)">${semVir} ${pl(semVir, "arquivo não veio", "arquivos não vieram")} nesta conversa</b> (ela foi enviada sem os arquivos. Toque em <b>"Ler fotos, PDFs e áudios"</b>, aqui embaixo, escolha ${semVir === 1 ? "o arquivo" : "os arquivos"} no seu aparelho e o app lê ${semVir === 1 ? "ele" : "eles"} agora)`
     : "";
   return naoLidos + naoVieram;
 }
@@ -5859,8 +5861,16 @@ function renderLeadFoco(lead){
                salva. No celular o seletor já abre na galeria/câmera; no computador dá pra colar a
                imagem direto no campo de texto (Ctrl+V). -->
           <input type="file" id="cp1250PrintInput" accept="image/png,image/jpeg,image/webp" hidden onchange="cp1250LerPrint(this)">
+          <!-- v1349 — OS ARQUIVOS QUE NÃO VIERAM NA CONVERSA, LIDOS AQUI MESMO.
+               Quando a conversa é exportada sem os arquivos, foto e PDF viram "<Mídia oculta>" e o
+               conteúdo não existe dentro do que chegou. Reexportar a conversa inteira por causa de
+               dois ou três arquivos é trabalho demais: ele escolhe os arquivos aqui, o app lê e o
+               texto cai no campo acima pra ele conferir e salvar. Aceita vários de uma vez, e
+               aceita PDF — a leitura de print (v1250) é uma imagem só, e só de conversa. -->
+          <input type="file" id="cp1349ArquivosInput" accept="image/png,image/jpeg,image/webp,image/heic,application/pdf,audio/*,.opus,.ogg,.m4a,.mp3" multiple hidden onchange="cp1349LerArquivos(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
             <button type="button" id="cp1250PrintBtn" onclick="document.getElementById('cp1250PrintInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler print da resposta</button>
+            <button type="button" id="cp1349ArquivosBtn" onclick="document.getElementById('cp1349ArquivosInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler fotos, PDFs e áudios</button>
             <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
             <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
           </div>
@@ -12440,6 +12450,88 @@ function cp1250LerPrint(input){
   cp1250EnviarPrint(file);
 }
 window.cp1250LerPrint = cp1250LerPrint;
+
+// v1349 — LER AS FOTOS E OS PDFs QUE FICARAM DE FORA DA CONVERSA.
+//
+// Print do dono, 21/08/2026: as três últimas mensagens de um atendimento eram "arquivo enviado —
+// conteúdo não analisado", bem na hora em que ele perguntou sobre entrada e permuta. A conversa
+// tinha sido exportada sem os arquivos, então não havia o que ler. Mandar reexportar a conversa
+// toda por causa de três arquivos é empurrar trabalho: aqui ele escolhe os arquivos direto do
+// aparelho e o app lê, com o MESMO leitor da importação.
+async function cp1349LerArquivos(input){
+  const arquivosEscolhidos = Array.from(input?.files || []);
+  if(input) input.value = "";
+  if(!arquivosEscolhidos.length) return;
+  const status = qs("#cp7ObsStatus");
+  const ta = qs("#cp7ObsTexto");
+  const btn = qs("#cp1349ArquivosBtn");
+  const rotulo = btn ? btn.textContent : "";
+  const aviso = (cor, html) => { if(status) status.innerHTML = `<span style="color:var(${cor})">${html}</span>`; };
+  // 10 por vez: é o teto da rota. Mais que isso não cabe no tempo da função.
+  const arquivos = arquivosEscolhidos.slice(0, 10);
+  const sobraram = arquivosEscolhidos.length - arquivos.length;
+  if(btn){ btn.disabled = true; btn.textContent = arquivos.length === 1 ? "Lendo o arquivo…" : `Lendo ${arquivos.length} arquivos…`; }
+  aviso("--morno", arquivos.length === 1 ? "Lendo o arquivo…" : `Lendo ${arquivos.length} arquivos…`);
+  try{
+    const prontos = [];
+    // O envio inteiro precisa caber no limite de corpo da hospedagem (~4,5 MB). Foto encolhida dá
+    // uns 200 KB; PDF é o que pode estourar. Em vez de deixar a hospedagem recusar o envio todo
+    // (erro seco, sem explicação), o que não couber fica de fora e ele é avisado.
+    const TETO_ENVIO = 3.6 * 1024 * 1024;
+    let usado = 0, naoCouberam = 0;
+    for(const f of arquivos){
+      const nome = f.name || "";
+      const ehPdf = /pdf/i.test(f.type || "") || /\.pdf$/i.test(nome);
+      const ehAudio = /^audio\//i.test(f.type || "") || /\.(opus|ogg|mp3|m4a|wav|aac)$/i.test(nome);
+      // Foto passa pelo mesmo encolhimento da leitura de print (v1250) — senão a foto de 8 MP do
+      // celular estoura o envio. PDF e áudio vão inteiros: encolher não faz sentido.
+      const base64 = (ehPdf || ehAudio) ? await cp1349ArquivoBase64(f) : (await cp1250ReduzirImagem(f)).base64;
+      if(!base64) continue;
+      if(usado + base64.length > TETO_ENVIO){ naoCouberam++; continue; }
+      usado += base64.length;
+      prontos.push({ nome, mime: ehPdf ? "application/pdf" : (ehAudio ? (f.type || "audio/ogg") : "image/jpeg"), base64 });
+    }
+    if(!prontos.length){
+      aviso("--risco", naoCouberam
+        ? "Esses arquivos são grandes demais pra mandar de uma vez. Tente um por vez."
+        : "Não consegui abrir esses arquivos. Mande foto (JPG/PNG), PDF ou áudio.");
+      return;
+    }
+    const res = await fetchComTimeout("./api/cerebro-config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ action:"ler-arquivos", arquivos: prontos })
+    }, 60000);
+    const data = await res.json().catch(()=>({ ok:false }));
+    if(data?.ok && data.texto){
+      if(ta){
+        ta.value = (ta.value.trim() ? ta.value.trim()+"\n" : "") + data.texto;
+        ta.focus();
+      }
+      const lidos = Number(data.lidos) || prontos.length;
+      const naoLidos = prontos.length - lidos;
+      aviso("--acao", `Li ${lidos} ${lidos === 1 ? "arquivo" : "arquivos"}.`
+        + (naoLidos > 0 ? ` ${naoLidos} não ${naoLidos === 1 ? "tinha" : "tinham"} texto pra ler.` : "")
+        + (sobraram > 0 ? ` ${sobraram} ${sobraram === 1 ? "ficou" : "ficaram"} de fora (10 por vez).` : "")
+        + (naoCouberam > 0 ? ` ${naoCouberam} não ${naoCouberam === 1 ? "coube" : "couberam"} no envio — mande ${naoCouberam === 1 ? "ele" : "eles"} separado.` : "")
+        + " <b>Confira o texto acima</b> e toque em Salvar observação.");
+    } else {
+      aviso("--risco", escapeHtml(data?.error || "Não consegui ler esses arquivos."));
+    }
+  }catch(err){
+    aviso("--risco", "Não consegui ler os arquivos: " + escapeHtml(String(err?.message||err)));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = rotulo || "Ler fotos, PDFs e áudios"; }
+  }
+}
+function cp1349ArquivoBase64(file){
+  return new Promise((resolve) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || "").replace(/^data:[^;]+;base64,/, ""));
+    fr.onerror = () => resolve("");
+    fr.readAsDataURL(file);
+  });
+}
+window.cp1349LerArquivos = cp1349LerArquivos;
 
 // Colar a imagem direto no campo (Ctrl+V no computador — é como o corretor recorta a tela e cola).
 // Um listener só, no documento, ligado uma vez: o campo de observação é redesenhado a cada
