@@ -508,15 +508,24 @@ despedida do corretor deixou de contar como cobrança ignorada — ver v1308).
    v1043; desde a v1325 em qualquer branch, com o job chamado `testes`) — é o "x"/"✓" visível
    antes de mesclar.
 3. Mesclar no `main` → a Vercel publica sozinha (webhook do GitHub já configurado).
-   - **v1325 → v1328 — a suíte NÃO roda dentro do build da Vercel, e não pode voltar a rodar.**
-     A v1325 tinha posto `npm test && node build.js` como comando de publicação. Falhou na
-     prática: o build da Vercel roda **com as variáveis de ambiente de produção carregadas**, e
-     vários testes conferem o valor **de fábrica** de tetos e limites — com `CORRETOR_PRO_LIMITE_*`
-     definidas, esses testes ficam vermelhos, o build cai junto e **a publicação para**. Foi o que
-     aconteceu: o site ficou preso na v1324 com a v1325, a v1326 e a v1327 já mescladas, e quem
-     percebeu foi o dono. No GitHub Actions a mesma suíte passava (ambiente limpo) — verde no CI,
-     vermelho na publicação. A v1328 desfez: publicação é `node build.js`, e o lugar de barrar
-     código vermelho é **antes do merge** (seção 5-C). Guarda: `tests/v1325-publicacao-nao-sobe-com-teste-vermelho.test.mjs`.
+   - **v1325 → v1328 → v1338 — a suíte roda antes de publicar, mas NUNCA como `npm test` cru.**
+     A v1325 pôs `npm test && node build.js` como comando de publicação e falhou na prática: o
+     build da Vercel roda **com as variáveis de ambiente de produção carregadas**, e vários testes
+     conferem o valor **de fábrica** de tetos e limites — com `CORRETOR_PRO_LIMITE_*` e companhia
+     definidas, esses testes ficam vermelhos (ou travam tentando falar com a rede), o build cai
+     junto e **a publicação para**. Foi o que aconteceu: o site ficou preso na v1324 com a v1325, a
+     v1326 e a v1327 já mescladas, e quem percebeu foi o dono. No GitHub Actions a mesma suíte
+     passava (ambiente limpo) — verde no CI, vermelho na publicação. A v1328 desfez o portão, e
+     com isso o buraco original (mesclar e publicar com suíte vermelha) ficou aberto de novo.
+     **A v1338 devolveu o portão atacando a causa:** o comando de publicação é
+     `node scripts/testes-antes-de-publicar.mjs && node build.js`, e esse script roda a suíte num
+     **ambiente limpo** — só `PATH`, `HOME`, `LANG`, `TZ` e `NODE_ENV=test`; nenhuma variável de
+     produção entra. O resultado do build passou a ser idêntico ao do `npm test` da máquina.
+     Tem teto de tempo (10 min) e válvula de emergência: `DIRECIONA_PULAR_TESTES_NO_BUILD=1` nas
+     variáveis da Vercel publica mesmo com a suíte vermelha, avisando em letras garrafais no log.
+     Guardas: `tests/v1325-publicacao-nao-sobe-com-teste-vermelho.test.mjs` e
+     `tests/v1338-portao-da-publicacao.test.mjs` (este último prova, rodando de verdade, que um
+     teste vermelho faz o portão devolver erro).
    - Desde a v1073, `build.js` publica os `.js`/`.css` **sem comentários e espaços** (esbuild,
      só `minifyWhitespace` — nunca renomeia identificador, senão os `onclick="funcao()"` do HTML
      quebrariam; se o esbuild faltar/falhar, publica o arquivo como está). O `app.js` publicado
@@ -589,8 +598,9 @@ de segurança, não substituta.
 
 ## 5-C. O único clique que falta (e que só o dono pode dar)
 
-A trava da publicação (item 3 acima) impede que código com teste vermelho chegue ao ar. Falta ainda
-impedir que ele chegue ao `main`, e isso é um ajuste do GitHub, não do código:
+A trava da publicação (item 3 acima, restaurada na v1338) impede que código com teste vermelho
+chegue ao ar. Falta ainda impedir que ele chegue ao `main` — o que evita descobrir o problema só na
+hora de publicar. Isso é um ajuste do GitHub, não do código:
 
 1. GitHub → o repositório `corretor-pro` → **Settings** → **Branches** (ou **Rules → Rulesets**).
 2. **Add branch protection rule** / **New ruleset**, com o padrão `main`.
@@ -665,11 +675,12 @@ montar isso:
   comentário `multiempresa-ok: <motivo>` — hoje são 2 (o construtor de consulta da carteira e a
   gravação do backup, que já leva o dono em cada linha), e o teste reprova se passarem de 4
   (`NOTAS-v1325.md`).
-- ~~**(v1325)** Publicação não sobe com suíte vermelha (`npm test && node build.js` no
-  `vercel.json`)~~ — **desfeito na v1328**: o build da Vercel roda com as variáveis de produção
-  carregadas e derrubava testes que conferem valor de fábrica, travando a publicação inteira (o
-  site ficou na v1324 com três versões já mescladas). A barreira certa é o check obrigatório do
-  GitHub, na seção 5-C, que depende de um clique do dono (`NOTAS-v1328.md`).
+- **(v1338)** Publicação não sobe com suíte vermelha — agora pelo caminho certo:
+  `node scripts/testes-antes-de-publicar.mjs && node build.js` no `vercel.json`, rodando a suíte
+  num **ambiente limpo** (nenhuma variável de produção entra), com teto de tempo e válvula de
+  emergência `DIRECIONA_PULAR_TESTES_NO_BUILD=1`. A tentativa da v1325 (`npm test` cru no build)
+  travou a publicação porque o build carrega as variáveis de produção e foi desfeita na v1328;
+  entre a v1328 e a v1337 nada impedia publicar com teste vermelho (`NOTAS-v1338.md`).
 - **(v1325)** Configuração conferida quando o servidor acorda (`avisarConfiguracaoNoLog`) e na
   tela do painel — o erro de configuração deixa de aparecer só quando um corretor esbarra na
   função que dependia dele (`NOTAS-v1325.md`).

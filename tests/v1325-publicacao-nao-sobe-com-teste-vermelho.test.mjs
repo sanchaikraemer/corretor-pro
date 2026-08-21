@@ -19,21 +19,34 @@ import assert from "node:assert/strict";
 // (Detalhe cruel: no GitHub Actions a mesma suíte passava, porque lá o ambiente é limpo. Verde no
 // CI, vermelho na publicação, e nenhum aviso pra ninguém.)
 //
-// Conclusão que fica registrada: o lugar de barrar código vermelho é ANTES do merge (o check
-// obrigatório do GitHub, que só o dono consegue marcar — ESTADO-ATUAL.md, seção 5-C), não dentro
-// do build da hospedagem. Rodar a suíte com o ambiente de produção carregado mistura duas coisas
-// que precisam ficar separadas: "o código está certo?" e "a configuração desta conta está certa?".
-// A segunda pergunta tem tela própria desde a v1325 (Saúde da configuração, no painel).
+// Conclusão que ficou registrada na época: rodar a suíte com o ambiente de produção carregado
+// mistura duas coisas que precisam ficar separadas — "o código está certo?" e "a configuração
+// desta conta está certa?". A segunda pergunta tem tela própria desde a v1325 (Saúde da
+// configuração, no painel).
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// v1338 — O PORTÃO VOLTOU, ATACANDO A CAUSA E NÃO O SINTOMA.
+//
+// Tirar o portão resolveu a publicação e deixou o buraco original aberto: entre a v1328 e a v1337,
+// nada impedia publicar com a suíte vermelha. O erro da v1325 nunca foi "conferir antes de
+// publicar" — foi conferir COM AS VARIÁVEIS DE PRODUÇÃO NO AMBIENTE.
+//
+// Agora quem confere é scripts/testes-antes-de-publicar.mjs: ele roda a suíte num ambiente LIMPO
+// (nenhuma variável de produção entra), com teto de tempo e uma válvula de emergência
+// (DIRECIONA_PULAR_TESTES_NO_BUILD=1). O resultado do build passou a ser o mesmo do `npm test` da
+// máquina — que é o que faltava. Está provado rodando, em v1338-portao-da-publicacao.test.mjs.
+//
+// O que este arquivo guarda daqui pra frente: `npm test` cru NUNCA pode voltar pro buildCommand.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 const raiz = new URL("../", import.meta.url);
 const vercel = JSON.parse(fs.readFileSync(new URL("vercel.json", raiz), "utf8"));
 
-// A publicação volta a ser só o build — e não pode voltar a carregar a suíte junto.
-assert.equal(vercel.buildCommand, "node build.js",
-  "a publicação constrói o app e mais nada: pôr `npm test` aqui derruba o deploy por causa das variáveis de produção (ver o comentário no topo deste arquivo)");
+// v1338 — a publicação passa pelo portão de ambiente limpo, e nunca por `npm test` cru.
+assert.equal(vercel.buildCommand, "node scripts/testes-antes-de-publicar.mjs && node build.js",
+  "a publicação confere a suíte num ambiente limpo antes de gerar os arquivos");
 assert.ok(!/npm test/.test(vercel.buildCommand),
-  "não repita a v1325: a suíte roda no GitHub (ambiente limpo), não dentro do build da Vercel");
+  "não repita a v1325: `npm test` cru no build carrega as variáveis de produção e trava a publicação");
 
 // A rede que continua valendo: a suíte roda sozinha em todo push e em todo PR, com o job nomeado
 // `testes` — que é o nome que o dono marca como obrigatório no GitHub.
