@@ -1562,17 +1562,36 @@ export function permutaOferecidaPeloCliente(timeline, corretorNome = "", lead = 
 // analisado pela IA" — e nada na tela dizia isso. O corretor lia a análise achando que a IA tinha
 // visto a arte com o preço, e ela não tinha visto nada. Vídeo fica fora da conta de propósito:
 // ele nunca é lido, por decisão do dono, então não é surpresa nenhuma.
+// v1348 — O FURO QUE DEIXAVA O CORRETOR NO ESCURO: o marcador SEM TIPO não era contado.
+//
+// Print do dono (21/08/2026, 15h22): as três últimas mensagens da conversa, logo depois de ele
+// perguntar sobre entrada e permuta, eram "[Arquivo enviado nesta mensagem: arquivo — conteúdo não
+// analisado pela IA]". E nenhum aviso, em tela nenhuma.
+//
+// A causa está aqui: quando o WhatsApp do Android exporta SEM os arquivos, cada foto, PDF ou áudio
+// vira a linha "<Mídia oculta>" — que NÃO diz o tipo. O marcador que nasce dela é o genérico
+// ("arquivo"), e esta conta só enxergava "imagem", "documento/PDF" e "áudio". Resultado: total 0,
+// aviso nenhum, e o corretor lendo a análise sem saber que o momento decisivo da conversa era
+// invisível pra IA. Justamente o caso MAIS comum — é a exportação leve, a que quase todo mundo usa.
+//
+// v1348 também passou a contar por OCORRÊNCIA, não por mensagem: três fotos numa mensagem só
+// contavam como uma.
 export function contarMaterialNaoLido(timeline) {
-  let imagens = 0, documentos = 0, audios = 0;
+  const quantos = (t, re) => (String(t).match(re) || []).length;
+  let imagens = 0, documentos = 0, audios = 0, arquivos = 0;
   for (const m of (Array.isArray(timeline) ? timeline : [])) {
     const t = String(m?.text || "");
-    if (/imagem — conteúdo não analisado/i.test(t)) imagens += 1;
-    else if (/documento\/PDF — conteúdo não analisado/i.test(t)) documentos += 1;
-    else if (/[áa]udio — conteúdo não analisado/i.test(t)
-      || /\.opus \(arquivo anexado\)/i.test(t)
-      || /^\[[ÁA]udio:\s/.test(t)) audios += 1;
+    imagens += quantos(t, /imagem — conteúdo não analisado/gi);
+    documentos += quantos(t, /documento\/PDF — conteúdo não analisado/gi);
+    audios += quantos(t, /[áa]udio — conteúdo não analisado/gi)
+      + quantos(t, /\.opus \(arquivo anexado\)/gi)
+      + quantos(t, /^\[[ÁA]udio:\s/gm);
+    // O genérico: veio de "<Mídia oculta>"/"Media omitted" — o arquivo NÃO está no que foi enviado
+    // pro app, então nem dá pra tentar ler. O conserto é outro (reexportar com mídia), e por isso
+    // ele vive num campo separado: a tela precisa dizer a coisa certa pra cada caso.
+    arquivos += quantos(t, /arquivo — conteúdo não analisado/gi);
   }
-  return { imagens, documentos, audios, total: imagens + documentos + audios };
+  return { imagens, documentos, audios, arquivos, total: imagens + documentos + audios + arquivos };
 }
 
 // ─── v1334 — OS QUATRO DEFEITOS QUE A MEDIÇÃO APONTOU, VIRADOS EM FATO ───────────────────────
@@ -6322,7 +6341,11 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   // "Sem mídia": quando o WhatsApp exporta SEM mídia, os áudios/imagens viram "<Mídia oculta>"
   // e NÃO vêm no zip. Contamos pra AVISAR o corretor — senão os áudios somem calados e a análise
   // fica incoerente. Se há mídia oculta E nenhum arquivo de áudio, foi exportado sem mídia.
-  const midiasOcultas = (txt.match(/<[^>]*(oculta|omitida|omitido|ocultado|omitted|hidden)[^>]*>/gi) || []).length;
+  // v1348 — a conta também precisa enxergar o formato do iPhone, que escreve "imagem omitida" na
+  // linha SEM os sinais de menor/maior. Sem isso, exportação de iPhone sem mídia não disparava o
+  // aviso "Conversa exportada SEM mídia" (mesma família do furo do marcador genérico).
+  const midiasOcultas = (txt.match(/<[^>]*(oculta|omitida|omitido|ocultado|omitted|hidden)[^>]*>/gi) || []).length
+    + (txt.match(/(?:^|:[^\S\n])[^\S\n]*(imagem|foto|v[ií]deo|[áa]udio|documento|arquivo|figurinha|adesivo|sticker|gif|m[ií]dia|image|photo|video|audio|document|file|media)\s+(omitid[ao]s?|ocultad[ao]s?|ocult[ao]s?|omitted|hidden)[^\S\n]*$/gim) || []).length;
   const exportadoSemMidia = midiasOcultas > 0 && audioFiles.length === 0;
 
   const planoVisuais = montarPlanoVisuais(
