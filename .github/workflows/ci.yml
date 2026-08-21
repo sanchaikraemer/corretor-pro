@@ -3,14 +3,22 @@ name: CI
 # Roda a suíte do projeto (npm test — node --check em toda a API + os arquivos tests/*.test.mjs)
 # em toda alteração enviada ao GitHub.
 #
-# v1325 — a auditoria de 20/08/2026 apontou que "teste vermelho ≠ produção bloqueada": este
-# workflow avisava, mas não impedia nada. O bloqueio de verdade passou a ser feito no ponto que
-# ninguém consegue contornar sem querer: a PUBLICAÇÃO. O vercel.json agora publica com
-# `npm test && node build.js`, então suíte vermelha = build da Vercel falha = a versão anterior
-# continua no ar. Este workflow continua existindo por dois motivos: dá o "x"/"✓" visível no PR
-# antes de mesclar (mais rápido que descobrir na publicação) e é a checagem que pode ser marcada
-# como obrigatória no GitHub (Settings → Rules/Branches), que é o único passo que depende de um
-# clique do dono.
+# HISTÓRIA DESTE ARQUIVO, PORQUE ELA IMPORTA:
+#
+# v1325 — a auditoria de 20/08/2026 apontou, com razão, que "teste vermelho ≠ produção bloqueada":
+# este workflow avisava e não impedia nada. A correção foi publicar com `npm test && node build.js`
+# no vercel.json. Deu errado: o build da Vercel roda COM as variáveis de produção, e com elas parte
+# da suíte deixa de testar o padrão de fábrica e parte tenta falar com a rede. O site ficou parado
+# na 1324 com três versões esperando, até o dono avisar. A v1328 tirou o portão.
+#
+# v1338 — o portão voltou, pelo caminho certo: scripts/testes-antes-de-publicar.mjs roda a suíte
+# num ambiente LIMPO (nenhuma variável de produção entra), com teto de tempo e uma válvula de
+# emergência (DIRECIONA_PULAR_TESTES_NO_BUILD=1). Suíte vermelha = build da Vercel falha = a versão
+# que está no ar continua no ar.
+#
+# Este workflow continua existindo por dois motivos: dá o "x"/"✓" visível no PR antes de mesclar
+# (mais rápido que descobrir na publicação) e é a checagem que pode ser marcada como obrigatória no
+# GitHub (Settings → Rules/Branches) — o único passo que depende de um clique do dono.
 on:
   push:
     branches: ['**']
