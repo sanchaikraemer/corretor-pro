@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { parseDateTime } from '../api/_pipeline.js';
 import { normalizarEtapaBanco } from '../api/_persistence.js';
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v1107 — auditoria completa (backend + tela + app instalado). Cada bloco abaixo protege uma
 // correção desta versão; se algum quebrar, o bug correspondente voltou.
@@ -119,9 +122,21 @@ const civilSP = (iso) =>
 // DOIS meses pra trás (mostrava "Junho" no dia 1º de agosto). Roda a função extraída em
 // subprocessos com fusos diferentes: o resultado tem que ser idêntico e ser o mês anterior em SP.
 {
-  const fonteMes = app.match(/function cpInicioMesMs\(\)\{[\s\S]*?\n\}/)[0];
-  const fonte = app.match(/function cpInicioMesAnteriorMs\(\)\{[\s\S]*?\n\}/)[0];
-  const script = `${fonteMes}\n${fonte}\nprocess.stdout.write(String(cpInicioMesAnteriorMs()));`;
+  // v1337 — as duas funções passaram a depender das funções de fuso do app (cpFuso, cpMeiaNoiteMs),
+  // que antes eram a string "America/Sao_Paulo" cravada. O subprocesso recebe as funções REAIS do
+  // app.js junto, senão testaria um recorte que não existe.
+  const pedaco = (re, nome) => { const m = app.match(re); assert.ok(m, `sanidade: ${nome} existe no app.js`); return m[0]; };
+  const fonteFuso = [
+    pedaco(/const CP_FUSO_PADRAO = "[^"]+";/, 'CP_FUSO_PADRAO'),
+    pedaco(/let _cpFusoCache = null;/, '_cpFusoCache'),
+    pedaco(/function cpFusoValido\(tz\)\{[\s\S]*?\n\}/, 'cpFusoValido'),
+    pedaco(/function cpFuso\(\)\{[\s\S]*?\n\}/, 'cpFuso'),
+    pedaco(/function cpDeslocamentoDoFusoMs\(quando, tz\)\{[\s\S]*?\n\}/, 'cpDeslocamentoDoFusoMs'),
+    pedaco(/function cpMeiaNoiteMs\(y, m, d, tz = cpFuso\(\)\)\{[\s\S]*?\n\}/, 'cpMeiaNoiteMs')
+  ].join('\n');
+  const fonteMes = pedaco(/function cpInicioMesMs\(\)\{[\s\S]*?\n\}/, 'cpInicioMesMs');
+  const fonte = pedaco(/function cpInicioMesAnteriorMs\(\)\{[\s\S]*?\n\}/, 'cpInicioMesAnteriorMs');
+  const script = `${fonteFuso}\n${fonteMes}\n${fonte}\nprocess.stdout.write(String(cpInicioMesAnteriorMs()));`;
   const roda = (tz) => {
     const r = spawnSync(process.execPath, ['-e', script], { env: { ...process.env, TZ: tz }, encoding: 'utf8' });
     assert.equal(r.status, 0, `cpInicioMesAnteriorMs falhou com TZ=${tz}: ${r.stderr}`);

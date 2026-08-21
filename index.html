@@ -452,6 +452,19 @@
           <input type="number" id="cerebroDiasDescanso" min="1" max="60" placeholder="5" style="max-width:120px">
           <div class="small" style="color:var(--muted);margin-top:4px">Depois que você atende um cliente, quantos dias ele fica fora da fila "Fazer agora" antes de poder voltar a aparecer (de 1 a 60). Padrão: 5. <b>Este mesmo número é o respiro</b> quando o cliente fica de te dar uma resposta ("vou falar com meu marido hoje à noite"): a data sugerida pra retomar é o prazo que ele deu mais estes dias.</div>
 
+          <!-- v1337 — o fuso horário era cravado em Brasília no código todo. Corretor de Manaus,
+               Cuiabá, Rio Branco ou Noronha recebia a hora errada — e hora errada vira saudação
+               errada na mensagem sugerida. O app detecta sozinho pelo aparelho; aqui só dá pra
+               corrigir se a detecção errar. -->
+          <label>Seu fuso horário</label>
+          <select id="cerebroFusoHorario" style="max-width:340px;width:100%;padding:14px 13px;font-size:16px;border-radius:12px;border:1px solid var(--line);appearance:auto">
+            <option value="America/Sao_Paulo">Brasília / Sul / Nordeste (−3h)</option>
+            <option value="America/Manaus">Manaus / Cuiabá / Boa Vista (−4h)</option>
+            <option value="America/Rio_Branco">Rio Branco / Acre (−5h)</option>
+            <option value="America/Noronha">Fernando de Noronha (−2h)</option>
+          </select>
+          <div class="small" style="color:var(--muted);margin-top:4px" id="cerebroFusoDetectado"></div>
+
           <!-- v1091 — antes, sábado e domingo eram fixos no código como dias sem fila (regra pedida
                na v914/v937). Corretor de imóveis costuma trabalhar sábado, então virou escolha de
                cada um, aqui. Marque os dias em que você quer receber a fila "Fazer agora". -->
@@ -762,7 +775,7 @@
              ("recebi agora essa msg em anexo, isso ta programado pra essa hora?", dono, 20/08). -->
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
           <label class="small" for="lembreteDiarioHora" style="color:var(--soft)">Chegar por volta das</label>
-          <select id="lembreteDiarioHora" onchange="cpLembreteDiarioSalvarHora()" style="padding:8px 10px;font-size:14px;width:auto"></select>
+          <select id="lembreteDiarioHora" onchange="cpLembreteDiarioSalvarHora()" style="padding:10px 12px;font-size:15px;width:auto;border-radius:12px;border:1px solid var(--line)"></select>
         </div>
         <button type="button" class="btn" id="btnLembreteDiario" style="padding:12px 20px;font-size:14px;width:auto" onclick="cpLembreteDiario()">Ativar lembrete diário</button>
         <div class="small" id="lembreteDiarioStatus" style="color:var(--muted);margin-top:8px;line-height:1.5"></div>

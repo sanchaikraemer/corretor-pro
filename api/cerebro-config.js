@@ -26,6 +26,11 @@ const DEFAULTS = {
   // atendimento (0 desliga o resgate).
   resgatesPorDia: 2,
   diasDescansoPosAtendimento: 5,
+  // v1337 — fuso horário do corretor. Estava cravado em America/Sao_Paulo no código inteiro, o que
+  // dava a hora e o "hoje" errados pra quem atende em Manaus, Cuiabá, Rio Branco ou Fernando de
+  // Noronha — e a hora errada vira saudação errada na mensagem sugerida. O padrão continua
+  // Brasília: quem nunca mexeu não sente diferença nenhuma.
+  fusoHorario: "America/Sao_Paulo",
   // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Padrão segunda a
   // sexta, que era o comportamento cravado no código antes desta versão.
   diasAtendimento: [1, 2, 3, 4, 5],
@@ -84,6 +89,19 @@ function clampDiasDescanso(v) {
   return (Number.isFinite(n) && n >= 1 && n <= 60) ? Math.round(n) : 5;
 }
 
+// v1337 — só entram fusos que o próprio navegador/servidor reconhece. Texto inventado (ou vindo de
+// um payload adulterado) volta pro padrão de Brasília em vez de quebrar toda formatação de data.
+function normalizarFuso(v) {
+  const texto = String(v || "").trim();
+  if (!texto) return "America/Sao_Paulo";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: texto }).format(new Date());
+    return texto.slice(0, 60);
+  } catch (_) {
+    return "America/Sao_Paulo";
+  }
+}
+
 // v1091 — lista vazia ou inválida vira o padrão: "não atendo nunca" deixaria o corretor sem fila
 // pra sempre, sem entender o motivo.
 function normalizarDiasAtendimento(v) {
@@ -125,6 +143,7 @@ function sanitizeCerebroConfig(valor = {}) {
     atendimentosPorDia: clampAtendimentosDia(v.atendimentosPorDia),
     resgatesPorDia: clampResgatesDia(v.resgatesPorDia),
     diasDescansoPosAtendimento: clampDiasDescanso(v.diasDescansoPosAtendimento),
+    fusoHorario: normalizarFuso(v.fusoHorario),
     diasAtendimento: normalizarDiasAtendimento(v.diasAtendimento),
     usarCerebro: chaveLigada(v.usarCerebro),
     usarAprendizado: chaveLigada(v.usarAprendizado),
@@ -550,6 +569,7 @@ export default async function handler(req, res) {
       atendimentosPorDia: clampAtendimentosDia(body.atendimentosPorDia),
       resgatesPorDia: clampResgatesDia(body.resgatesPorDia),
       diasDescansoPosAtendimento: clampDiasDescanso(body.diasDescansoPosAtendimento),
+      fusoHorario: normalizarFuso(body.fusoHorario),
       diasAtendimento: normalizarDiasAtendimento(body.diasAtendimento),
       usarCerebro: chaveLigada(body.usarCerebro),
       usarAprendizado: chaveLigada(body.usarAprendizado),

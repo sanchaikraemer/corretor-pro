@@ -252,11 +252,78 @@ function cpContarAtividade(chave, desdeMs, ateMs){
 window.cpRegistrarAtividade = cpRegistrarAtividade;
 window.cpContarAtividade = cpContarAtividade;
 
+// ─── v1337 — O FUSO HORÁRIO DO CORRETOR ──────────────────────────────────────────────────────
+//
+// Até aqui "America/Sao_Paulo" estava escrito 35 vezes dentro deste arquivo. Funciona pra quem
+// atende no horário de Brasília e mente pra todo o resto do país: em Manaus o app mostrava uma
+// hora a mais, e perto da meia-noite mostrava até o DIA errado — o que muda a fila do dia, o
+// "atendido há X dias" e a saudação da mensagem sugerida.
+//
+// A escolha fica no Cérebro (é ela que o servidor também usa na análise), e o padrão continua
+// Brasília. O fuso do APARELHO não decide nada: ele é só a sugestão mostrada na tela, porque
+// relógio de celular já veio errado aqui (Android reinstalado volta em UTC, corretor viajando leva
+// o "hoje" junto — v887/v1107/v1248). Fuso que o navegador não reconhece volta pro padrão, porque
+// um fuso inválido quebraria toda a formatação de data do app de uma vez.
+const CP_FUSO_PADRAO = "America/Sao_Paulo";
+let _cpFusoCache = null;
+function cpFusoValido(tz){
+  const texto = String(tz || "").trim();
+  if(!texto) return "";
+  try{ new Intl.DateTimeFormat("en-CA", { timeZone: texto }).format(new Date()); return texto; }
+  catch(_){ return ""; }
+}
+function cpFusoDoAparelho(){
+  try{ return cpFusoValido(Intl.DateTimeFormat().resolvedOptions().timeZone) || CP_FUSO_PADRAO; }
+  catch(_){ return CP_FUSO_PADRAO; }
+}
+function cpFuso(){
+  if(_cpFusoCache) return _cpFusoCache;
+  let salvo = "";
+  try{ salvo = cpFusoValido(localStorage.getItem("cp-fuso-horario")); }catch(_){ }
+  // ATENÇÃO: o padrão NÃO é o fuso do aparelho, e isso é de propósito. O relógio do celular já
+  // apareceu errado nesta base de usuários — Android reinstalado volta em UTC, e corretor viajando
+  // levava o "hoje" junto (v887/v1107/v1248). O fuso do aparelho serve só de SUGESTÃO na tela do
+  // Cérebro; o que vale é o que está salvo lá, e o padrão continua Brasília.
+  _cpFusoCache = salvo || CP_FUSO_PADRAO;
+  return _cpFusoCache;
+}
+function cpFusoDefinir(tz){
+  const valido = cpFusoValido(tz);
+  if(!valido) return cpFuso();
+  _cpFusoCache = valido;
+  try{ localStorage.setItem("cp-fuso-horario", valido); }catch(_){ }
+  return valido;
+}
+window.cpFuso = cpFuso;
+
+// Quanto o fuso do corretor está adiantado/atrasado em relação ao UTC NAQUELE instante (em ms).
+// Precisa ser calculado no instante, e não fixado em -3h, porque cada fuso tem o seu — e porque
+// horário de verão existe em vários países (o app não é só do Brasil por acidente de fuso).
+function cpDeslocamentoDoFusoMs(quando, tz){
+  try{
+    const partes = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, hour12:false, year:"numeric", month:"2-digit", day:"2-digit",
+      hour:"2-digit", minute:"2-digit", second:"2-digit"
+    }).formatToParts(quando).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
+    const comoSeFosseUTC = Date.UTC(+partes.year, +partes.month-1, +partes.day, (+partes.hour)%24, +partes.minute, +partes.second);
+    return comoSeFosseUTC - Math.floor(quando.getTime()/1000)*1000;
+  }catch(_){ return -3*3600000; }
+}
+// O INSTANTE exato da meia-noite de um dia do calendário do corretor. É a peça que estava cravada
+// em "meia-noite em Brasília = 03:00 UTC" em três lugares do app.
+function cpMeiaNoiteMs(y, m, d, tz = cpFuso()){
+  const palpite = Date.UTC(y, m-1, d, 0, 0, 0, 0);
+  let ts = palpite - cpDeslocamentoDoFusoMs(new Date(palpite), tz);
+  ts = palpite - cpDeslocamentoDoFusoMs(new Date(ts), tz); // 2ª passada: acerta virada de horário de verão
+  return ts;
+}
+window.cpMeiaNoiteMs = cpMeiaNoiteMs;
+
 // Tempo no app: conta só enquanto a aba está VISÍVEL (em segundo plano não conta). Guardado por
 // dia (chave de calendário BR), só neste aparelho.
 const CP_TEMPO_APP_KEY = "cpTempoAppPorDia";
 let _cpTempoAppInicioVisivel = (typeof document !== "undefined" && document.visibilityState === "visible") ? Date.now() : null;
-function cpTempoAppHojeChave(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date()); }
+function cpTempoAppHojeChave(){ return new Intl.DateTimeFormat("en-CA",{timeZone:cpFuso()}).format(new Date()); }
 function cpTempoAppLerMapa(){
   try{ return JSON.parse(localStorage.getItem(CP_TEMPO_APP_KEY) || "{}"); }catch(_){ return {}; }
 }
@@ -293,7 +360,7 @@ function cpTempoAppMediaSegundos7d(){
   let total = 0, dias = 0;
   for(let i=0;i<7;i++){
     const d = new Date(hoje); d.setDate(d.getDate()-i);
-    const chave = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(d);
+    const chave = new Intl.DateTimeFormat("en-CA",{timeZone:cpFuso()}).format(d);
     if(mapa[chave] != null){ total += Number(mapa[chave])||0; dias++; }
   }
   return dias ? Math.round(total/dias) : 0;
@@ -1630,7 +1697,7 @@ function _prioridadeAtendimentoCalcular(l){
   // 5) atendimento programado; 6) retomada por tempo sem contato; 7) aguardando o cliente.
   const _lembreteTs = lembreteTs(l);
   const diasLembrete = isNaN(_lembreteTs) ? null
-    : ui671DiasAte(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(_lembreteTs)));
+    : ui671DiasAte(new Intl.DateTimeFormat("en-CA", { timeZone: cpFuso() }).format(new Date(_lembreteTs)));
   const lembreteAtrasado = diasLembrete != null && diasLembrete < 0;
   const retornoParaHoje = diasLembrete === 0;
   // v1022 — o "ou" com o mesmo teste hoje/amanhã virou redundante: temAgenda agora já cobre
@@ -2110,14 +2177,13 @@ function produtosLabelCurto(l){
   return nomes.length ? nomes.join(" - ") : arr.join(", ");
 }
 
-// Início do dia de HOJE no fuso de Brasília (UTC-3 fixo, sem horário de verão desde 2019),
-// independente do relógio/fuso do aparelho. Sem isso, contato do fim da tarde de ontem
-// "vaza" pra hoje quando o aparelho não está exatamente em Brasília. Mesma lógica que o
-// servidor já aplica com America/Sao_Paulo.
+// Início do dia de HOJE no fuso DO CORRETOR (v1337; era Brasília cravado), independente do
+// relógio/fuso do aparelho. Sem isso, contato do fim da tarde de ontem "vaza" pra hoje quando o
+// aparelho está em outro fuso. Mesma lógica que o servidor aplica na análise.
 function inicioDoDiaBR(){
-  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone:"America/Sao_Paulo", year:"numeric", month:"2-digit", day:"2-digit" });
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone:cpFuso(), year:"numeric", month:"2-digit", day:"2-digit" });
   const [y,m,d] = fmt.format(new Date()).split("-").map(Number);
-  return new Date(Date.UTC(y, m-1, d, 3, 0, 0, 0)); // meia-noite em Brasília = 03:00 UTC
+  return new Date(cpMeiaNoiteMs(y, m, d)); // v1337 — meia-noite NO FUSO DO CORRETOR, não sempre em Brasília
 }
 
 // Dias de CALENDÁRIO entre uma data e hoje, no fuso de Brasília (NÃO "períodos de 24h": senão
@@ -2126,7 +2192,7 @@ function diasCalendarioBR(quando){
   if(quando == null) return null;
   const t = (quando instanceof Date) ? quando : new Date(quando);
   if(isNaN(t.getTime())) return null;
-  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone:"America/Sao_Paulo", year:"numeric", month:"2-digit", day:"2-digit" });
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone:cpFuso(), year:"numeric", month:"2-digit", day:"2-digit" });
   const civil = d => { const [y,m,dd] = fmt.format(d).split("-").map(Number); return Date.UTC(y, m-1, dd); };
   const diff = Math.round((civil(new Date()) - civil(t)) / 86400000);
   return diff < 0 ? 0 : diff;
@@ -2259,7 +2325,7 @@ function cpCadenciaSemResposta(l){
       const t = Date.parse(campo || ''); if(!isNaN(t)) ts.push(t);
     }
     if(!ts.length) return null; // sem 1º contato registrado → segue a regra normal de "nunca atendido"
-    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" });
+    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: cpFuso() });
     const diasCivis = new Set(ts.map(t => fmt.format(t)));
     const primeiro = Math.min(...ts), ultimo = Math.max(...ts);
     const feitas = Math.min(Math.max(0, diasCivis.size - 1), CP_CADENCIA_TOTAL); // 1º contato não é retomada
@@ -2283,7 +2349,7 @@ function cpCadenciaNoticeHTML(l){
     const idJs = JSON.stringify(String(l?.id || ""));
     return `<div class="notice" style="margin:0 0 12px;border-color:var(--risco)"><b>${escapeHtml(CP_CADENCIA_MSG_ARQUIVAR)}</b><div class="small" style="margin:6px 0 10px;color:var(--muted)">Cliente sem nenhuma resposta desde o primeiro contato. Se preferir, continue tentando — nada é arquivado sem você mandar.</div><button type="button" class="btn" style="width:auto;padding:10px 16px" onclick='arquivarLead(${idJs},${safeJson(String(l?.name || ""))})'>Arquivar este lead</button></div>`;
   }
-  const dataProx = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).format(new Date(cad.proximaTs));
+  const dataProx = new Intl.DateTimeFormat("pt-BR", { timeZone: cpFuso(), day: "2-digit", month: "2-digit" }).format(new Date(cad.proximaTs));
   const rotulo = cad.encerramento ? `mensagem de encerramento (${cad.total} de ${cad.total})` : `retomada ${cad.feitas + 1} de ${cad.total}`;
   const quando = cad.devida ? "sugerida pra hoje" : `programada pra ${dataProx}`;
   return `<div class="notice" style="margin:0 0 12px"><b>Cliente ainda não respondeu.</b> <span class="small">Este lead segue o plano de ${cad.total} retomadas em 6 meses: a próxima é a ${escapeHtml(rotulo)}, ${escapeHtml(quando)} — ${cad.feitas} já ${cad.feitas === 1 ? "feita" : "feitas"}. Se ele respondeu no WhatsApp, reimporte a conversa que ele volta pro fluxo normal.</span></div>`;
@@ -2450,7 +2516,7 @@ function lembreteHojeOuFuturo(l){
   const t = lembreteTs(l);
   if(isNaN(t)) return false;
   try{
-    const iso = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(t));
+    const iso = new Intl.DateTimeFormat('en-CA',{timeZone:cpFuso()}).format(new Date(t));
     const diff = typeof ui671DiasAte==='function' ? ui671DiasAte(iso) : null;
     return diff!=null ? diff>=0 : t>Date.now();
   }catch(_){ return t>Date.now(); }
@@ -2880,7 +2946,7 @@ async function registrarMensagemEnviada(id, msg){
   const DETALHES_COPIA = { tipo:"Mensagem enviada", de:"copiar_msg" };
   try{
     quando = new Date().toISOString();
-    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
+    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:cpFuso(),day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
     dataLocal = `${p.day}/${p.month}/${p.year}`;
     horaLocal = `${p.hour}:${p.minute}`;
     if(state.lead && String(state.lead.id) === String(id)) ui667AplicarAtendidoLocal(state.lead, quando, dataLocal, horaLocal, DETALHES_COPIA);
@@ -3302,7 +3368,7 @@ function cp1251Dados(){
   // o desenho saiba o que é fim de semana; a filtragem acontece só na hora de desenhar, então os
   // números do painel (atendidos no mês, mensagens) continuam contando tudo, inclusive sábado e
   // domingo — quem trabalhou no fim de semana não perde o atendimento da conta.
-  const diaSemanaBR = new Intl.DateTimeFormat("en-US", { timeZone:"America/Sao_Paulo", weekday:"short" });
+  const diaSemanaBR = new Intl.DateTimeFormat("en-US", { timeZone:cpFuso(), weekday:"short" });
   return {
     atendidosHoje: base.filter(ehAtendidoHoje).length,
     atendidosSemana: base.filter(ehAtendidoNaSemana).length,
@@ -3312,7 +3378,7 @@ function cp1251Dados(){
       const sigla = diaSemanaBR.format(new Date(iniMes + i * 86400000));
       return { qtd: s.size, dia: i + 1, fds: sigla === "Sat" || sigla === "Sun", hoje: i === porDia.length - 1 };
     }),
-    mesNome: new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", month:"long" }).format(new Date()),
+    mesNome: new Intl.DateTimeFormat("pt-BR", { timeZone:cpFuso(), month:"long" }).format(new Date()),
     diasNoMes: new Date(new Date(iniMes).getUTCFullYear(), new Date(iniMes).getUTCMonth() + 1, 0).getDate()
   };
 }
@@ -3489,7 +3555,7 @@ function abrirGrupoHome(grupo, options={}){
   // Corretor trabalha com DATA, não com contagem regressiva. "Volta 15/08" ninguém lê errado.
   const dataBRcurta = (ts) => {
     try{
-      return new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", day:"2-digit", month:"2-digit" }).format(new Date(ts));
+      return new Intl.DateTimeFormat("pt-BR", { timeZone:cpFuso(), day:"2-digit", month:"2-digit" }).format(new Date(ts));
     }catch(_){ return ""; }
   };
   const COLUNAS_POR_GRUPO = {
@@ -4857,7 +4923,7 @@ function cp704Css(){
       d = new Date(raw);
     }
     if(!Number.isNaN(d.getTime())){
-      return d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', ' •');
+      return d.toLocaleString('pt-BR',{timeZone:cpFuso(),day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', ' •');
     }
     return raw.replace(/T/, ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '');
   }
@@ -5842,7 +5908,7 @@ function classificarCompromissoConfirmado(lead, ap){
   // meia-noite do RELÓGIO DO APARELHO: com o celular em outro fuso (corretor viajando, ou o relógio
   // do Android em UTC — acontece em app reinstalado), das 21h à meia-noite o "hoje" do aparelho já
   // era o dia seguinte, e a barra do topo anunciava como "hoje" um compromisso que é de amanhã.
-  const dt = new Date(Date.UTC(+dataAbs[1], +dataAbs[2]-1, +dataAbs[3], 3, 0, 0, 0)); // meia-noite em Brasília
+  const dt = new Date(cpMeiaNoiteMs(+dataAbs[1], +dataAbs[2], +dataAbs[3])); // meia-noite no fuso do corretor
   const hj = inicioDoDiaBR();
   const diff = Math.round((dt - hj) / 86400000);
   let ordem = 9, quando = null;
@@ -6071,7 +6137,7 @@ window.cpAgendarMarcarChip = cpAgendarMarcarChip;
 // Data (aaaa-mm-dd) do lembrete já marcado, no fuso de Brasília — pra pré-preencher o painel.
 function cpAgendarDataDoLembrete(quando){
   try{
-    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric"})
+    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:cpFuso(),day:"2-digit",month:"2-digit",year:"numeric"})
       .formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
     return (p.year && p.month && p.day) ? `${p.year}-${p.month}-${p.day}` : "";
   }catch(_){ return ""; }
@@ -6121,7 +6187,7 @@ async function reagendarLembrete(id, dateStr, horaStr){
     if(d?.atendimentoRegistrado){
       try{
         const quando = String(d.atendimentoQuando || new Date().toISOString());
-        const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
+        const p = new Intl.DateTimeFormat("pt-BR",{timeZone:cpFuso(),day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
         const detalhes = { tipo:"Agendamento", de:"agendamento" };
         if(state.lead && String(state.lead.id) === String(id)) ui667AplicarAtendidoLocal(state.lead, quando, `${p.day}/${p.month}/${p.year}`, `${p.hour}:${p.minute}`, detalhes);
         for(const lista of [state.itemsAtivos, state.todosLeads, state.leads]){
@@ -6212,7 +6278,7 @@ async function carregarAgenda(){
     // "Atraso" (vermelho) ganha quadradinho quando existir; "+" no fim mostra o que vem depois
     // desta semana (inclusive compromisso sem data concreta). Fuso de São Paulo, como o app todo.
     const diaSP = (ts) => {
-      try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(ts)); }
+      try{ return new Intl.DateTimeFormat('en-CA',{timeZone:cpFuso()}).format(new Date(ts)); }
       catch(_){ const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
     };
     const hojeKey = diaSP(Date.now());
@@ -6428,6 +6494,8 @@ function sanitizeCerebroConfigV762(cfg) {
     resgatesPorDia: (Number.isFinite(Number(c.resgatesPorDia)) && Number(c.resgatesPorDia) >= 0 && Number(c.resgatesPorDia) <= 20) ? Math.round(Number(c.resgatesPorDia)) : 2,
     // v1048 — dias de "descanso" pós-atendimento, configurável por corretor; fora de 1–60 vira 5.
     diasDescansoPosAtendimento: (Number(c.diasDescansoPosAtendimento) >= 1 && Number(c.diasDescansoPosAtendimento) <= 60) ? Math.round(Number(c.diasDescansoPosAtendimento)) : 5,
+    // v1337 — fuso horário do corretor. Vazio ou inválido: fica o do aparelho.
+    fusoHorario: cpFusoValido(c.fusoHorario) || cpFuso(),
     // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Lista vazia ou
     // inválida cai no padrão de sempre (segunda a sexta), pra ninguém ficar sem fila por engano.
     diasAtendimento: cpNormalizarDiasAtendimento(c.diasAtendimento),
@@ -6478,6 +6546,7 @@ export function obterCerebroConfigParaAnalise() {
       // fora. Campo vazio = vale o que está salvo.
       resgatesPorDia: cpLerResgatesDiaDoFormulario(cfg),
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || cfg?.diasDescansoPosAtendimento || 5,
+      fusoHorario: cpFusoDefinir(qs("#cerebroFusoHorario")?.value) || cpFuso(),
       regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
       objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
       diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? cpNormalizarDiasAtendimento(cfg?.diasAtendimento),
@@ -6749,7 +6818,7 @@ async function exportarAprendizadoExcel(botao){
       {nome:"Produto e perfil",linhas:produtos,larguras:[16,24,45,40,20]},
       {nome:"Movimentos",linhas:movimentos,larguras:[16,26,60,20]}
     ]);
-    const dataNome = new Date().toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo"}).split("/").reverse().join("-");
+    const dataNome = new Date().toLocaleDateString("pt-BR",{timeZone:cpFuso()}).split("/").reverse().join("-");
     cpBaixarArquivo(blob, `corretor-pro-aprendizado-${dataNome}.xlsx`);
     toast(`Aprendizado exportado: ${casos.length} casos e ${obs.length} observações.`);
   }catch(err){ toast("Erro ao exportar aprendizado: " + (err?.message||err)); }
@@ -7250,6 +7319,26 @@ async function carregarCerebro(){
   if(inpResg) inpResg.value = Number.isFinite(Number(config.resgatesPorDia)) ? config.resgatesPorDia : 2;
   const inpDescanso = qs("#cerebroDiasDescanso");
   if(inpDescanso) inpDescanso.value = (Number(config.diasDescansoPosAtendimento) >= 1) ? config.diasDescansoPosAtendimento : 5;
+  // v1337 — o fuso salvo passa a valer no app inteiro (datas, "hoje", contagem de dias), e não só
+  // no seletor da tela. Sem nada salvo, vale o fuso do aparelho.
+  const selFuso = qs("#cerebroFusoHorario");
+  const fusoAtivo = cpFusoDefinir(config.fusoHorario) || cpFuso();
+  if(selFuso){
+    const conhecido = [...selFuso.options].some(o => o.value === fusoAtivo);
+    if(!conhecido){
+      const op = document.createElement("option");
+      op.value = fusoAtivo; op.textContent = fusoAtivo;
+      selFuso.appendChild(op);
+    }
+    selFuso.value = fusoAtivo;
+  }
+  const avisoFuso = qs("#cerebroFusoDetectado");
+  if(avisoFuso){
+    const doAparelho = cpFusoDoAparelho();
+    avisoFuso.textContent = (doAparelho === fusoAtivo)
+      ? `Detectado pelo seu aparelho: ${doAparelho}. Só mexa aqui se estiver errado.`
+      : `Atenção: seu aparelho está em ${doAparelho}, diferente do que está salvo aqui (${fusoAtivo}). Vale o que está salvo.`;
+  }
   // v1308 — as três chaves da análise.
   const chaveCer = qs("#cerebroUsarCerebro"); if(chaveCer) chaveCer.checked = cpChaveLigada(config.usarCerebro);
   const chaveApr = qs("#cerebroUsarAprendizado"); if(chaveApr) chaveApr.checked = cpChaveLigada(config.usarAprendizado);
@@ -7338,6 +7427,7 @@ async function salvarCerebro(){
     atendimentosPorDia: (Number.isFinite(atendN) && atendN >= 1 && atendN <= 50) ? Math.round(atendN) : 10,
     resgatesPorDia: (Number.isFinite(resgN) && resgN >= 0 && resgN <= 20) ? Math.round(resgN) : 2,
     diasDescansoPosAtendimento: (Number.isFinite(descansoN) && descansoN >= 1 && descansoN <= 60) ? Math.round(descansoN) : 5,
+    fusoHorario: cpFusoDefinir(qs("#cerebroFusoHorario")?.value) || cpFuso(),
     diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
     usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", null, "usarCerebro"),
     usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", null, "usarAprendizado"),
@@ -7418,6 +7508,7 @@ async function zerarCerebroTudo(){
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || 10,
       resgatesPorDia: cpLerResgatesDiaDoFormulario(null),
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || 5,
+      fusoHorario: cpFusoDefinir(qs("#cerebroFusoHorario")?.value) || cpFuso(),
       diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
       // v1308 — as chaves são preferência de teste, como a meta diária: zerar o Cérebro não mexe
       // nelas.
@@ -9415,7 +9506,7 @@ async function exportarLeadsCSV(btn){
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `leads-corretor-pro-${new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date())}.csv`;
+    a.download = `leads-corretor-pro-${new Intl.DateTimeFormat("en-CA",{timeZone:cpFuso()}).format(new Date())}.csv`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
@@ -9442,7 +9533,7 @@ async function exportarBackupCompletoV681(btn){
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `corretor-pro-backup-completo-${new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date())}.json`;
+    a.download = `corretor-pro-backup-completo-${new Intl.DateTimeFormat("en-CA",{timeZone:cpFuso()}).format(new Date())}.json`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
@@ -10463,7 +10554,7 @@ function cp1168ItensDeHoje(items){
   return lista;
 }
 function cp1168HoraCurta(ts){
-  try{ return new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", hour:"2-digit", minute:"2-digit" }).format(new Date(ts)); }
+  try{ return new Intl.DateTimeFormat("pt-BR", { timeZone:cpFuso(), hour:"2-digit", minute:"2-digit" }).format(new Date(ts)); }
   catch(_){ return ""; }
 }
 // "hoje às 15h" → "15h"; "hoje 15:30" → "15:30". Sem hora no texto, devolve vazio (o card mostra
@@ -10784,7 +10875,7 @@ function cp786CompromissoAtrasado(l){
   const considerar=(diff,ts)=>{ if(diff==null||diff>=0||diff< -JANELA||!ts) return; if(cpCompromissoJaAtendido(l,ts)) return; if(!melhor||diff>melhor.diff) melhor={diff,ts}; };
   try{
     const lt=cp786DataTs(l?.analysis?.lembrete?.quando);
-    if(lt){ const iso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(lt)); considerar(typeof ui671DiasAte==='function'?ui671DiasAte(iso):null, lt); }
+    if(lt){ const iso=new Intl.DateTimeFormat('en-CA',{timeZone:cpFuso()}).format(new Date(lt)); considerar(typeof ui671DiasAte==='function'?ui671DiasAte(iso):null, lt); }
   }catch(_){}
   const apps=Array.isArray(l?.analysis?.confirmedAppointments)?l.analysis.confirmedAppointments:[];
   let dispensados=null; try{dispensados=typeof compromissosDispensados==='function'?compromissosDispensados():null;}catch(_){}
@@ -10798,7 +10889,7 @@ function cp786CompromissoAtrasado(l){
     considerar(typeof ui671DiasAte==='function'?ui671DiasAte(data):null, cp786DataTs(data,'12:00'));
   }
   if(!melhor) return null;
-  return { dias:Math.abs(melhor.diff), dataLabel:new Date(melhor.ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) };
+  return { dias:Math.abs(melhor.diff), dataLabel:new Date(melhor.ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:cpFuso()}) };
 }
 window.cp786CompromissoAtrasado=cp786CompromissoAtrasado;
 // v1213 — "atendi no dia marcado; por que ainda está atrasado?".
@@ -10814,7 +10905,7 @@ function cpCompromissoJaAtendido(l, ts){
   const atendidoEm = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
   if(!atendidoEm) return false;
   try{
-    const dia = (t) => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(t));
+    const dia = (t) => new Intl.DateTimeFormat('en-CA',{timeZone:cpFuso()}).format(new Date(t));
     return dia(atendidoEm) >= dia(ts); // 'AAAA-MM-DD' compara certo como texto
   }catch(_){ return atendidoEm >= ts; }
 }
@@ -10838,7 +10929,7 @@ function cpCompromissosVencidosDoLead(l){
     // v1213 — mesma régua da contagem: compromisso atendido na data marcada (ou depois) está
     // cumprido e não pode continuar listado como pendência dentro do lead.
     if(cpCompromissoJaAtendido(l, cp786DataTs(data,'12:00'))) continue;
-    out.push({ key, oQue:String(ap?.oQue||'compromisso'), trecho:String(ap?.trechoLiteral||'').trim(), dias:Math.abs(diff), dataBR:new Date(cp786DataTs(data,'12:00')).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) });
+    out.push({ key, oQue:String(ap?.oQue||'compromisso'), trecho:String(ap?.trechoLiteral||'').trim(), dias:Math.abs(diff), dataBR:new Date(cp786DataTs(data,'12:00')).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:cpFuso()}) });
   }
   out.sort((a,b)=>a.dias-b.dias);
   return out;
@@ -11198,7 +11289,7 @@ window.ui667MarcarAtendido=async function(btn){
     }
     if(!d) throw ultimoErro||new Error("Não foi possível marcar o atendimento.");
     const quando=d.quando||new Date().toISOString();
-    const agoraFmt=new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,p)=>(p.type!=="literal"&&(o[p.type]=p.value),o),{});
+    const agoraFmt=new Intl.DateTimeFormat("pt-BR",{timeZone:cpFuso(),day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,p)=>(p.type!=="literal"&&(o[p.type]=p.value),o),{});
     const dataLocal=d.dataBR||`${agoraFmt.day}/${agoraFmt.month}/${agoraFmt.year}`;
     const horaLocal=d.horaBR||`${agoraFmt.hour}:${agoraFmt.minute}`;
     ui667AplicarAtendidoLocal(lead,quando,dataLocal,horaLocal);
@@ -11225,12 +11316,12 @@ window.ui667MarcarAtendido=async function(btn){
 function ui667RemoverAtendidoLocal(lead){
   const evs=lead?.analysis?.aprendizado?.eventos;
   if(!Array.isArray(evs)) return;
-  const hojeBR=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
+  const hojeBR=new Intl.DateTimeFormat('en-CA',{timeZone:cpFuso()}).format(new Date());
   // Remove TODO contato_manual de HOJE (não só o do botão): senão o "Atendido hoje" continua
   // ligado por outro contato do dia e o botão não volta pra "Marcar atendimento".
   lead.analysis.aprendizado.eventos=evs.filter(e=>{
     if(e?.evento!=='contato_manual'||!e?.quando) return true;
-    const iso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(e.quando));
+    const iso=new Intl.DateTimeFormat('en-CA',{timeZone:cpFuso()}).format(new Date(e.quando));
     return iso!==hojeBR;
   });
   const ts=(typeof ultimoAtendimentoTs==='function')?ultimoAtendimentoTs(lead):0;
@@ -11403,7 +11494,7 @@ function cpAppointmentData(lead){
     text=[escolhido.ap?.oQue||escolhido.ap?.tipo||'',produtosLabel(lead)||''].filter(Boolean).join(' · ');
   }else if(usarLembrete){
     const d=new Date(lembreteTs), hojeIso=hoje;
-    const dataIso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+    const dataIso=new Intl.DateTimeFormat('en-CA',{timeZone:cpFuso(),year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
     const diff=typeof ui671DiasAte==='function'?ui671DiasAte(dataIso):null;
     const prefixo=diff===0?'Hoje':diff===1?'Amanhã':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
     time=`${prefixo} · ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
@@ -11450,18 +11541,18 @@ function cpAvatarStyle(name){
 // fuso de Brasília): pedido do dono, que revisa o Desempenho uma vez por mês, não por dia —
 // com 7 dias rolando o recorte muda todo dia e o total nunca bate com o que ele fez no mês.
 function cpInicioMesMs(){
-  const hojeIso = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date());
-  return new Date(`${hojeIso.slice(0,7)}-01T00:00:00-03:00`).getTime();
+  const hojeIso = new Intl.DateTimeFormat("en-CA",{timeZone:cpFuso()}).format(new Date());
+  return cpMeiaNoiteMs(Number(hojeIso.slice(0,4)), Number(hojeIso.slice(5,7)), 1);
 }
 window.cpInicioMesMs = cpInicioMesMs;
 // v1106 — o dono, dia 1º de agosto: "pra ver resultados do mês passado como faço?". Não fazia:
 // virou o mês, os números zeravam na tela (os DADOS continuam — tudo tem data). Este é o começo
 // do mês anterior; o fim dele é cpInicioMesMs().
 function cpInicioMesAnteriorMs(){
-  // Deriva de cpInicioMesMs() no calendário de America/Sao_Paulo — getFullYear()/getMonth()
+  // Deriva de cpInicioMesMs() no calendário do corretor — getFullYear()/getMonth()
   // usariam o fuso do APARELHO: em Cuiabá/Manaus (UTC-4/-5) a virada do mês acontecia em outra
   // hora e o "mês anterior" pulava um mês a mais pra trás (chip mostrava "Junho" em 1º de agosto).
-  const iniIso = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date(cpInicioMesMs()));
+  const iniIso = new Intl.DateTimeFormat("en-CA",{timeZone:cpFuso()}).format(new Date(cpInicioMesMs()));
   let y = Number(iniIso.slice(0,4)), m = Number(iniIso.slice(5,7)) - 1;
   if(m === 0){ m = 12; y -= 1; }
   return new Date(`${y}-${String(m).padStart(2,"0")}-01T00:00:00-03:00`).getTime();
@@ -11587,7 +11678,7 @@ function cpRenderDesempenhoMetricas(items, all){
   const iniAnt = (typeof cpInicioMesAnteriorMs === "function") ? cpInicioMesAnteriorMs() : 0;
   const iniAtual = (typeof cpInicioMesMs === "function") ? cpInicioMesMs() : 0;
   const periodo = vendoMesPassado ? { ini: iniAnt, fim: iniAtual } : null;
-  const nomeMes = (ms) => { try{ return new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",month:"long"}).format(new Date(ms + 12*3600*1000)); }catch(_){ return "mês passado"; } };
+  const nomeMes = (ms) => { try{ return new Intl.DateTimeFormat("pt-BR",{timeZone:cpFuso(),month:"long"}).format(new Date(ms + 12*3600*1000)); }catch(_){ return "mês passado"; } };
   const rotuloMes = vendoMesPassado ? `em ${nomeMes(iniAnt)}` : "este mês";
   const m = cpDesempenhoMetricas(items, all, periodo);
   const linha = (icone, cor, titulo, sub, valor) => `
@@ -11797,7 +11888,7 @@ function ui670Parceiro(lead){
 
 
 function ui671HojeIso(){
-  try{return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
+  try{return new Intl.DateTimeFormat("en-CA",{timeZone:cpFuso(),year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
   catch(_){return new Date().toISOString().slice(0,10);}
 }
 function ui671DiasAte(data){
@@ -13133,7 +13224,7 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
     const totalMes=perDay.reduce((s,p)=>s+p.itens.length,0);
     const diasVisiveis=perDay.filter(p=>p.itens.length>0||!p.fds);
     let nomeDoMes='';
-    try{ nomeDoMes=hoje0.toLocaleDateString('pt-BR',{ month:'long', timeZone:'America/Sao_Paulo' }); }catch(_){ nomeDoMes=''; }
+    try{ nomeDoMes=hoje0.toLocaleDateString('pt-BR',{ month:'long', timeZone:cpFuso() }); }catch(_){ nomeDoMes=''; }
     const tituloPeriodo=nomeDoMes?`${nomeDoMes.charAt(0).toUpperCase()}${nomeDoMes.slice(1)}, do dia 1 até hoje`:'Do dia 1 do mês até hoje';
     const CP788_META_DIA = cp788MetaDia();
     box.innerHTML=`<section class="cp788-att-page">

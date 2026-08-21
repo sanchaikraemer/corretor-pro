@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v1273 — SÁBADO E DOMINGO SAEM DO GRÁFICO "CLIENTES ATENDIDOS POR DIA".
 //
@@ -20,8 +23,10 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 // ── 1. Cada dia sabe a data dele (sem isso não dá pra saber o que é fim de semana) ─────────────
 const dados = app.slice(app.indexOf("function cp1251Dados(){"));
 const blocoDados = dados.slice(0, dados.indexOf("\n}"));
-assert.match(blocoDados, /timeZone:"America\/Sao_Paulo", weekday:"short"/,
-  "o dia da semana é o de Brasília, não o do relógio do aparelho");
+// v1337 — o fuso virou cpFuso() (fuso salvo da conta, padrão Brasília). A regra guardada aqui é a
+// mesma de sempre: o dia da semana NÃO pode sair do relógio do aparelho.
+assert.match(blocoDados, /timeZone:cpFuso\(\), weekday:"short"/,
+  "o dia da semana vem do fuso do corretor, não do relógio do aparelho");
 assert.match(blocoDados, /fds: sigla === "Sat" \|\| sigla === "Sun"/,
   "cada dia marca se é sábado ou domingo");
 assert.match(blocoDados, /qtd: s\.size, dia: i \+ 1/,

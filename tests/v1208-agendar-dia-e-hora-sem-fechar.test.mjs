@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v1208 — "não estou conseguindo agendar a hora, porra... boto ali o dia, e daí quando eu vou
 // tentar selecionar a hora fecha. Sem falar que está feio, nem parece um app desse nível."
@@ -50,7 +53,10 @@ assert.ok(!/reagHora_/.test(app), 'o painel antigo da Agenda (ids reagHora_) pre
 
 // --- 4. Pré-preenche o que já está marcado (em vez de dois campos vazios). -------------------
 assert.match(app, /function cpAgendarDataDoLembrete\(quando\)/, 'precisa saber a data do compromisso já marcado');
-assert.match(app, /timeZone:"America\/Sao_Paulo"/, 'a data pré-preenchida tem que ser a do fuso do Brasil');
+// v1337 — o fuso saiu de 35 literais e virou cpFuso(), que devolve o fuso salvo da conta (padrão
+// Brasília). O que este teste guarda continua igual: a data vem de um fuso EXPLÍCITO, não do
+// relógio do aparelho, que já pré-preencheu o dia errado pra quem estava em outro fuso.
+assert.match(app, /timeZone:cpFuso\(\)/, 'a data pré-preenchida tem que ser a do fuso do corretor, explicitamente');
 assert.match(doLead, /hora: lem\?\.hora \|\| ""/, 'o lead pré-preenche a hora já marcada');
 assert.match(daAgenda, /hora: lembrete\?\.hora \|\| ""/, 'a Agenda pré-preenche a hora já marcada');
 

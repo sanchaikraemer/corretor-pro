@@ -10,7 +10,11 @@ const markStart = app.indexOf('window.ui667MarcarAtendido=async function(btn)');
 const markEnd = app.indexOf('// Atualização #724-2: wrapper antigo', markStart);
 const mark = app.slice(markStart, markEnd);
 assert.ok(mark.indexOf('renderLeadFoco(lead)') < mark.indexOf('recarregarLeadFoco(lead.id)'), 'tela deve atualizar antes do refetch');
-assert.match(mark, /America\/Sao_Paulo/, 'fallback de data/hora precisa usar fuso de São Paulo');
+// v1337 — o fuso deixou de ser Brasília cravado em 35 lugares do app.js e passou a sair de
+// cpFuso(), que devolve o fuso da conta (padrão: o do aparelho, e Brasília como último recurso).
+// O que este teste guarda continua sendo o mesmo: o carimbo de "atendido" usa um fuso EXPLÍCITO e
+// não o relógio cru do aparelho, que já colocou atendimento no dia errado.
+assert.match(mark, /timeZone:\s*cpFuso\(\)/, 'fallback de data/hora precisa usar o fuso do corretor, explicitamente');
 assert.match(mark, /ui667AplicarAtendidoLocal\(item,quando,dataLocal,horaLocal\)/, 'listas em memória também precisam ser atualizadas');
 
 const reloadStart = app.indexOf('async function recarregarLeadFoco(id)');

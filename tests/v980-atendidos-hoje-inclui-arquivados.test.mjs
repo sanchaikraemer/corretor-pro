@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v980 — print do dono (24/07): a Home dizia "11 atendidos hoje" e a tela Atendimentos, no
 // mesmo instante, listava 12 nomes reais pro dia de hoje. Causa: cpAtendidosHojeTotal (usada

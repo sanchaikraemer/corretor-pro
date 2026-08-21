@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -45,10 +48,12 @@ assert.match(app, /agendaCardHTML\(l, extra, horaHtml\)|function agendaCardHTML\
 assert.match(css, /\.cp-ag-dia\.ativo\{background:var\(--cp-coral,#FF6258\)/,
   'o dia escolhido acende em coral, como na simulação');
 assert.match(css, /\.cp-ag-dia b\{font-size:17px/, 'o número do DIA é o grande do quadradinho (não a contagem)');
-// O dia é calculado no fuso de São Paulo, como o resto do app.
+// O dia é calculado num fuso explícito, como o resto do app. v1337: esse fuso deixou de ser
+// "America/Sao_Paulo" cravado e passou a ser cpFuso() — o fuso salvo da conta, com Brasília de
+// padrão. O que não pode voltar é o dia sair do relógio do aparelho.
 const iniAg = app.indexOf('async function carregarAgenda(){');
 const agSrc = app.slice(iniAg, app.indexOf('window.carregarAgenda', iniAg));
-assert.match(agSrc, /America\/Sao_Paulo/, 'a faixa da semana usa o fuso de São Paulo');
+assert.match(agSrc, /timeZone:cpFuso\(\)/, 'a faixa da semana usa o fuso do corretor, explicitamente');
 
 // --- Avatar dentro da paleta ---
 assert.ok(!css.includes('#efb28c') && !css.includes('#8b5d4a'),

@@ -11,7 +11,18 @@
 //   boa noite  → das 18h00 em diante
 // ============================================================================================
 
-export const FUSO_CORRETOR = "America/Sao_Paulo";
+// v1337 — o fuso deixou de ser Brasília cravado: quando este módulo roda dentro do app, ele usa o
+// fuso da conta (escolhido no Cérebro, detectado pelo aparelho). No servidor e nos testes, onde
+// não existe window, continua valendo Brasília — que é o padrão do produto.
+export const FUSO_PADRAO = "America/Sao_Paulo";
+export function fusoDoCorretorAqui(){
+  try{
+    if(typeof window !== "undefined" && typeof window.cpFuso === "function") return window.cpFuso() || FUSO_PADRAO;
+  }catch(_){ }
+  return FUSO_PADRAO;
+}
+// Nome antigo, mantido porque é o que o resto do app importa.
+export const FUSO_CORRETOR = FUSO_PADRAO;
 
 export function saudacaoParaHora(hora){
   const h = Number(hora);
@@ -24,7 +35,7 @@ export function saudacaoParaHora(hora){
 // A hora do CORRETOR, não a do servidor: o app roda no celular dele, mas a análise roda num
 // servidor que costuma estar em UTC — sem fixar o fuso, "17h37 no Brasil" vira "20h37" e a
 // saudação sai errada por três horas.
-export function horaNoFusoDoCorretor(agora = new Date(), fuso = FUSO_CORRETOR){
+export function horaNoFusoDoCorretor(agora = new Date(), fuso = fusoDoCorretorAqui()){
   try{
     return Number(new Intl.DateTimeFormat("en-GB", { timeZone: fuso, hour: "2-digit", hour12: false }).format(agora));
   }catch(_){
@@ -32,7 +43,7 @@ export function horaNoFusoDoCorretor(agora = new Date(), fuso = FUSO_CORRETOR){
   }
 }
 
-export function saudacaoAgora(agora = new Date(), fuso = FUSO_CORRETOR){
+export function saudacaoAgora(agora = new Date(), fuso = fusoDoCorretorAqui()){
   return saudacaoParaHora(horaNoFusoDoCorretor(agora, fuso));
 }
 
@@ -41,7 +52,7 @@ export function saudacaoAgora(agora = new Date(), fuso = FUSO_CORRETOR){
 // saudação no MEIO da mensagem não é mexida — lá ela pode estar citando outra coisa.
 const ABERTURA_COM_SAUDACAO = /^(\s*(?:oi|ol[áa]|opa|e a[íi])?[\s,!—-]*)(bom\s+dia|boa\s+tarde|boa\s+noite)/i;
 
-export function corrigirSaudacaoAbertura(texto, agora = new Date(), fuso = FUSO_CORRETOR){
+export function corrigirSaudacaoAbertura(texto, agora = new Date(), fuso = fusoDoCorretorAqui()){
   const original = String(texto || "");
   const casa = original.match(ABERTURA_COM_SAUDACAO);
   if(!casa) return original;

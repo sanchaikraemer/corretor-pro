@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { sanitizeCerebroConfig, CEREBRO_DEFAULTS } from "../api/cerebro-config.js";
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v1048 — o dono explicou o critério de quem entra na fila "Fazer agora" e apontou o ponto exato
 // que queria mudar: "o número 2 (você não atendeu ele hoje ainda) esse 'hoje' deve mudar para
