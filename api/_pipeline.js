@@ -224,6 +224,21 @@ function normalizeComparable(text = "") {
 // explícito em Agenda conta. Sem chamador desde que api/_persistence.js passou a zerar
 // confirmedAppointments incondicionalmente em toda leitura de lead.
 
+// v1339 — merge seguro das duas linhas de trabalho que chegaram a usar o número v1337.
+// O Motor Comercial determinístico precisa conviver com o fuso configurável do corretor.
+// Nunca confiamos em texto arbitrário vindo da configuração: Intl valida o identificador IANA
+// e qualquer valor ausente/inválido volta ao padrão histórico do produto (Brasília).
+export function fusoDoCorretor(configCerebro) {
+  const candidato = String(configCerebro?.fusoHorario || "").trim();
+  if (!candidato) return "America/Sao_Paulo";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidato }).format(new Date());
+    return candidato;
+  } catch (_) {
+    return "America/Sao_Paulo";
+  }
+}
+
 export function parseDateTime(date, time) {
   const [d, m, yRaw] = String(date).split("/").map(Number);
   const [hh, mm] = String(time).split(":").map(Number);
@@ -5091,9 +5106,11 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = "[Conversa longa: parte antiga omitida apenas por limite técnico da importação. Use as mensagens abaixo como histórico recente, sem análise antiga.]\n" + recentes.join("\n");
   }
 
+  const configCerebro = await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null);
   const _agoraDt = new Date();
-  // Data e hora atuais no fuso do corretor, fornecidas apenas como contexto técnico da análise.
-  const fusoAnalise = "America/Sao_Paulo";
+  // v1339 — usa o fuso salvo no Cérebro; inválido/ausente mantém Brasília como padrão.
+  // Esta linha havia sido perdida quando o _pipeline.js da outra v1337 foi substituído inteiro.
+  const fusoAnalise = fusoDoCorretor(configCerebro);
   let hoje, hojeSemana = "", dataHoraAtualAnalise = "";
   try {
     hoje = _agoraDt.toLocaleDateString("en-CA", { timeZone: fusoAnalise });
@@ -5120,7 +5137,6 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     horaAnalise = Number(new Intl.DateTimeFormat("en-GB", { timeZone: fusoAnalise, hour: "2-digit", hour12: false }).format(_agoraDt));
   } catch (_) { /* fica a hora do servidor */ }
   const saudacaoDoHorario = horaAnalise < 12 ? "Bom dia" : horaAnalise < 18 ? "Boa tarde" : "Boa noite";
-  const configCerebro = await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null);
   // v1132 — MODO PRÉVIA (conta nova, Cérebro ainda vazio).
   //
   // Até aqui, sem Cérebro configurado a análise era RECUSADA ("A análise não foi gerada para evitar
