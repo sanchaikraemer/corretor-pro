@@ -172,9 +172,11 @@ assert.equal(contarMaterialNaoLido(null).total, 0, "e nada quebra com entrada va
   // v1350 — e a linha do arquivo que não veio virou o próprio conserto: toca e manda o arquivo.
   assert.match(app, /const arquivoFaltando = \/não veio no envio da conversa\/\.test\(textoNaTela\);/,
     'a linha do arquivo que não veio precisa ser reconhecida na hora de desenhar');
-  assert.match(app, /class="cp1350-faltou" onclick='event\.stopPropagation\(\);cp1350EnviarArquivoQueFaltou\(\)'/,
-    'e virar botão que abre o seletor de arquivos');
-  assert.match(app, /function cp1350EnviarArquivoQueFaltou\(\)\{/, 'com a função que faz isso');
+  // v1352 — o botão passou a levar o lead e o momento da mensagem: é assim que o texto lido volta
+  // pra DENTRO dela, em vez de virar observação em outro ponto do histórico.
+  assert.match(app, /class="cp1350-faltou" onclick='event\.stopPropagation\(\);cp1350EnviarArquivoQueFaltou\(\$\{JSON\.stringify/,
+    'e virar botão que abre o seletor de arquivos, sabendo qual mensagem está esperando');
+  assert.match(app, /function cp1350EnviarArquivoQueFaltou\(leadId, iso\)\{/, 'com a função que faz isso');
   assert.match(app, /const texto = cp1348TextoNaTela\(m\.text\)\.replace/,
     "o bloco das 2 últimas mensagens dentro da ficha também");
 }
