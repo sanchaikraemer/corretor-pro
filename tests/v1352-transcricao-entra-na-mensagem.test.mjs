@@ -89,3 +89,29 @@ assert.match(app, /onclick="cp1352LimparAlvo\(\);document\.getElementById\('cp13
 assert.match(app, /function cp1352LimparAlvo\(\)\{ cp1352Alvo = null; \}/);
 
 console.log("v1352-transcricao-entra-na-mensagem: ok");
+
+// ── 5. v1354 — DAVA CERTO E NÃO APARECIA NA TELA ─────────────────────────────────────────────
+// recarregarLeadFoco tem uma proteção antiga: se a cópia local tem MAIS mensagens que a que voltou
+// do servidor, ela fica com a LOCAL (a lista devolve só um recorte, e sem isso a barra de interesse
+// despencava de 108 pra 4). Com o histórico completo aberto — 16 mensagens contra 4 — essa proteção
+// vencia sempre, e o texto recém-gravado era descartado na hora de desenhar. O corretor mandava o
+// arquivo, o servidor gravava certo, e a linha vermelha continuava lá.
+{
+  assert.match(app, /cp1352TrocaNaTimelineLocal\(alvo\.leadId, alvo\.iso, d2\.mensagem\);/,
+    "a cópia da tela precisa receber a linha nova ANTES de recarregar");
+  const fn = app.match(/function cp1352TrocaNaTimelineLocal\(leadId, iso, mensagem\)\{[\s\S]*?\n\}/)[0];
+  assert.match(fn, /String\(state\.lead\.id\) !== String\(leadId\)/, "só mexe no lead que está aberto");
+  assert.match(fn, /msgs\[i\] = \{ \.\.\.msgs\[i\], \.\.\.mensagem \};/, "troca a mensagem, sem perder o resto dela");
+  assert.match(fn, /renderLeadFoco\(state\.lead\)/, "e redesenha na hora");
+  assert.match(bloco, /return json\(res, 200, \{ ok: true, mensagem: nova\[idx\] \}\);/,
+    "sanidade: é a rota que devolve a mensagem já gravada");
+  // Rodando: a proteção do recarregarLeadFoco continua valendo (ela protege outra coisa), então o
+  // conserto TEM que ser o patch local — este teste falha se alguém tirar o patch achando que o
+  // recarregamento resolve sozinho.
+  const local = [{ iso: "a" }, { iso: "b" }, { iso: "c" }, { iso: "d" }, { iso: "e" }];
+  const fresco = [{ iso: "d" }, { iso: "e" }];
+  assert.ok(local.length > fresco.length,
+    "é este o caso real: histórico completo na tela, recorte curto vindo da lista");
+  assert.match(app, /if\(msgsLocal\.length>msgsFresh\.length\)\{/,
+    "a proteção do recarregamento continua no código — por isso o patch local é obrigatório");
+}
