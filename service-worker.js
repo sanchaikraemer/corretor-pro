@@ -324,6 +324,18 @@ self.addEventListener('periodicsync', event => {
   event.waitUntil((async () => {
     const retrato = await swNotifLer('retrato');
     if (!retrato || !Number(retrato.total)) return;
+    // v1336 — A HORA É DO CORRETOR, NÃO DO CELULAR.
+    // O navegador acorda o app na hora que quiser, e por isso o aviso já chegou em horário que não
+    // é hora de trabalhar ("isso ta programado pra essa hora?", dono, 20/08). Agora o aviso só sai
+    // dentro da janela que ele escolheu na tela de ajustes (padrão: a partir das 8h, valendo por 4
+    // horas). Acordou fora da janela? Não avisa — espera a próxima.
+    const horario = await swNotifLer('horaAviso');
+    const horaEscolhida = Number(horario?.hora);
+    const janela = Number(horario?.janelaHoras) || 4;
+    const inicio = (Number.isFinite(horaEscolhida) && horaEscolhida >= 0 && horaEscolhida <= 23) ? horaEscolhida : 8;
+    const agora = new Date().getHours();
+    const decorrido = (agora - inicio + 24) % 24;
+    if (decorrido >= janela) return;
     // Anti-incômodo: no máximo um aviso a cada 20h (o navegador pode acordar mais vezes).
     const ultimo = Number(await swNotifLer('ultimoAviso') || 0);
     if (Date.now() - ultimo < 20 * 60 * 60 * 1000) return;

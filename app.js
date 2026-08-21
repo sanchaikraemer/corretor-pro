@@ -9852,6 +9852,12 @@ function leadEhAtivo(l){
 // sistema registrou com data: compromisso atrasado + a dose de "Fazer agora" do dia — exatamente
 // os mesmos números que o app mostra na Home (card "Fazer agora") e no aviso do sino.
 const CP_LEMBRETE_DIARIO_KEY = "cp-lembrete-diario";
+// v1336 — a hora escolhida pelo corretor pro lembrete diário (0 a 23). O padrão é 8h da manhã.
+const CP_LEMBRETE_HORA_KEY = "cp-lembrete-hora";
+const CP_LEMBRETE_HORA_PADRAO = 8;
+// Depois da hora escolhida, o aviso ainda vale por 4 horas: o celular acorda o app quando quer, e
+// uma janela apertada demais faria o lembrete simplesmente não sair naquele dia.
+const CP_LEMBRETE_JANELA_HORAS = 4;
 
 // Ações com lastro pra cobrar hoje. Só fato registrado no sistema entra:
 //   - compromisso/lembrete ATRASADO (data marcada que já passou — cp786CompromissoAtrasado);
@@ -9919,11 +9925,37 @@ function cpAtualizarRetratoAcoes(items){
 function cpLembreteDiarioLigado(){
   try{ return localStorage.getItem(CP_LEMBRETE_DIARIO_KEY) === "on"; }catch(_){ return false; }
 }
+function cpLembreteDiarioHora(){
+  try{
+    const h = parseInt(localStorage.getItem(CP_LEMBRETE_HORA_KEY), 10);
+    return (Number.isFinite(h) && h >= 0 && h <= 23) ? h : CP_LEMBRETE_HORA_PADRAO;
+  }catch(_){ return CP_LEMBRETE_HORA_PADRAO; }
+}
+function cpHoraDoisDigitos(h){ return String(h).padStart(2, "0") + "h"; }
+// A hora vai pro mesmo lugar onde mora o retrato: o service worker não enxerga o localStorage.
+function cpLembreteDiarioGravarHoraNoWorker(){
+  return cpNotifGravar("horaAviso", { hora: cpLembreteDiarioHora(), janelaHoras: CP_LEMBRETE_JANELA_HORAS });
+}
+function cpLembreteDiarioSalvarHora(){
+  const sel = qs("#lembreteDiarioHora");
+  if(!sel) return;
+  try{ localStorage.setItem(CP_LEMBRETE_HORA_KEY, String(parseInt(sel.value, 10) || 0)); }catch(_){ }
+  cpLembreteDiarioGravarHoraNoWorker();
+  if(cpLembreteDiarioLigado()){
+    const h = cpLembreteDiarioHora();
+    cpLembreteDiarioStatus(`Horário salvo. O aviso passa a chegar a partir das ${cpHoraDoisDigitos(h)} (e nunca fora da janela até ${cpHoraDoisDigitos((h + CP_LEMBRETE_JANELA_HORAS) % 24)}).`, "var(--acao)");
+  }
+}
+window.cpLembreteDiarioSalvarHora = cpLembreteDiarioSalvarHora;
 async function cpLembreteDiarioRegistrarSync(){
   try{
     const reg = await navigator.serviceWorker?.ready;
     if(!reg || !("periodicSync" in reg)) return false;
-    await reg.periodicSync.register("cp-cobranca-diaria", { minInterval: 20 * 60 * 60 * 1000 });
+    // v1336 — o intervalo mínimo caiu de 20h pra 4h de propósito: o navegador acorda o app quando
+    // QUER, e com 20h ele quase nunca acordava dentro da hora escolhida pelo corretor. Quem
+    // continua garantindo "no máximo um aviso por dia" é a trava de 20h dentro do service worker,
+    // que não depende do humor do celular.
+    await reg.periodicSync.register("cp-cobranca-diaria", { minInterval: 4 * 60 * 60 * 1000 });
     return true;
   }catch(_){ return false; }
 }
@@ -9940,6 +9972,16 @@ function cpLembreteDiarioStatus(texto, cor){
 }
 function cpLembreteDiarioRender(){
   const btn = qs("#btnLembreteDiario");
+  const sel = qs("#lembreteDiarioHora");
+  if(sel && !sel.options.length){
+    for(let h = 5; h <= 21; h++){
+      const op = document.createElement("option");
+      op.value = String(h);
+      op.textContent = cpHoraDoisDigitos(h);
+      sel.appendChild(op);
+    }
+  }
+  if(sel) sel.value = String(cpLembreteDiarioHora());
   if(!btn) return;
   if(!("Notification" in window)){
     btn.style.display = "none";
@@ -9975,9 +10017,11 @@ async function cpLembreteDiario(){
   try{ localStorage.setItem(CP_LEMBRETE_DIARIO_KEY, "on"); }catch(_){ }
   // Atualiza o retrato agora, com o que estiver em memória — pra primeira notificação não sair velha.
   cpAtualizarRetratoAcoes(state.todosLeads || state.itemsAtivos || []);
+  await cpLembreteDiarioGravarHoraNoWorker();
   const fundo = await cpLembreteDiarioRegistrarSync();
+  const horaEscolhida = cpLembreteDiarioHora();
   cpLembreteDiarioStatus(fundo
-    ? "Ativado. O aviso chega uma vez por dia, mesmo com o app fechado."
+    ? `Ativado. O aviso chega uma vez por dia, a partir das ${cpHoraDoisDigitos(horaEscolhida)}, mesmo com o app fechado. Fora dessa janela ele não toca.`
     : "Ativado. Neste navegador o aviso em segundo plano não é suportado — no Android, com o app instalado, ele chega mesmo fechado. Aqui, o sino do topo segue mostrando o que pede ação hoje.",
     "var(--acao)");
   cpLembreteDiarioRender();

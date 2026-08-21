@@ -127,7 +127,11 @@ assert.doesNotMatch(html.slice(html.indexOf('lembreteDiarioCard'), html.indexOf(
   'o cartão não promete mais detectar cliente esperando resposta');
 assert.match(html, /onclick="cpLembreteDiario\(\)"/, 'o botão liga/desliga');
 assert.match(app, /await Notification\.requestPermission\(\)/, 'a permissão é pedida só no clique (gesto do corretor), nunca na abertura');
-assert.match(app, /periodicSync\.register\("cp-cobranca-diaria", \{ minInterval: 20 \* 60 \* 60 \* 1000 \}\)/,
+// v1336 — o intervalo pedido ao navegador caiu de 20h pra 4h. O que este teste guarda é o que
+// sempre importou aqui: o TAG pedido é o mesmo que o worker escuta (errar o tag deixa o lembrete
+// mudo sem ninguém perceber). A frequência de um aviso por dia mudou de lugar: quem garante isso é
+// a trava de 20h dentro do service worker, conferida em v1336-lembrete-na-hora-escolhida.
+assert.match(app, /periodicSync\.register\("cp-cobranca-diaria", \{ minInterval: \d+ \* 60 \* 60 \* 1000 \}\)/,
   'o sync periódico é registrado com o mesmo tag que o worker escuta');
 assert.match(app, /o aviso em segundo plano não é suportado/,
   'onde o navegador não suporta (iPhone/desktop), o corretor fica sabendo — sem fingir que funciona');

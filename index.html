@@ -757,6 +757,13 @@
           maioria das vendas sai depois do quinto contato; o lembrete existe pra nenhum cliente
           esfriar esquecido. O aviso não mostra nome de cliente na tela do celular.
         </div>
+        <!-- v1336 — a HORA do aviso passa a ser escolhida pelo corretor. Antes o aviso saía quando
+             o celular resolvia acordar o app, e chegou em horário que não era hora de trabalhar
+             ("recebi agora essa msg em anexo, isso ta programado pra essa hora?", dono, 20/08). -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <label class="small" for="lembreteDiarioHora" style="color:var(--soft)">Chegar por volta das</label>
+          <select id="lembreteDiarioHora" onchange="cpLembreteDiarioSalvarHora()" style="padding:8px 10px;font-size:14px;width:auto"></select>
+        </div>
         <button type="button" class="btn" id="btnLembreteDiario" style="padding:12px 20px;font-size:14px;width:auto" onclick="cpLembreteDiario()">Ativar lembrete diário</button>
         <div class="small" id="lembreteDiarioStatus" style="color:var(--muted);margin-top:8px;line-height:1.5"></div>
       </div>
