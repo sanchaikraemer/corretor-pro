@@ -137,6 +137,22 @@ await analyzeWithBrain({
 });
 const pedido = chamadas.at(-1).messages.find(m => m.role === "user")?.content || "";
 
+// A IDADE DO PREÇO ANTIGO É CONTADA A PARTIR DE HOJE — E "HOJE" MUDA TODO DIA.
+//
+// Esta linha era `"há 211 dias"`, cravada: 211 é a distância de 21/01/2026 (o dia do preço de
+// R$ 670 mil nesta conversa) até 20/08/2026, o dia em que o teste foi escrito. À meia-noite
+// seguinte viraram 212 e a suíte inteira ficou vermelha sozinha, sem ninguém ter mexido em nada.
+// Isso não é detalhe de teste: desde a v1338 a suíte VERMELHA PARA A PUBLICAÇÃO. Um número
+// cravado assim é uma bomba-relógio que trava o site numa madrugada qualquer.
+//
+// A conta agora é feita na hora, do mesmo jeito que o app faz (dia de calendário no fuso do
+// corretor). O teste continua provando o que importa — que a idade do preço antigo chega ao
+// pedido — sem depender do dia em que roda.
+const diaCivil = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
+const emDias = (iso) => Math.round((Date.parse(`${diaCivil(new Date())}T12:00:00Z`) - Date.parse(`${iso}T12:00:00Z`)) / 86400000);
+const diasDoPrecoAntigo = emDias("2026-01-21");
+assert.ok(diasDoPrecoAntigo > 200, "sanidade: o preço de 21/01/2026 tem mais de 200 dias em qualquer dia de 2026 daqui pra frente");
+
 for (const [trecho, porque] of [
   ["VALORES EM DINHEIRO JÁ CITADOS NESTA CONVERSA", "a lista de valores com idade"],
   ["PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA", "a lista de perguntas já feitas"],
@@ -145,7 +161,7 @@ for (const [trecho, porque] of [
   ["FAIXA DE COMPRA QUE ESSA ENTRADA ABRE", "a conta do poder de compra"],
   ["R$ 720.000 a R$ 900.000", "o resultado da conta"],
   ["Você está procurando algo para morar ou para investir?", "a pergunta do primeiro dia, que não pode ser refeita às cegas"],
-  ["há 211 dias", "a idade do preço antigo"]
+  [`há ${diasDoPrecoAntigo} dias`, "a idade do preço antigo, contada a partir de hoje"]
 ]) {
   assert.ok(pedido.includes(trecho), `${porque} precisa chegar ao pedido enviado à IA: "${trecho}"`);
 }
