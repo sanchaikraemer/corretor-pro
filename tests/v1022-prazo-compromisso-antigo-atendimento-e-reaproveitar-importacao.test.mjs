@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v1195 — a parte de reaproveitar a importação (cpSalvarImportPendente e companhia) mudou de
 // endereço: foi pro pedaço js/importacao.js, baixado só quando o corretor importa uma conversa.

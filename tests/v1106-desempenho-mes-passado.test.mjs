@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');

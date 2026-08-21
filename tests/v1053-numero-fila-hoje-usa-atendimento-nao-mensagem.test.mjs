@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v1053 — caso real "Karine": a v1052 fez a regra de descanso contar exclusivamente do último
 // atendimento marcado. O número na linha da lista "Fazer agora" usava a data mais recente entre

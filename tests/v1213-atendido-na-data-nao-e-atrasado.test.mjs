@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+// v1337 — o fuso do app saiu de 35 literais "America/Sao_Paulo" e virou cpFuso(). Este import
+// entrega as funções REAIS de fuso do app.js pros trechos que este teste roda com eval.
+import "./_fuso-do-app.mjs";
 
 // v1213 — relato do dono (11/08/2026, print da Agenda): o lead "Bocorni" estava em
 // "Atrasados — retome ou descarte" por causa do lembrete de 10/08, mas o próprio cadastro mostrava

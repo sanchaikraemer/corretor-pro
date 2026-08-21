@@ -8,10 +8,25 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
   + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
+// v1337 — o fuso deixou de ser cravado no código e passou a vir do Cérebro da conta (Brasília
+// continua sendo o padrão). O que este teste guarda é o que sempre importou aqui: a análise usa um
+// fuso EXPLÍCITO, não o fuso do servidor da Vercel — que roda em UTC e daria a hora errada pra
+// todo mundo.
 assert.match(
   pipeline,
-  /const fusoAnalise = ["']America\/Sao_Paulo["']/,
-  'a análise deve usar explicitamente o fuso America/Sao_Paulo'
+  /const fusoAnalise = fusoDoCorretor\(configCerebro\);/,
+  'a análise deve usar explicitamente o fuso da conta'
+);
+assert.match(
+  pipeline,
+  /export function fusoDoCorretor\(config\)[\s\S]*?return "America\/Sao_Paulo";/,
+  'e o padrão, sem nada configurado, continua sendo Brasília'
+);
+// O Cérebro precisa ser carregado ANTES do relógio — senão o fuso é lido de uma variável que ainda
+// não existe e a análise inteira quebra em produção sem quebrar teste nenhum.
+assert.ok(
+  pipeline.indexOf('const configCerebro = await loadCerebroConfig') < pipeline.indexOf('const fusoAnalise = fusoDoCorretor'),
+  'o Cérebro tem que ser carregado antes de calcular a hora da análise'
 );
 assert.match(
   pipeline,
