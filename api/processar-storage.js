@@ -445,65 +445,83 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   // qualquer falha deixa a conversa exatamente como era antes desta versão.
   const visuaisExtraidos = prep._extractedVisuals || {};
   delete prep._extractedVisuals;
+  // v1346 — AS DUAS LEITURAS PASSAM A RODAR JUNTAS.
+  //
+  // "importação está demorando MUITO" (dono, 21/08/2026). Uma parte é a análise (ver o comentário
+  // do modo de duas etapas em _pipeline.js); esta aqui é a outra: a leitura das imagens/PDFs tem
+  // janela de 22 segundos e a dos links, 20 — e uma esperava a outra terminar. Numa conversa com
+  // arte E link, isso era até 42 segundos EM FILA antes de a análise sequer começar. As duas são
+  // independentes (uma lê arquivo do ZIP, a outra busca página na internet): rodando juntas, a
+  // espera passa a ser a da mais lenta, não a soma. Cada uma continua com a sua própria janela,
+  // o seu próprio teto do dia e o mesmo fail-open de sempre.
   const leiturasVisuais = {};
   let leituraVisualLimiteAtingido = false;
   let visuaisReaproveitados = 0;
-  try {
-    // v1312 — o que este cliente já teve lido numa importação anterior entra pronto e nem vira
-    // candidato: não desce pra IA, não custa nada e não gasta segundo nenhum da janela.
-    let candidatos = Object.entries(visuaisExtraidos).map(([name, buf]) => ({ name, buffer: buf }));
-    candidatos = candidatos.filter(({ name }) => {
-      const jaLido = cacheVisualDoLead[name] || cacheVisualDoLead[normalizeName(name)];
-      if (!jaLido?.text) return true;
-      leiturasVisuais[name] = { status: "lido", text: jaLido.text, reaproveitado: true };
-      visuaisReaproveitados++;
-      return false;
-    });
-    if (candidatos.length) {
-      const limite = await verificarLimiteLeituraVisual(organizationId);
-      if (Number.isFinite(limite.restante) && candidatos.length > limite.restante) {
-        candidatos = candidatos.slice(0, Math.max(0, limite.restante));
-        leituraVisualLimiteAtingido = true;
-      }
+  const leiturasLinks = {};
+  let linksReaproveitados = 0;
+
+  const lerVisuaisDaImportacao = async () => {
+    try {
+      // v1312 — o que este cliente já teve lido numa importação anterior entra pronto e nem vira
+      // candidato: não desce pra IA, não custa nada e não gasta segundo nenhum da janela.
+      let candidatos = Object.entries(visuaisExtraidos).map(([name, buf]) => ({ name, buffer: buf }));
+      candidatos = candidatos.filter(({ name }) => {
+        const jaLido = cacheVisualDoLead[name] || cacheVisualDoLead[normalizeName(name)];
+        if (!jaLido?.text) return true;
+        leiturasVisuais[name] = { status: "lido", text: jaLido.text, reaproveitado: true };
+        visuaisReaproveitados++;
+        return false;
+      });
       if (candidatos.length) {
-        const { leituras } = await lerArquivosVisuais(candidatos, organizationId, { deadlineTs: Date.now() + 22000 });
-        Object.assign(leiturasVisuais, leituras || {});
-        const lidosAgora = Object.values(leituras || {}).filter(l => l?.status === "lido").length;
-        if (lidosAgora) await registrarConsumoLeituraVisual(organizationId, lidosAgora);
+        const limite = await verificarLimiteLeituraVisual(organizationId);
+        if (Number.isFinite(limite.restante) && candidatos.length > limite.restante) {
+          candidatos = candidatos.slice(0, Math.max(0, limite.restante));
+          leituraVisualLimiteAtingido = true;
+        }
+        if (candidatos.length) {
+          const { leituras } = await lerArquivosVisuais(candidatos, organizationId, { deadlineTs: Date.now() + 22000 });
+          Object.assign(leiturasVisuais, leituras || {});
+          const lidosAgora = Object.values(leituras || {}).filter(l => l?.status === "lido").length;
+          if (lidosAgora) await registrarConsumoLeituraVisual(organizationId, lidosAgora);
+        }
       }
+    } catch (erroVisual) {
+      console.warn("[direciona] leitura de imagem/PDF da importação falhou:", erroVisual?.message || erroVisual);
     }
-  } catch (erroVisual) {
-    console.warn("[direciona] leitura de imagem/PDF da importação falhou:", erroVisual?.message || erroVisual);
-  }
+  };
+
   // v1307 — os links que o corretor mandou na conversa são abertos aqui, na mesma etapa e com as
   // mesmas travas (tempo, teto do dia, fail-open). Link de cliente nunca é aberto — a seleção é
   // feita em linksDoCorretorNaConversa, no _pipeline.
-  const leiturasLinks = {};
-  let linksReaproveitados = 0;
-  try {
-    const todosOsLinks = Array.isArray(prep.linksParaLer) ? prep.linksParaLer : [];
-    // v1312 — link já lido deste cliente também volta pronto (a página não foi buscada de novo,
-    // e a IA não foi chamada pra resumir de novo o mesmo endereço).
-    const links = todosOsLinks.filter((url) => {
-      const jaLido = cacheLinksDoLead[String(url)];
-      if (!jaLido?.text) return true;
-      leiturasLinks[url] = { status: "lido", text: jaLido.text, reaproveitado: true };
-      linksReaproveitados++;
-      return false;
-    });
-    if (links.length) {
-      const limiteLink = await verificarLimiteLeituraVisual(organizationId);
-      const cabem = Number.isFinite(limiteLink.restante) ? links.slice(0, Math.max(0, limiteLink.restante)) : links;
-      if (cabem.length) {
-        const { leituras } = await lerLinksDaConversa(cabem, organizationId, { deadlineTs: Date.now() + 20000 });
-        Object.assign(leiturasLinks, leituras || {});
-        const lidos = Object.values(leituras || {}).filter(l => l?.status === "lido").length;
-        if (lidos) await registrarConsumoLeituraVisual(organizationId, lidos);
+  const lerLinksDaImportacao = async () => {
+    try {
+      const todosOsLinks = Array.isArray(prep.linksParaLer) ? prep.linksParaLer : [];
+      // v1312 — link já lido deste cliente também volta pronto (a página não foi buscada de novo,
+      // e a IA não foi chamada pra resumir de novo o mesmo endereço).
+      const links = todosOsLinks.filter((url) => {
+        const jaLido = cacheLinksDoLead[String(url)];
+        if (!jaLido?.text) return true;
+        leiturasLinks[url] = { status: "lido", text: jaLido.text, reaproveitado: true };
+        linksReaproveitados++;
+        return false;
+      });
+      if (links.length) {
+        const limiteLink = await verificarLimiteLeituraVisual(organizationId);
+        const cabem = Number.isFinite(limiteLink.restante) ? links.slice(0, Math.max(0, limiteLink.restante)) : links;
+        if (cabem.length) {
+          const { leituras } = await lerLinksDaConversa(cabem, organizationId, { deadlineTs: Date.now() + 20000 });
+          Object.assign(leiturasLinks, leituras || {});
+          const lidos = Object.values(leituras || {}).filter(l => l?.status === "lido").length;
+          if (lidos) await registrarConsumoLeituraVisual(organizationId, lidos);
+        }
       }
+    } catch (erroLink) {
+      console.warn("[direciona] leitura de link da importação falhou:", erroLink?.message || erroLink);
     }
-  } catch (erroLink) {
-    console.warn("[direciona] leitura de link da importação falhou:", erroLink?.message || erroLink);
-  }
+  };
+
+  await Promise.all([lerVisuaisDaImportacao(), lerLinksDaImportacao()]);
+
   prep.leiturasLinks = leiturasLinks;
   prep.linksLidos = Object.values(leiturasLinks).filter(l => l?.status === "lido").length;
   prep.leiturasVisuais = leiturasVisuais;

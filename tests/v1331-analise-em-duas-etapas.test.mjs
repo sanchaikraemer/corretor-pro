@@ -39,11 +39,21 @@ function mock(chamadas) {
 
 const cerebro = { corretorNome: "Corretor Sanchai", metodo: "Método do corretor.", tom: "Tom do corretor." };
 
-// ── 1. v1332: LIGADO virou o padrão; desligar continua sendo um comando só ──────────────────
+// ── 1. v1346: DESLIGADO voltou a ser o padrão; ligar continua sendo um comando só ───────────
+//
+// A v1332 tinha ligado as duas etapas por padrão. Isso dobra a espera do corretor (são duas
+// conversas com o modelo grande, uma esperando a outra) — e foi ligado SEM medir, o que está
+// registrado no próprio evals/assinatura-do-prompt.json. Em 21/08/2026 o dono reclamou da demora
+// ("está demorando MUITO! DEMAIS!!!") e o padrão voltou pro estado que foi medido: uma chamada.
+// O modo continua inteiro, a um comando de distância — e é ele que este arquivo testa.
 {
+  const chamadasPadrao = [];
+  await analyzeWithBrain({ lead: { clientName: "Cliente" }, timeline, openai: mock(chamadasPadrao), cerebroConfig: cerebro });
+  assert.equal(chamadasPadrao.length, 1, "o padrão é uma chamada só — o corretor não pode esperar duas");
+
   const chamadas = [];
-  const r = await analyzeWithBrain({ lead: { clientName: "Cliente" }, timeline, openai: mock(chamadas), cerebroConfig: cerebro });
-  assert.equal(chamadas.length, 2, "o padrão passou a ser entender primeiro, escrever depois");
+  const r = await analyzeWithBrain({ lead: { clientName: "Cliente" }, timeline, openai: mock(chamadas), cerebroConfig: cerebro, etapas: "2" });
+  assert.equal(chamadas.length, 2, "com etapas=2, é entender primeiro e escrever depois");
   assert.equal(r.messages.a, RESPOSTA.mensagens.recomendada);
 
   const chamadasDesligado = [];
@@ -115,8 +125,11 @@ const cerebro = { corretorNome: "Corretor Sanchai", metodo: "Método do corretor
 // ── 5. O modo novo é ligável sem publicar código, e o painel sabe pedir ─────────────────────
 {
   const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
-  assert.match(pipeline, /String\(etapas \?\? process\.env\.DIRECIONA_ANALISE_ETAPAS \?\? "2"\)\.trim\(\) === "2"/,
-    "ligado por padrão na v1332; desliga por parâmetro ou por variável de ambiente");
+  // v1346 — o padrão voltou pra "1" (uma chamada). O modo continua ligável sem publicar código:
+  // DIRECIONA_ANALISE_ETAPAS=2 na hospedagem, ou o parâmetro etapas na chamada (é assim que o
+  // painel administrativo pede a medição do modo novo na bateria).
+  assert.match(pipeline, /String\(etapas \?\? process\.env\.DIRECIONA_ANALISE_ETAPAS \?\? "1"\)\.trim\(\) === "2"/,
+    "desligado por padrão na v1346; liga por parâmetro ou por variável de ambiente");
   assert.match(pipeline, /rota: "analise-mensagens"/, "a etapa que escreve registra o próprio custo");
 
   const rota = fs.readFileSync(new URL("../api/diagnostico.js", import.meta.url), "utf8");

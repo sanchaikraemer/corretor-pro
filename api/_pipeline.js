@@ -5439,7 +5439,24 @@ Responda somente com JSON válido no formato solicitado.`;
   // pedindo a mesma coisa — o estado atual já é ruim, e esperar medição virou desculpa pra não
   // mexer. Entender primeiro e escrever depois passa a ser o padrão. Desligar é imediato e sem
   // publicar código: DIRECIONA_ANALISE_ETAPAS=1 na hospedagem.
-  const duasEtapas = String(etapas ?? process.env.DIRECIONA_ANALISE_ETAPAS ?? "2").trim() === "2";
+  // v1346 — VOLTOU A SER UMA CHAMADA SÓ, POR PADRÃO.
+  //
+  // "reanálise e importação estão demorando MUITO! DEMAIS!!!" (dono, 21/08/2026, 11h41, com o print
+  // da barra em 50%). A causa é minha e tem nome: na v1332 eu liguei o modo de DUAS ETAPAS como
+  // padrão. São duas conversas com o modelo grande, uma esperando a outra — a leitura completa
+  // primeiro, as três mensagens depois. O tempo de espera é somado; foi por isso que o próprio
+  // aviso da tela passou a dizer "de 1 a 2 minutos".
+  //
+  // E o pior: liguei SEM MEDIR. Está escrito no registro da bateria (evals/assinatura-do-prompt.json)
+  // que a comparação ficou devendo. Ou seja: dobrei a espera dele em troca de uma melhora que nunca
+  // foi comprovada. Volta pro estado que FOI medido (156/191, pedido único), que é também o estado
+  // que ele já usava — agora somado a tudo o que entrou depois e não depende de etapa nenhuma: o
+  // fichário determinístico, o estado comercial e a conferência das três mensagens.
+  //
+  // O modo de duas etapas continua existindo e a um passo de distância: DIRECIONA_ANALISE_ETAPAS=2
+  // nas variáveis da Vercel liga de volta, sem publicar nada. Se um dia a bateria mostrar que ele
+  // entrega mais, aí sim ele volta a ser o padrão — com número na mão.
+  const duasEtapas = String(etapas ?? process.env.DIRECIONA_ANALISE_ETAPAS ?? "1").trim() === "2";
 
   const blocoPisoDeForma = `PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE. O Cérebro decide o QUE dizer, o TOM e QUAL
 saudação usar em cada faixa de horário; se ele definir faixas próprias, são as dele que valem, não

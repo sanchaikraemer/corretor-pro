@@ -64,8 +64,12 @@ await analyzeWithBrain({
   cerebroConfig: { corretorNome: "Corretor Sanchai", metodo: "Regra do corretor.", tom: "Tom do corretor." }
 });
 
-// v1332 — duas etapas viraram o padrão; a voz do corretor precisa chegar na que ESCREVE.
-assert.equal(chamadas.length, 2);
+// v1346 — a análise voltou a ser UMA chamada por padrão: o modo de duas etapas (v1332) dobrava a
+// espera do corretor e tinha sido ligado sem medir. Ele continua disponível por variável de
+// ambiente. Por isso a contagem aqui não crava mais o número — o que este teste guarda vale
+// igual nos dois modos.
+// A voz do corretor precisa chegar na chamada que ESCREVE — que é a última, em qualquer modo.
+assert.ok(chamadas.length >= 1);
 const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
 const pedido = chamadas.map(c => c.messages.find(m => m.role === "user")?.content || "").join("\n");
 

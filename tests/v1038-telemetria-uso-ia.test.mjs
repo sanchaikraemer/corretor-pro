@@ -141,9 +141,12 @@ try {
     // v1331 — no modo padrão a análise é uma chamada só, e registra um evento só. Quando o modo de
     // duas etapas for ligado, a etapa que escreve registra o dela na rota "analise-mensagens" (o
     // código está em api/_pipeline.js e é conferido em tests/v1331-analise-em-duas-etapas).
+    // v1346 — a análise voltou a ser uma chamada por padrão (o modo de duas etapas dobrava a
+    // espera do corretor e tinha sido ligado sem medir). Com uma chamada, um evento de custo.
+    // Quando o modo de duas etapas é ligado, a etapa que escreve registra o dela na rota
+    // "analise-mensagens" — isso é conferido em tests/v1331-analise-em-duas-etapas.
     const eventos = global.__eventosAnalise || [];
-    assert.equal(eventos.length, 2, "as duas etapas da análise precisam aparecer no custo");
-    assert.ok(eventos.some(e => e.rota === "analise-mensagens"), "a etapa que escreve registra o dela");
+    assert.equal(eventos.length, 1, "a análise padrão é uma chamada e registra um evento de custo");
     const porRota = Object.fromEntries(eventos.map(e => [e.rota, e]));
     const evento = porRota["analise"];
     assert.ok(evento, "a etapa de leitura precisa registrar uso de IA na rota 'analise'");
