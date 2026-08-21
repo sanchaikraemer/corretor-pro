@@ -25,7 +25,9 @@ import {
 import {
   LIMITE_ENVIO_BYTES,
   fraseDoCorte,
-  planejarConteudoDoZip
+  planejarConteudoDoZip,
+  escolherVisuaisDoZip,
+  VISUAL_KEEP_RE
 } from './enxugar-zip.js?v=__VERSION__';
 import {
   formatarTamanhoArquivo,
@@ -103,11 +105,12 @@ async function slimZipKeepingTextAndAudio(file, onProgress, opcoes = {}){
   const entries = [];
   zip.forEach((path, entry)=>{ if(!entry.dir) entries.push([path, entry]); });
 
-  // Imagem, vídeo e documento saem sempre (nunca entram na análise). Do que sobra, o texto é
-  // obrigatório e o áudio passa pela escolha da v1270 — ver js/enxugar-zip.js.
+  // v1353 — vídeo continua saindo sempre (o app não lê vídeo). O texto é obrigatório, o áudio
+  // passa pela escolha da v1270 e a foto/PDF pela da v1353 — ver js/enxugar-zip.js.
   const uteis = entries.filter(([path]) => KEEP_RE.test(path));
   const textos = uteis.filter(([path]) => /\.txt$/i.test(path));
-  const audios = uteis.filter(([path]) => !/\.txt$/i.test(path));
+  const visuais = uteis.filter(([path]) => VISUAL_KEEP_RE.test(path));
+  const audios = uteis.filter(([path]) => !/\.txt$/i.test(path) && !VISUAL_KEEP_RE.test(path));
 
   let txt = "";
   try{ if(textos[0]) txt = await textos[0][1].async("string"); }catch(_){ }
@@ -124,7 +127,14 @@ async function slimZipKeepingTextAndAudio(file, onProgress, opcoes = {}){
     bytesTexto: textos.reduce((soma, [, entry]) => soma + tamanhoDaEntrada(entry), 0)
   });
   const audiosQueVao = new Set(plano.manter);
-  const selecionadas = uteis.filter(([path]) => /\.txt$/i.test(path) || audiosQueVao.has(path));
+  // v1353 — foto e PDF entram DEPOIS do texto e do áudio: o que já funcionava não perde espaço.
+  const planoVisuais = escolherVisuaisDoZip({
+    txt,
+    visuais: visuais.map(([path, entry]) => ({ caminho: path, bytes: tamanhoDaEntrada(entry) })),
+    bytesJaUsados: plano.resumo?.bytesEstimados || 0
+  });
+  const visuaisQueVao = new Set(planoVisuais.manter);
+  const selecionadas = uteis.filter(([path]) => /\.txt$/i.test(path) || audiosQueVao.has(path) || visuaisQueVao.has(path));
 
   const newZip = new JSZip();
   let kept=0;
@@ -143,7 +153,7 @@ async function slimZipKeepingTextAndAudio(file, onProgress, opcoes = {}){
 
   const blob = await newZip.generateAsync({type:"blob", compression:"STORE"});
   const slim = new File([blob], file.name.replace(/\.zip$/i,"")+"-enxuto.zip", {type:"application/zip"});
-  return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size, plano };
+  return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size, plano, planoVisuais };
 }
 
 // v1132 — convite que aparece na análise de quem ainda não configurou a Inteligência Comercial.
