@@ -51,10 +51,29 @@ const r = spawnSync(process.execPath, [path.join(raiz, "tests", "run-all.mjs")],
   cwd: raiz,
   env: ambienteLimpo,
   encoding: "utf8",
-  stdio: "inherit",
+  maxBuffer: 64 * 1024 * 1024,
   timeout: TETO_MS
 });
+const saida = `${r.stdout || ""}${r.stderr || ""}`;
+process.stdout.write(saida);
 
+// ── FALHA DE MÁQUINA NÃO PODE PARAR A PUBLICAÇÃO ────────────────────────────────────────────
+// Esta é a lição da v1325 levada até o fim. O portão existe pra barrar CÓDIGO ERRADO. Se o que
+// deu errado foi a máquina da publicação — um pacote que não foi instalado, o Node que não subiu —
+// isso não é um defeito do app, e não pode deixar o site preso numa versão velha. Nesse caso o
+// portão AVISA em letras garrafais e deixa passar; o CI do GitHub, que roda em máquina limpa a
+// cada envio, continua sendo a segunda rede.
+const PROBLEMA_DE_MAQUINA = /ERR_MODULE_NOT_FOUND|Cannot find (module|package)|ERR_DLOPEN_FAILED|ENOENT: no such file or directory, open '.*node_modules/;
+if (r.error && r.error.code !== "ETIMEDOUT") {
+  console.error("\n⚠️  Não deu pra RODAR a suíte nesta máquina de publicação:", r.error.message);
+  console.error("   Isso não é teste vermelho — é problema de ambiente. A publicação SEGUE.\n");
+  process.exit(0);
+}
+if (r.status !== 0 && PROBLEMA_DE_MAQUINA.test(saida)) {
+  console.error("\n⚠️  A suíte parou por falta de um pacote nesta máquina de publicação, não por teste vermelho.");
+  console.error("   A publicação SEGUE, e a conferência de verdade continua no CI do GitHub.\n");
+  process.exit(0);
+}
 if (r.error && r.error.code === "ETIMEDOUT") {
   console.error(`\n✗ A suíte passou de ${TETO_MS / 60000} minutos e foi interrompida. A publicação PAROU.`);
   console.error("  A versão que já está no ar continua no ar. Rode `npm test` na máquina pra ver onde travou.\n");

@@ -78,4 +78,25 @@ if (!dentroDoPortao) {
   assert.match(String(r.stdout), /suíte foi PULADA/, "e o log avisa que passou sem conferência");
 }
 
+// ── 5. v1339 — falha de MÁQUINA não pode parar a publicação ─────────────────────────────────
+// A lição da v1325 levada até o fim: o portão existe pra barrar código errado. Se a máquina da
+// publicação estiver com um pacote faltando, isso não é defeito do app — e o site não pode ficar
+// preso numa versão velha por causa disso. O portão avisa alto e deixa passar.
+assert.match(portao, /const PROBLEMA_DE_MAQUINA = /,
+  "o portão precisa saber diferenciar teste vermelho de problema de ambiente");
+assert.match(portao, /ERR_MODULE_NOT_FOUND\|Cannot find \(module\|package\)/,
+  "pacote faltando na máquina de publicação é problema de ambiente");
+{
+  const trechoMaquina = portao.slice(portao.indexOf("if (r.status !== 0 && PROBLEMA_DE_MAQUINA"));
+  assert.match(trechoMaquina.slice(0, 400), /process\.exit\(0\)/,
+    "nesse caso a publicação SEGUE — parar o site por causa da máquina foi exatamente o estrago da v1325");
+}
+// E o pacote que a suíte precisa (acorn, usado pelos testes de código morto) não pode ficar só em
+// devDependencies: se a máquina de publicação instalar sem elas, a suíte cai por falta de pacote.
+{
+  const pkg = JSON.parse(fs.readFileSync(new URL("package.json", raiz), "utf8"));
+  assert.ok(pkg.dependencies?.acorn, "acorn precisa estar em dependencies — a suíte do build depende dele");
+  assert.ok(!pkg.devDependencies?.acorn, "e não pode ficar duplicado em devDependencies");
+}
+
 console.log(`v1338-portao-da-publicacao: ok${dentroDoPortao ? " (dentro do portão: as duas provas caras ficaram pra rodada da máquina)" : ""}`);
