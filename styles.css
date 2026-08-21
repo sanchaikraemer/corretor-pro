@@ -1669,3 +1669,29 @@ body.cpio-aberto{overflow:hidden}
    transcrição de áudio ou o salvamento de conversas estão indisponíveis. */
 .cp1293-aviso{display:block!important;margin:0 0 10px!important;padding:10px 12px!important;border:1px solid var(--risco)!important;border-radius:12px!important;background:rgba(255,98,88,.10)!important;color:var(--risco)!important;font-size:12.5px!important;font-weight:800!important;line-height:1.45!important}
 .cp1293-aviso[hidden]{display:none!important}
+
+/* ============================================================================================
+   v1345 — CARREGAMENTO CENTRALIZADO NA TELA, NÃO NA COLUNA DA ESQUERDA.
+
+   Print do dono (21/08/2026, 09h50): a rodinha de "Carregando os leads..." aparecia jogada pra
+   esquerda numa janela larga. Ela sempre esteve centralizada — só que dentro da PRIMEIRA COLUNA
+   da Home (a da lista), que ocupa ~866px de um espaço útil de ~1240px. Durante o carregamento a
+   segunda coluna ("Seu mês") ainda está vazia, então sobra um buraco à direita e o conjunto fica
+   visivelmente torto: no print, rodinha em x=743 numa área cujo centro real é x=902.
+
+   Enquanto o aviso de carregamento estiver na tela, a Home vira UMA coluna só — e aí o centro do
+   aviso e o centro da área de conteúdo passam a ser o mesmo ponto. Quando os leads chegam, o aviso
+   sai do DOM e a grade volta ao normal sozinha: ninguém precisa lembrar de tirar classe nenhuma.
+
+   POR QUE ESTA REGRA MORA NO FIM DO ARQUIVO E LEVA !important:
+   existem SETE blocos definindo as colunas de `.home-grid` neste CSS, quatro deles com !important,
+   e um escrito como `#home .home-grid` — que pesa mais do que qualquer regra escrita só com
+   classes. As duas primeiras tentativas desta correção foram atropeladas exatamente por ele: é a
+   armadilha que o CLAUDE.md descreve desde a v1078 ("o bloco do desktop, que manda em #home").
+   Por isso a regra aparece duas vezes aqui, no fim do arquivo: a versão com `#home` na frente
+   ganha do bloco do desktop, e a sem `#home` cobre o caso de a lista ser desenhada fora da tela
+   inicial. Se um dia uma regra nova voltar a atropelar isto, o teste da v1345 fica vermelho —
+   ele confere o resultado NA TELA, num navegador de verdade, não o texto do CSS.
+   ============================================================================================ */
+#home .home-grid:has(.cp-loading-leads){grid-template-columns:minmax(0,1fr)!important}
+.home-grid:has(.cp-loading-leads){grid-template-columns:minmax(0,1fr)!important}

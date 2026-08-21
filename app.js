@@ -3205,7 +3205,22 @@ function renderBotoesHome(){
       /* v942 — lista compacta dos leads do dia (1 coluna, sem quebra lateral) */
       .cp-hoje-list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:8px}
       /* Desktop: 1 linha (nome · produto · barra · dias) via grid-areas. */
-      .cp-hoje-row{width:100%;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.7fr) 240px 42px;grid-template-areas:"nm pr bar dd";column-gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+      /* v1345 — A COLUNA DA DIREITA TINHA 42px PRA UM TEXTO DE 97px.
+         Print do dono (21/08/2026, 09h52): o número de mensagens e o "atendido há 8d" apareciam
+         fora de enquadramento, embolados um no outro. A causa foi minha, na v1332: até ali essa
+         coluna mostrava só "há 8d" (~35px) e 42px bastavam; a v1332 pôs a palavra na frente
+         ("atendido há" / "falou há") pra o número parar de enganar — e ninguém alargou a coluna.
+         Como o texto é alinhado à direita, o excesso vazava PRA ESQUERDA, por cima do número da
+         barra. Medido no navegador: "atendido há 100d" precisa de 97px. Agora são 104px, com a
+         folga que o pior caso pede. */
+      .cp-hoje-row{width:100%;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.7fr) 240px 104px;grid-template-areas:"nm pr bar dd";column-gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+      /* Entre o celular e a tela cheia (tablet, notebook pequeno, janela do navegador reduzida) a
+         barra de 240px + a data espremiam o NOME do cliente a ponto de sobrar quase nada pra ele —
+         e o nome é o que importa na lista. Nessa faixa a barra encolhe primeiro. */
+      @media(min-width:561px) and (max-width:1199px){
+        .cp-hoje-row{grid-template-columns:minmax(0,1.15fr) minmax(0,.6fr) 150px 104px;column-gap:10px}
+        .cp-hoje-row .chr-track{width:95px}
+      }
       .cp-hoje-row:last-child{border-bottom:0}
       .cp-hoje-row:hover{background:rgba(255,255,255,.03)}
       .cp-hoje-row .chr-nm{grid-area:nm;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -4899,6 +4914,16 @@ function cp704Css(){
       .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:var(--acao);font-weight:950}
       .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
+      /* v1345 — as duas últimas mensagens trocadas, no espaço vazio da ficha (pedido do dono). */
+      .cp1345-ultimas{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:8px}
+      .cp1345-tit{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
+      .cp1345-msg{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.035);border-left:3px solid rgba(255,255,255,.18)}
+      /* A fala do cliente ganha a cor de "ação" pra dar pra ver de relance quem falou por último. */
+      .cp1345-msg.do-cliente{border-left-color:var(--acao);background:var(--acao-soft)}
+      .cp1345-msg b{font-size:11px;font-weight:900;color:var(--soft);letter-spacing:.01em}
+      .cp1345-msg.do-cliente b{color:var(--acao)}
+      /* Duas linhas no máximo: a ficha não pode virar o histórico. */
+      .cp1345-msg span{font-size:13px;line-height:1.45;color:rgba(237,246,248,.92);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
       .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-msg-item.cp704-msg-copiada{border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.12)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:#fff}.cp704-msg-alerta{grid-column:1/-1;border:1px solid var(--risco-line,rgba(255,98,88,.45));background:var(--risco-soft,rgba(255,98,88,.10));border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.45;color:var(--risco)}.cp704-msg-alerta b{font-weight:950}.cp704-msg-item.cp704-msg-suja{border-color:var(--risco-line,rgba(255,98,88,.45))}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:var(--acao-line);color:var(--acao)}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:var(--risco)}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:var(--risco)!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:var(--acao);border-color:var(--acao-line)}
@@ -5299,6 +5324,44 @@ function cp704Css(){
     ].filter(r=>cp704Text(r[1]));
     return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
   }
+  // ─── v1345 — AS DUAS ÚLTIMAS MENSAGENS TROCADAS, DENTRO DA FICHA ──────────────────────────
+  //
+  // Pedido do dono (21/08/2026), com o print e um círculo vermelho no espaço vazio embaixo de
+  // "Última análise / Última mensagem": ele quer ver ali as duas últimas mensagens da conversa,
+  // sem precisar abrir o histórico. É o contexto que faz a sugestão de resposta fazer sentido.
+  //
+  // Só entra mensagem TROCADA de verdade: observação que ele mesmo registrou (visita, ligação,
+  // nota) fica de fora — aquilo é anotação dele, não é o cliente falando nem ele respondendo.
+  function cp1345UltimasMensagens(lead, quantas = 2){
+    const msgs = Array.isArray(lead?.recentMessages) ? lead.recentMessages : [];
+    const trocadas = msgs.filter(m => {
+      if(!m || !String(m.text || "").trim()) return false;
+      const src = String(m.source || "");
+      if(src === "manual" || src === "corretor-pro-manual") return false;
+      const tp = String(m.type || "");
+      return !["atendimento","nota","ligacao","visita","presencial","observacao_manual","proposta"].includes(tp);
+    });
+    return trocadas.slice(-quantas);
+  }
+  function cp1345UltimasMensagensHTML(lead){
+    const ultimas = cp1345UltimasMensagens(lead, 2);
+    if(!ultimas.length) return "";
+    const linhas = ultimas.map(m => {
+      const doCliente = (typeof cpMensagemEhDoCliente === "function") ? cpMensagemEhDoCliente(lead, m) : false;
+      const quem = doCliente ? (String(lead?.name || "Cliente").trim().split(/\s+/)[0] || "Cliente") : "Você";
+      const quando = [String(m.date || "").trim(), String(m.time || "").trim()].filter(Boolean).join(" ");
+      const texto = String(m.text || "").replace(/\s+/g, " ").trim();
+      return `<div class="cp1345-msg${doCliente ? " do-cliente" : ""}">
+        <b>${escapeHtml(quem)}${quando ? ` · ${escapeHtml(quando)}` : ""}</b>
+        <span>${escapeHtml(texto)}</span>
+      </div>`;
+    }).join("");
+    return `<div class="cp1345-ultimas">
+      <div class="cp1345-tit">${ultimas.length === 1 ? "Última mensagem da conversa" : "Últimas mensagens da conversa"}</div>
+      ${linhas}
+    </div>`;
+  }
+
   function cp704Msgs(lead){
     const a=lead?.analysis||{};
     const m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
@@ -5800,6 +5863,7 @@ function renderLeadFoco(lead){
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
           ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`${ultimaMsgRotulo} — ${ultimaMsgEm}`)}</div>`:''}
           ${mostrarLinhaMensagem?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgConversaEm}`)}</div>`:''}
+          ${cp1345UltimasMensagensHTML(lead)}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>

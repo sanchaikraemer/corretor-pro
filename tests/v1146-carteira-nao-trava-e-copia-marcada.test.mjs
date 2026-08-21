@@ -38,8 +38,16 @@ const persistencia = fs.readFileSync(new URL("../api/_persistence.js", import.me
 
 // ── 2. Servidor: o que foi calculado agora tem tempo de ser gravado ───────────────────────────
 {
-  assert.match(persistencia, /const STATS_CACHE_WRITE_BUDGET_MS = 6000;/,
-    "o orçamento de gravação subiu (com o teto de leituras, o volume por carga é pequeno e conhecido)");
+  // v1345 — 6000ms voltou pra 2500ms. O raciocínio da v1146 continua certo (o volume por carga é
+  // conhecido e pequeno), só que o teto de leituras caiu de 150 pra 60 na mesma versão: são no
+  // máximo ~3 rodadas de 20 gravações, que cabem em 2,5s. E o corretor não pode esperar 6 segundos
+  // por gravação de CACHE — a resposta dele já está pronta antes disso (reclamação de 21/08/2026:
+  // "está demorando demais pra carregar"). O que este teste guarda é o que importa: existe um teto
+  // de tempo, e ele é aplicado.
+  assert.match(persistencia, /const STATS_CACHE_WRITE_BUDGET_MS = \d+;/,
+    "o orçamento de gravação existe");
+  assert.ok(Number(/const STATS_CACHE_WRITE_BUDGET_MS = (\d+);/.exec(persistencia)[1]) <= 3000,
+    "e não pode fazer o corretor esperar mais que uns poucos segundos por gravação de cache");
   // E continua sendo um TETO: banco lento não segura a resposta pra sempre.
   const contador = { n: 0 };
   const lento = () => new Promise(r => setTimeout(() => { contador.n++; r({ error: null }); }, 400));
