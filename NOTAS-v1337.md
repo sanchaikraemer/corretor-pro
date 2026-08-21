@@ -1,49 +1,49 @@
-# v1337 — o app deixa de achar que todo corretor está no horário de Brasília
+# v1337 — fatos primeiro, IA depois
 
-## De onde veio
+## O problema
 
-Item da auditoria de arquitetura: o fuso horário estava escrito na unha dentro do código — 35 vezes
-só no arquivo principal do app, mais 16 nas rotas do servidor. Sempre "Brasília".
+O sistema já tinha vários detectores bons no fichário, mas eles eram chamados como peças separadas.
+Isso deixava a leitura, a redação e a conferência das mensagens dependentes de blocos soltos e ainda
+obrigava a IA a redescobrir respostas óbvias em conversas longas.
 
-Funciona pra quem atende no horário de Brasília (Sul, Sudeste, Nordeste) e **mente pra todo o resto
-do país**: em Manaus e Cuiabá o app mostrava uma hora a mais; em Rio Branco, duas.
+Também havia uma falha objetiva nas promessas do corretor: uma promessa composta como "te mando o
+valor, as fotos e as condições" podia ser considerada cumprida porque QUALQUER entrega aparecia logo
+depois, mesmo que o valor continuasse faltando.
 
-E isso não é detalhe de tela. Hora errada é:
+## O que mudou
 
-- **saudação errada dentro da mensagem sugerida** — a IA recebia "são 19h" e escrevia "Boa noite"
-  pra um cliente que, no Acre, ainda estava às 17h da tarde;
-- **"hoje" errado na virada do dia** — o que muda a fila do "Fazer agora", o "atendido há X dias" e
-  os compromissos do dia.
+1. **Estado comercial determinístico único**
+   - `montarEstadoComercialDeterministico()` calcula uma vez os fatos da conversa.
+   - o mesmo estado alimenta o fichário, as duas etapas da IA e a conferência final das mensagens.
+   - não muda regra comercial e não reescreve mensagem; só organiza fatos.
 
-## O que mudou na tela
+2. **Tópicos já respondidos pelo cliente**
+   - respostas explícitas passam a ser classificadas em tópicos como dormitórios, finalidade,
+     pronto/planta, faixa de valor, financiamento, entrada, permuta, garagem, metragem, prazo e decisor.
+   - cada tópico guarda a fala original e a data como prova.
+   - pergunta do cliente não vira preferência por inferência.
+   - o fichário passa a avisar claramente quais perguntas genéricas não devem ser repetidas.
 
-No **Cérebro** apareceu **"Seu fuso horário"**, com quatro opções:
+3. **Promessas conferidas pelo conteúdo**
+   - promessa composta só é fechada quando todos os itens identificáveis aparecem depois.
+   - oferta condicionada à escolha do cliente (ex.: “o que prefere receber primeiro?”) não vira pendência automática.
+   - o fichário mostra o que ainda está faltando (valor, fotos, planta, condições etc.).
 
-- Brasília / Sul / Nordeste (−3h) — **é o padrão, quem não mexer continua exatamente como estava**
-- Manaus / Cuiabá / Boa Vista (−4h)
-- Rio Branco / Acre (−5h)
-- Fernando de Noronha (−2h)
+4. **Conferência das três mensagens**
+   - se a IA volta a perguntar genericamente algo já respondido (ex.: "2 ou 3 dormitórios?"), o
+     sistema gera aviso de qualidade.
+   - pergunta de aprofundamento continua permitida (ex.: "os 3 precisam ser suítes?").
 
-Embaixo, o app mostra o que o seu aparelho está dizendo ("Detectado pelo seu aparelho: ..."), só
-como conferência.
+## Proteções
 
-## O que NÃO mudou — de propósito
+- o miolo do prompt NÃO foi alterado; a assinatura da bateria continua igual.
+- nenhuma mensagem é reescrita por regra local.
+- nenhum catálogo de outra conversa entrou no prompt.
+- nenhuma regra nova de venda foi inventada.
 
-**O relógio do celular não decide nada.** Isso já deu problema aqui antes: celular Android
-reinstalado volta marcando o fuso de Londres, e corretor viajando levava o "hoje" junto. Por isso o
-aparelho é só uma sugestão na tela; quem manda é o que está salvo no Cérebro, e o padrão continua
-Brasília.
+## Testes desta versão
 
-## Por baixo
-
-- o fuso salvo vale nos dois lados: nas telas do app e na análise feita no servidor (é ele que
-  define a hora atual e a saudação certa que a IA recebe);
-- a conta da meia-noite era cravada ("meia-noite em Brasília = 03:00 em Londres") em três lugares.
-  Agora ela é calculada de verdade a partir do fuso escolhido, e funciona até no dia em que um país
-  adianta o relógio;
-- fuso que o navegador não reconhece volta pro padrão em vez de quebrar toda a formatação de data.
-
-## Conferido na tela
-
-Aberto no Chromium, em celular (390px) e computador (1280px): o seletor aparece com a mesma cara
-dos outros campos do Cérebro, com o texto da opção cabendo inteiro na largura do celular.
+- novo: `tests/v1337-estado-comercial-deterministico.test.mjs`;
+- compatibilidade conferida em v1317, v1323, v1329, v1332, v1334 e v1335;
+- bateria estrutural das 32 conversas canônicas continua verde;
+- porteiro do prompt v1327 continua verde, confirmando que o miolo não mudou.
