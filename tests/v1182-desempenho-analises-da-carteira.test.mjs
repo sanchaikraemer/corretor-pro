@@ -13,7 +13,13 @@ const DIA = 86400000;
 const MIN = 60000;
 
 function montar({ atividadeLocal = () => 0, inicioMes = 0 } = {}) {
-  const fonte = app.match(/function cpDesempenhoMetricas\(items, all, periodo\)\{[\s\S]*?\n\}/)[0];
+  // v1340 — cpDesempenhoMetricas passou a chamar cpResultadoDasSugestoes (medição de "as sugestões
+  // estão funcionando?"), que usa cpMensagemEhDoCliente. As três vêm juntas.
+  const fonte = [
+    app.match(/function cpMensagemEhDoCliente\(l, m\)\{[\s\S]*?\n\}/)[0],
+    app.match(/function cpResultadoDasSugestoes\(todos, dentro\)\{[\s\S]*?\n\}/)[0],
+    app.match(/function cpDesempenhoMetricas\(items, all, periodo\)\{[\s\S]*?\n\}/)[0]
+  ].join("\n");
   globalThis.__atividadeLocal = atividadeLocal;
   return eval(`
     const cpInicioMesMs = () => ${inicioMes};
@@ -21,6 +27,7 @@ function montar({ atividadeLocal = () => 0, inicioMes = 0 } = {}) {
     const cpTempoAppSegundosHoje = () => 0;
     const cpTempoAppMediaSegundos7d = () => 0;
     const produtosLabel = () => "";
+    const cpNomeCorretorCerebro = () => "";
     ${fonte}
     ({ cpDesempenhoMetricas });
   `).cpDesempenhoMetricas;

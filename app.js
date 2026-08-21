@@ -1896,6 +1896,25 @@ function scoreRankingHoje(l){
 // Dias desde a última mensagem da timeline. somenteCliente=true conta só mensagens da
 // PRÓPRIA cliente (ignora corretor/empresa e anotação manual). Calcula client-side a partir
 // do recentMessages que o lead já carrega — funciona mesmo com lead em cache.
+// v1340 — a regra de "esta mensagem é do CLIENTE?" saiu de dentro de _diasDesdeMsg pra cá, porque
+// agora ela tem dois usos: a contagem de dias parados e a medição do resultado das sugestões
+// (cpResultadoDasSugestoes). Uma cópia da regra em cada lugar ia divergir no primeiro ajuste.
+function cpMensagemEhDoCliente(l, m){
+  const autor = String(m?.author||"").trim();
+  if(!autor) return false;
+  const nome = String(l?.name||"").trim().toLowerCase().split(/\s+/)[0] || "";
+  const corretorNome = (typeof cpNomeCorretorCerebro === "function" ? cpNomeCorretorCerebro() : "").toLowerCase().split(/\s+/)[0] || "";
+  const business = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
+  const autorLower = autor.toLowerCase();
+  const ehCorretor = (corretorNome && autorLower.includes(corretorNome)) || business.test(autor);
+  const ehCliente = nome ? autorLower.includes(nome) : !ehCorretor;
+  if(!ehCliente) return false;
+  // Anotação do próprio corretor não é fala do cliente, mesmo entrando na timeline dele.
+  const tp = String(m?.type||""); const src = String(m?.source||"");
+  if(src==="manual" || ["atendimento","nota","ligacao","visita","presencial","print-whatsapp"].includes(tp)) return false;
+  return true;
+}
+
 function _diasDesdeMsg(l, somenteCliente){
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
   if(!msgs.length) return null;
@@ -1909,16 +1928,7 @@ function _diasDesdeMsg(l, somenteCliente){
   const business = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
   let maxTs = 0;
   for(const m of msgs){
-    if(somenteCliente){
-      const autor = String(m.author||"").trim();
-      if(!autor) continue;
-      const autorLower = autor.toLowerCase();
-      const ehCorretor = (corretorNome && autorLower.includes(corretorNome)) || business.test(autor);
-      const ehCliente = nome ? autorLower.includes(nome) : !ehCorretor;
-      if(!ehCliente) continue;
-      const tp = String(m.type||""); const src = String(m.source||"");
-      if(src==="manual" || ["atendimento","nota","ligacao","visita","presencial","print-whatsapp"].includes(tp)) continue;
-    }
+    if(somenteCliente && !cpMensagemEhDoCliente(l, m)) continue;
     const ts = m && m.iso ? Date.parse(m.iso) : NaN;
     if(!isNaN(ts) && ts > maxTs) maxTs = ts;
   }
@@ -11567,6 +11577,46 @@ function cpTempoAppSegundosPeriodo(iniMs, fimMs){
   }
   return Math.round(total);
 }
+// ─── v1340 — O RESULTADO REAL DA CONDUÇÃO ────────────────────────────────────────────────────
+//
+// Item da auditoria de arquitetura, e a pergunta que nenhuma tela respondia: as sugestões
+// FUNCIONAM? O app media quantas sugestões o corretor copiou — e parava aí. Copiar não é
+// resultado; resultado é o cliente VOLTAR A FALAR depois.
+//
+// Agora dá pra medir, com o que já está guardado: cada cópia de sugestão fica registrada com
+// data (evento "mensagem_copiada" ou o atendimento com de:"copiar_msg"), e a resposta do cliente
+// está na conversa. Se existe fala do CLIENTE depois da última sugestão copiada, aquele cliente
+// voltou a falar.
+//
+// O QUE ESTE NÚMERO NÃO É: não é taxa de conversão, e não mede quem respondeu por outro caminho.
+// Ele só enxerga o que passou pelo app — e a resposta do cliente só chega aqui depois que a
+// conversa é reimportada. Isso está escrito na tela, embaixo do número, porque número sem essa
+// ressalva vira mentira.
+function cpResultadoDasSugestoes(todos, dentro){
+  const r = { enviadas: 0, responderam: 0, semResposta: 0 };
+  for(const l of (Array.isArray(todos) ? todos : [])){
+    const eventos = l?.analysis?.aprendizado?.eventos || [];
+    let ultimaCopia = 0;
+    for(const e of eventos){
+      const t = Date.parse(e?.quando || "");
+      if(!Number.isFinite(t) || !dentro(t)) continue;
+      const ehCopia = e?.evento === "mensagem_copiada"
+        || (e?.evento === "contato_manual" && e?.detalhes?.de === "copiar_msg");
+      if(ehCopia && t > ultimaCopia) ultimaCopia = t;
+    }
+    if(!ultimaCopia) continue;
+    r.enviadas++;
+    let respondeu = false;
+    for(const m of (Array.isArray(l?.recentMessages) ? l.recentMessages : [])){
+      const t = Date.parse(m?.iso || "");
+      if(!Number.isFinite(t) || t <= ultimaCopia) continue;
+      if(cpMensagemEhDoCliente(l, m)){ respondeu = true; break; }
+    }
+    if(respondeu) r.responderam++; else r.semResposta++;
+  }
+  return r;
+}
+
 function cpDesempenhoMetricas(items, all, periodo){
   const ativos = Array.isArray(items) ? items : [];
   const todos = Array.isArray(all) ? all : ativos;
@@ -11656,6 +11706,7 @@ function cpDesempenhoMetricas(items, all, periodo){
     analisesFeitas: Math.max(typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoffPeriodo, fimPeriodo) : 0, analisesCarteira),
     importacoes: Math.max(typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoffPeriodo, fimPeriodo) : 0, importacoesCarteira),
     propostas: propostas.sort((a,b)=>b.ts-a.ts),
+    resultadoSugestoes: cpResultadoDasSugestoes(todos, dentro),
   };
 }
 window.cpDesempenhoMetricas = cpDesempenhoMetricas;
@@ -11715,7 +11766,31 @@ function cpRenderDesempenhoMetricas(items, all){
       <button type="button" class="cp-met-mes-chip${vendoMesPassado ? "" : " ativo"}" onclick="cpDesempenhoTrocarMes('atual')">Este mês</button>
       <button type="button" class="cp-met-mes-chip${vendoMesPassado ? " ativo" : ""}" onclick="cpDesempenhoTrocarMes('anterior')">${escapeHtml(nomeMes(iniAnt))[0].toUpperCase()+escapeHtml(nomeMes(iniAnt)).slice(1)}</button>
     </div>`;
-  box.innerHTML = seletorMes + rows + propostasRow + `
+  // v1340 — o número que faltava: das sugestões que você mandou, em quantas o cliente voltou a falar.
+  const sug = m.resultadoSugestoes || { enviadas:0, responderam:0, semResposta:0 };
+  const pct = sug.enviadas ? Math.round((sug.responderam / sug.enviadas) * 100) : 0;
+  const blocoSugestoes = `
+    <div class="cp-met-tags-row">
+      <small>As sugestões estão funcionando?</small>
+      ${sug.enviadas ? `
+      <div style="display:flex;align-items:baseline;gap:10px;margin:6px 0 2px">
+        <b style="font-size:26px;font-weight:950;color:var(--acao)">${sug.responderam} de ${sug.enviadas}</b>
+        <span style="font-size:13px;color:var(--soft)">clientes voltaram a falar (${pct}%)</span>
+      </div>
+      <div style="font-size:13px;color:var(--soft);line-height:1.5">
+        ${sug.semResposta === 0
+          ? "Todos responderam depois da sua mensagem."
+          : `${sug.semResposta === 1 ? "1 ainda não respondeu" : `${sug.semResposta} ainda não responderam`} depois da sua última mensagem ${escapeHtml(rotuloMes)}.`}
+      </div>` : `
+      <div style="font-size:13px;color:var(--soft);line-height:1.5;margin-top:4px">
+        Ainda não dá pra medir ${escapeHtml(rotuloMes)}: nenhuma sugestão foi copiada pelo botão do app neste período.
+      </div>`}
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:8px">
+        Conta só o que passou pelo app: sugestão copiada no botão, e a resposta do cliente aparecendo
+        na conversa depois que você reimporta. Quem respondeu por outro caminho não entra.
+      </div>
+    </div>`;
+  box.innerHTML = seletorMes + rows + propostasRow + blocoSugestoes + `
     <div class="cp-met-tags-row">
       <small>Empreendimentos negociados</small>
       <div class="cp-met-taglist">${tagsHtml}</div>
