@@ -148,24 +148,7 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 .resumo-dia .item.morno .num{color:var(--timing)}
 .resumo-dia .item.frio .num{color:var(--dados)}
 @media(max-width:899px){.resumo-dia{grid-template-columns:repeat(2,1fr);gap:6px}.resumo-dia .num{font-size:18px}}
-/* Top 3 prioritários */
-.top3-mini{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.025));border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;position:relative;transition:.15s}
-.top3-mini:hover{border-color:rgba(255,98,88,.32)}
-.top3-mini.sel{border:1px solid var(--accent-line);background:var(--accent-soft);box-shadow:none}
-.top3-mini .pos{position:absolute;top:8px;right:10px;font-size:18px;font-weight:950;color:var(--muted);opacity:.4}
-.top3-mini.sel .pos{color:var(--lime);opacity:1}
-.top3-mini .nome{font-size:15px;font-weight:950;color:var(--text);margin-bottom:3px;padding-right:24px;line-height:1.2;word-break:break-word}
-.top3-mini .prod{font-size:11px;color:var(--muted);margin-bottom:6px}
-.top3-mini .stats{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
-.top3-mini .pct-mini{padding:1px 8px;border-radius:999px;font-size:11px;font-weight:950;color:var(--on-accent);background:var(--lime)}
-.top3-mini .pct-mini.warn{background:var(--lime);color:var(--on-accent)}
-.top3-mini .pct-mini.cold{background:var(--risco);color:#fff}
-.top3-mini .dias-mini{background:rgba(255,98,88,.14);color:var(--lime);padding:1px 8px;border-radius:999px;font-size:10px;font-weight:950}
-.top3-mini .motivo-mini{font-size:11px;color:var(--soft);line-height:1.4;opacity:.85}
 /* Redesign cards: avatar com inicial + barra de progresso (estilo do mock) */
-@media(max-width:899px){
-  .top3-mini{padding:10px;min-width:78vw;max-width:78vw;flex-shrink:0;scroll-snap-align:start}
-}
 /* v942 — sempre 1 coluna (leads um embaixo do outro, sem quebra lateral). Antes ia pra 2/3
    colunas em telas largas e a 2ª coluna estourava a lateral, cortando os nomes (pedido do dono). */
 /* v1076 — listas dos cards da Home no modelo aprovado: tabela "com próximo passo". */
@@ -504,15 +487,14 @@ html[data-theme="dark"] .logo{background-image:url("/logo-cp.png?v=__VERSION__")
 .card{border-radius:18px}
 .mini,
 .lead,
-.top3-mini,
 .empty,
 .resumo-dia,
 .menu-card{
   background:var(--surface-soft);
   border-color:var(--line);
 }
-.top3-mini:hover,.menu-card:hover{border-color:var(--accent-line)}
-.top3-mini.sel,.msg-tab.active,.nav.active{background:var(--accent-soft);border-color:var(--accent-line)}
+.menu-card:hover{border-color:var(--accent-line)}
+.msg-tab.active,.nav.active{background:var(--accent-soft);border-color:var(--accent-line)}
 input,textarea,select{
   background:var(--input) !important;
   color:var(--text) !important;
@@ -544,8 +526,6 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
 .tag.hot{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
 
 .resumo-dia .item.sel{background:var(--accent-soft);border-color:var(--accent)}
-.top3-mini .pct-mini,.top3-mini .pct-mini.warn{background:var(--accent);color:#fff}
-.top3-mini .dias-mini{background:var(--accent-soft);color:var(--accent)}
 
 /* Sidebar e topo desktop */
 .sidebar{
@@ -987,8 +967,6 @@ body.lead-foco-aberto #home .home-page-heading,
 body.lead-foco-aberto #home #statusStamp,
 body.lead-foco-aberto #home #resumoDia,
 body.lead-foco-aberto #home #cpMesResumo,
-body.lead-foco-aberto #home #top3Area,
-body.lead-foco-aberto #home #filaPrioridade,
 body.lead-foco-aberto #home #homeRight{
   display: none !important;
 }
@@ -1062,7 +1040,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   border-color:var(--cp687-hairline)!important;
   box-shadow:var(--cp687-shadow-soft);
 }
-.card:hover,.menu-card:hover,.top3-mini:hover{box-shadow:var(--cp687-shadow);border-color:rgba(255,98,88,.28)!important}
+.card:hover,.menu-card:hover{box-shadow:var(--cp687-shadow);border-color:rgba(255,98,88,.28)!important}
 .sb-item{min-height:48px;position:relative;overflow:hidden}.sb-item::after{content:"";position:absolute;inset:0;background:rgba(255,98,88,.08);opacity:0;transition:opacity .18s var(--cp687-ease);pointer-events:none}.sb-item:hover::after,.sb-item.active::after{opacity:1}.sb-item.active{background:var(--accent-soft)!important;color:#fff!important;border-color:rgba(255,98,88,.30)!important;box-shadow:inset 3px 0 0 var(--accent)!important}.sb-item.active .ic{color:#fff}.sb-brand{transition:transform .16s var(--cp687-ease),background .16s var(--cp687-ease),border-color .16s var(--cp687-ease)}.sb-brand:hover{transform:translateY(-1px);background:rgba(255,255,255,.035)}
 .cp-topbar{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(151,197,211,.10)}
 .cp-search input,.ui677-search-wrap>input{transition:border-color .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),background .16s var(--cp687-ease)}
@@ -1088,11 +1066,10 @@ body{overflow-x:hidden;}
 .cp687-screen-polish{animation:none!important;}
 .card:hover,
 .menu-card:hover,
-.top3-mini:hover,
 .resumo-dia .item:hover,
 button:hover,
 .sb-brand:hover{transform:none!important;}
-button,.card,.menu-card,.top3-mini,.resumo-dia .item,.sb-brand{
+button,.card,.menu-card,.resumo-dia .item,.sb-brand{
   transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease,opacity .14s ease!important;
 }
 .cp-topbar{transform:none!important;will-change:auto!important;}

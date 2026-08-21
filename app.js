@@ -2097,23 +2097,6 @@ function motivoCurto(l){
 }
 
 
-function ehEsfriando(l){
-  if(!isNaN(lembreteTs(l))) return false;
-  const dias = Number(l.daysSinceLastInteraction) || 0;
-  const tipo = String(l?.analysis?.tipoRetomada || "").toLowerCase();
-  const interesse = String(l?.analysis?.diagnostico?.interesse || "").toLowerCase();
-  return dias >= 3 && dias <= 7 && (tipo === "quente-fechar" || interesse === "alto" || interesse === "quente");
-}
-
-// Badges agora são só ÍCONES (pedido do dono): 💸 sumiço após preço, ❄️ esfriando, 🏠 permuta.
-// O título (tooltip) explica o que cada um significa ao passar o mouse.
-function tagEsfriandoHTML(){
-  return `<span title="Parando — sem resposta há alguns dias" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">⏳</span>`;
-}
-function tagPermutaHTML(){
-  return `<span title="Envolve permuta/troca de imóvel" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">🏠</span>`;
-}
-
 function ehPermuta(l){ return l.analysis?.permuta === true; }
 // Nome dos empreendimentos do lead (vários, se houver). Texto cru — escapar no uso.
 function produtosLabel(l){
@@ -2758,9 +2741,6 @@ const GRUPOS_HOME = {
 function renderListasHome(ordenados){
   const foco = qs("#leadFocoArea");
   if(!foco) return;
-  // Esconde os containers antigos (top3/fila).
-  const area = qs("#top3Area"); if(area){ area.style.display = "none"; area.innerHTML = ""; }
-  const fila = qs("#filaPrioridade"); if(fila){ fila.style.display = "none"; fila.innerHTML = ""; }
 
   // Classifica por prioridade real de atendimento: agir agora ≠ maior chance de venda.
   const grupos = { "acao-hoje": [], "retomar-cuidado": [], "boa-sem-urgencia": [], "pode-aguardar": [], "baixa-prioridade": [], "tratado-hoje": [] };
@@ -3133,6 +3113,8 @@ function renderBotoesHome(){
           ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpMostrarMaisFilaHoje()">Mostrar mais ${Math.min(restam, CP1278_FILA_PASSO)} · faltam ${restam}</button></div>`
           : "");
   };
+  // Atenção ao nome: top3Html é a LISTA DO DIA da Home (a que você vê), herança de nome do
+  // bloco "Top 3" que a v1347 removeu. Vários testes ancoram nesse nome, por isso ficou.
   let top3Html;
   if(dose.length){
     // Lista compacta: um lead embaixo do outro, 1 coluna, sem quebra lateral (opção 1 + lista
@@ -3672,45 +3654,16 @@ window.renderBotoesHome = renderBotoesHome;
 
 
 
-function renderTop3(top3){
-  const area = qs("#top3Area");
-  if(!area) return;
-  if(!top3 || !top3.length){ area.style.display = "none"; area.innerHTML = ""; return; }
-  const selId = state.lead?.id ? String(state.lead.id) : null;
-  area.style.display = "grid";
-  area.innerHTML = top3.map((l, i) => {
-    const idStr = String(l.id||"");
-    const ehSel = selId && idStr === selId;
-    const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d" : "—";
-    const contatado = ehContatadoHoje(l);
-    const badgeContato = contatado ? `<span title="Contato registrado hoje" style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:9px;font-weight:950;color:var(--acao);background:var(--acao-soft);border:1px solid var(--acao);letter-spacing:.04em">✓ CONTATADO HOJE</span>` : "";
-    const alerta = !contatado && ehEsfriando(l) ? tagEsfriandoHTML() : "";
-    const novo = "";
-    const permuta = ehPermuta(l) ? tagPermutaHTML() : "";
-    return `
-      <div class="top3-mini ${ehSel?"sel":""}" data-id="${escapeHtml(idStr)}" onclick='abrirLeadTop3(${JSON.stringify(idStr)})'>
-        <div class="pos">${i+1}º</div>
-        <div class="nome">${escapeHtml(l.name||"Cliente")}</div>
-        <div class="prod">${escapeHtml(produtosLabel(l))}</div>
-        <div class="stats">
-          <span class="pct-mini" title="Prioridade de atendimento">${escapeHtml(prioridadeTituloCurto(l))}</span>
-          <span class="dias-mini">${escapeHtml(dias)} parado</span>
-          ${novo}
-          ${permuta}
-          ${alerta}
-          ${badgeContato}
-        </div>
-        <div class="motivo-mini">${escapeHtml(motivoCurto(l))}</div>
-      </div>`;
-  }).join("");
-}
-
-async function abrirLeadTop3(id){
-  if(!id) return;
-  return abrirLead(id);
-}
-window.abrirLeadTop3 = abrirLeadTop3;
-window.renderTop3 = renderTop3;
+// v1347 — O "TOP 3 DO DIA" FOI REMOVIDO POR SER CÓDIGO MORTO.
+// Ele desenhava três cartõezinhos no topo da Home, ordenados pela régua antiga (compromisso
+// vencido > retorno de hoje > negociação). Só que a Home passou a montar a própria lista
+// (renderListasHome + a lista do dia), e a partir daí NADA voltou a preencher state.top3 —
+// então renderTop3 nunca mais rodou e os dois contêineres (#top3Area, #filaPrioridade) viviam
+// escondidos à força por cinco lugares diferentes do código. Interruptor com o fio cortado.
+// Junto saíram os enfeites que só existiam lá dentro (⏳ esfriando, 🏠 permuta) e o atalho de
+// teclado 1/2/3, que procurava cartões que não existem mais desde então.
+// A régua antiga continua viva onde ela APARECE: a ordem da tela de Relatório e a coluna extra
+// da planilha exportada. Não foi mexida.
 
 // v928 — parseValorVenda/formatBRL removidos: só existiam pra alimentar cálculos de "vendas
 // fechadas" (valor/mês), tudo removido (o dono não marca Vendido no app — só Arquivar).
@@ -4054,8 +4007,6 @@ async function _processarDashboard(data){
       try{ renderHomeRight([]); }catch(_){}
     } else {
       renderHomeRight([]);
-      const area = qs("#top3Area"); if(area){ area.style.display = "none"; area.innerHTML = ""; }
-      const fila = qs("#filaPrioridade"); if(fila){ fila.style.display = "none"; fila.innerHTML = ""; }
       // Empty state: nenhum lead ainda
       const foco = qs("#leadFocoArea");
       if(foco){
@@ -4607,7 +4558,6 @@ export async function abrirLead(id, options={}){
     const histAbertoAntes = !!histAntes && !histAntes.hidden;
     renderLeadFoco(state.lead);
     if(histAbertoAntes){ const hist = qs("#cp704HistCard"); if(hist) hist.hidden = false; }
-    if(state.top3) renderTop3(state.top3);
     // v754: abrir/atualizar detalhe do lead não deve reconstruir a lista inteira.
     // Isso deixava cliques e expansão de abas lentos, principalmente com base grande.
     show("home", { skipLoad:true, skipHistory:true });
@@ -4735,7 +4685,7 @@ function renderHistoricoContatos(lead){
 //
 // Causa: abrir um lead liga o MODO DETALHE (ui667ModoDetalheLead) — isso põe a classe
 // lead-foco-aberto no body E um display:none!important direto no cabeçalho da Home, nos cartões
-// de números, no top3 e na coluna lateral. Excluir apenas zerava state.lead/focoLeadId e chamava
+// de números e na coluna lateral. Excluir apenas zerava state.lead/focoLeadId e chamava
 // show("home"), e NADA disso desliga o modo detalhe: a Home voltava a ser a tela ativa, mas com
 // tudo escondido, e a área do lead ainda com o cliente que acabou de ser apagado. Da parte do
 // corretor, é uma tela morta.
@@ -9976,13 +9926,6 @@ document.addEventListener("keydown", (e) => {
   if(state.focoLeadId || state.lead?.id) return;
   // / foca busca
   if(e.key === "/"){ const b = qs("#buscaGlobal"); if(b){ e.preventDefault(); b.focus(); } return; }
-  // 1, 2, 3 selecionam o card do Top 3
-  if(e.key === "1" || e.key === "2" || e.key === "3"){
-    const idx = Number(e.key) - 1;
-    const card = qsa(".top3-mini")[idx];
-    if(card){ e.preventDefault(); card.click(); }
-    return;
-  }
   // h volta pra home, m menu, z zip, c cérebro
   const mapTeclas = { h: "home", m: "menu", z: "zip", c: "cerebro" };
   if(mapTeclas[e.key]){ e.preventDefault(); show(mapTeclas[e.key]); }
@@ -11271,8 +11214,6 @@ function ui631LeadRow(l, actionLabel, tone){
 
 renderListasHome = function(ordenados){
   const foco=qs('#leadFocoArea'); if(!foco) return;
-  const area=qs('#top3Area'); if(area){area.style.display='none';area.innerHTML='';}
-  const fila=qs('#filaPrioridade'); if(fila){fila.style.display='none';fila.innerHTML='';}
   const ativos=(ordenados||[]).filter(leadEhAtivo);
   const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
   const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
@@ -11315,7 +11256,7 @@ renderListasHome = function(ordenados){
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
-  const alvos=[qs("#home .home-page-heading"),qs("#resumoDia"),qs("#top3Area"),qs("#filaPrioridade"),qs("#homeRight")].filter(Boolean);
+  const alvos=[qs("#home .home-page-heading"),qs("#resumoDia"),qs("#homeRight")].filter(Boolean);
   for(const el of alvos){
     if(ativo) el.style.setProperty("display","none","important");
     else el.style.removeProperty("display");
@@ -13453,8 +13394,6 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
 
   window.renderListasHome=function(ordenados){
     const foco=document.querySelector('#leadFocoArea'); if(!foco) return;
-    const area=document.querySelector('#top3Area'); if(area){area.style.display='none';area.innerHTML='';}
-    const fila=document.querySelector('#filaPrioridade'); if(fila){fila.style.display='none';fila.innerHTML='';}
     const ativos=(ordenados||[]).filter(typeof leadEhAtivo==='function'?leadEhAtivo:()=>true);
     const grupos=cp788Grupos(ativos);
     const fontePrioridades=grupos.agora.length?grupos.agora:grupos.programados;
