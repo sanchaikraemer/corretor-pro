@@ -5576,9 +5576,22 @@ function coletarAudiosReferenciados(messages, audioFiles) {
 // mensagem realmente cita, e só os MAIS RECENTES até o teto da importação — numa conversa longa, a
 // peça que vale comercialmente é a última, não a de dois anos atrás (e material velho é justamente
 // o que traz preço vencido, ver v1305).
-export function montarPlanoVisuais(messagesAll, visualFiles, maxArquivos = 6) {
+// v1333 — E O QUE FICOU PRA TRÁS PASSA A SER LIDO NA PRÓXIMA.
+//
+// Print do dono em 20/08/2026, na conversa de um cliente antigo: "a IA não leu 11 fotos, 2 PDFs e
+// 2 áudios desta conversa". A mídia TINHA vindo no arquivo (ele sempre exporta com mídia) — o que
+// acontecia é que só os 6 mais recentes viravam candidatos, importação após importação, sempre os
+// MESMOS 6. O resto nunca era lido, nem reimportando dez vezes. Entre os esquecidos estava a
+// proposta em PDF que a própria análise citava.
+//
+// Agora o plano PULA o que este cliente já teve lido (a lista chega em `jaLidos`) e desce a fila
+// dos citados de trás pra frente. Cada reimportação avança no que falta em vez de repetir o que já
+// foi feito — e o teto por importação subiu de 6 para 10, com o teto DIÁRIO por conta continuando
+// a ser quem segura o custo de verdade.
+export function montarPlanoVisuais(messagesAll, visualFiles, maxArquivos = 6, jaLidos = []) {
   const nomes = (Array.isArray(visualFiles) ? visualFiles : []).map(normalizeName).filter(arquivoVisualLegivel);
   if (!nomes.length || maxArquivos <= 0) return { citados: [], paraLer: [] };
+  const lidos = new Set((Array.isArray(jaLidos) ? jaLidos : []).map(normalizeName).filter(Boolean));
   const citadosEmOrdem = [];
   for (const msg of (Array.isArray(messagesAll) ? messagesAll : [])) {
     // O nome vem do campo `anexos` (guardado na leitura do TXT) e, como reserva, do próprio texto
@@ -5586,7 +5599,9 @@ export function montarPlanoVisuais(messagesAll, visualFiles, maxArquivos = 6) {
     const ref = encontrarArquivoCitado((msg?.anexos || []).join(" "), nomes) || encontrarArquivoCitado(msg?.text, nomes);
     if (ref && !citadosEmOrdem.includes(ref)) citadosEmOrdem.push(ref);
   }
-  return { citados: citadosEmOrdem, paraLer: citadosEmOrdem.slice(-maxArquivos) };
+  // Os que faltam ler, do mais recente pro mais antigo; os já lidos voltam do cache, sem custo.
+  const pendentes = citadosEmOrdem.filter(nome => !lidos.has(normalizeName(nome)));
+  return { citados: citadosEmOrdem, paraLer: pendentes.slice(-maxArquivos) };
 }
 
 function montarPlanoJanelaAudios(messagesAll, audioFiles, audioWindowDays) {
@@ -5668,7 +5683,12 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   const midiasOcultas = (txt.match(/<[^>]*(oculta|omitida|omitido|ocultado|omitted|hidden)[^>]*>/gi) || []).length;
   const exportadoSemMidia = midiasOcultas > 0 && audioFiles.length === 0;
 
-  const planoVisuais = montarPlanoVisuais(messagesAll, visualFiles, options.maxVisuais ?? maxVisuaisPorImportacao());
+  const planoVisuais = montarPlanoVisuais(
+    messagesAll,
+    visualFiles,
+    options.maxVisuais ?? maxVisuaisPorImportacao(),
+    Object.keys(options.visuaisJaLidos || {})
+  );
   const audioFilesRelevantes = planoAudio.audioFilesTimeline;
   const audiosParaTranscrever = planoAudio.audiosParaTranscrever;
   const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
@@ -5713,7 +5733,13 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   const leadPreliminarCalculado = guessLeadData(messages, corretorNomePreliminar, txtName);
   // v1307 — os links que o CORRETOR mandou nesta conversa (os mais recentes). Link de cliente não
   // entra: o servidor não abre endereço mandado por desconhecido.
-  const linksParaLer = linksDoCorretorNaConversa(messages, corretorNomePreliminar, leadPreliminarCalculado);
+  const linksParaLer = linksDoCorretorNaConversa(
+    messages,
+    corretorNomePreliminar,
+    leadPreliminarCalculado,
+    MAX_LINKS_POR_IMPORTACAO,
+    Object.keys(options.linksJaLidos || {})
+  );
   return {
     txtFile: txtName,
     messages,
@@ -5911,7 +5937,11 @@ export function limiteLeituraVisualDoDiaTeste() {
 // longa, o que interessa comercialmente são as peças recentes.
 export function maxVisuaisPorImportacao() {
   const n = Number(process.env.DIRECIONA_MAX_VISUAIS_IMPORT);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 6;
+  // v1333 — de 6 para 10. Com o plano pulando o que já foi lido (e não repetindo os mesmos 6 a
+  // cada importação), o teto por importação virou o passo com que a fila anda: com 6, uma conversa
+  // com 13 arquivos precisava de três importações; com 10, de duas. Quem segura o custo continua
+  // sendo o teto DIÁRIO por conta, que é conferido antes de gastar.
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 10;
 }
 
 // v1307 — O LINK QUE O CORRETOR MANDA PASSA A SER LIDO.
@@ -6084,7 +6114,10 @@ export async function baixarPaginaComSeguranca(url, { fetchImpl = null, lookupIm
 }
 
 // Os links mandados pelo corretor, do mais recente pro mais antigo, sem repetir.
-export function linksDoCorretorNaConversa(timeline, corretorNome = "", lead = {}, max = MAX_LINKS_POR_IMPORTACAO) {
+// v1333 — mesma correção da imagem/PDF: link já lido deste cliente sai da fila, e a importação
+// seguinte pega os que ainda faltam em vez de repetir sempre os dois mais recentes.
+export function linksDoCorretorNaConversa(timeline, corretorNome = "", lead = {}, max = MAX_LINKS_POR_IMPORTACAO, jaLidos = []) {
+  const lidos = new Set((Array.isArray(jaLidos) ? jaLidos : []).map(u => String(u || "").trim()).filter(Boolean));
   const achados = [];
   for (const m of (Array.isArray(timeline) ? timeline : [])) {
     if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
@@ -6097,7 +6130,8 @@ export function linksDoCorretorNaConversa(timeline, corretorNome = "", lead = {}
       if (!achados.includes(url)) achados.push(url);
     }
   }
-  return achados.slice(-max).reverse();
+  const pendentes = achados.filter(url => !lidos.has(url));
+  return pendentes.slice(-max).reverse();
 }
 
 // Tira o texto visível de uma página HTML. Sem biblioteca: script/estilo fora, tags viram espaço.
