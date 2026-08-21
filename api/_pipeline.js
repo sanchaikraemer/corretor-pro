@@ -1615,6 +1615,175 @@ export function clienteSemCapitalHojeComPrazo(timeline, corretorNome = "", lead 
   return { ...fala, prazo, obraNaConversa };
 }
 
+// ─── v1335 — O CATÁLOGO QUE O APP APRENDE SOZINHO, SEM TABELA NENHUMA ────────────────────────
+//
+// O dono, 20/08/2026, quando eu sugeri que ele colasse a tabela de produtos no Cérebro: *"não
+// adianta botar tabela, porque esse produto não é pra mim como comercial duma construtora que tem
+// x produtos. Esse sistema é pra corretores de imóveis, eles podem ter mais de cem produtos na
+// carteira deles, nos sites de venda... Aí você vai dar mais trabalho pro corretor em vez de
+// ajudar ele a resolver."* Ele está certo, e a saída estava na frente: o corretor JÁ manda o
+// material do produto todo dia — a arte com o preço, o PDF do empreendimento, o link da seleção.
+// Desde a v1306/v1307 o app LÊ esse material; ele só jogava fora depois de usar naquela conversa.
+//
+// Agora o que foi lido vira CATÁLOGO da conta: nome do produto, o que estava escrito e QUANDO. Sem
+// digitar nada.
+//
+// PARA QUE SERVE — E PARA QUE NÃO SERVE. O catálogo NÃO entra no pedido que escreve as três
+// mensagens, e não pode entrar. Foi exatamente uma fonte assim que fez a IA escrever pra Vanessa o
+// nome de um empreendimento que nunca apareceu na conversa dela ("nós nem falamos de Evolute",
+// dono, 20/08) — a mesma doença que a v1301 tratou tirando os casos de outros clientes ("tira as
+// duas fontes"). O catálogo serve pra UMA coisa: quando a conferência das sugestões (v1332) acha
+// um nome que não está na conversa, ela agora sabe distinguir invenção pura de produto REAL da
+// carteira aparecendo na conversa errada — e o aviso na tela diz qual dos dois é.
+//
+// Três travas, porque material de venda vem misturado com dado de cliente:
+//   • nome de pessoa, telefone, e-mail, documento e endereço saem antes de guardar (a mesma
+//     limpeza do aprendizado, v1326);
+//   • trecho que fala de UM cliente ("proposta para", "para o cliente") não vira catálogo;
+//   • só material que O CORRETOR mandou entra: o que o cliente mandou é do cliente.
+const CATALOGO_CHAVE = "corretor-catalogo";
+const MAX_ITENS_CATALOGO = 40;
+const MAX_CHARS_ITEM_CATALOGO = 320;
+const _TRECHO_DE_CLIENTE = /\b(proposta (para|pra|de)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ]|para o cliente|do cliente|comprador|CPF|assinatura)\b/i;
+const _LINHA_COM_PRODUTO = /\b(apartamento|apto|casa|sobrado|cobertura|studio|terreno|lote|sala|loja|dormit[óo]rio|su[íi]te|m²|m2|metros|entrada|parcela|financia|permuta|entrega|R\$)/i;
+
+// Nome do produto: o que o próprio texto lido chama de empreendimento/edifício, ou a primeira
+// linha curta em maiúsculas — que é como as artes de venda escrevem o nome.
+export function nomeDeProdutoNoMaterial(texto) {
+  const t = String(texto || "").replace(/\r/g, "");
+  const porPalavra = /\b(?:[Ee]mpreendimento|[Ee]dif[íi]cio|[Rr]esidencial|[Cc]ondom[íi]nio)\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}\d'’-]*(?:\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}\d'’-]*){0,2})/u.exec(t);
+  if (porPalavra) return porPalavra[1].trim();
+  for (const linha of t.split(/\n+/).slice(0, 4)) {
+    const limpa = linha.replace(/[*_#>-]/g, " ").trim();
+    if (limpa.length < 3 || limpa.length > 40) continue;
+    if (!/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(limpa)) continue;
+    if (/\d{2}\/\d{2}/.test(limpa)) continue;
+    const palavras = limpa.split(/\s+/);
+    if (palavras.length > 4) continue;
+    return limpa;
+  }
+  return "";
+}
+
+// Transforma o que foi lido (imagem, PDF, link) em item de catálogo — ou devolve null.
+export function itemDeCatalogoDoMaterial(texto, { origem = "", quando = "", aliases = [] } = {}) {
+  const bruto = String(texto || "").trim();
+  if (bruto.length < 40) return null;
+  if (_TRECHO_DE_CLIENTE.test(bruto)) return null;
+  const limpo = limparAprendizadoDeOutroCliente(bruto, { arquivo: origem }, aliases);
+  if (!limpo || limpo.length < 40) return null;
+  const linhas = limpo.split(/(?<=[.;!?])\s+|\n+/).map(l => l.trim()).filter(l => l && _LINHA_COM_PRODUTO.test(l));
+  if (!linhas.length) return null;
+  const nome = nomeDeProdutoNoMaterial(bruto);
+  return {
+    nome: nome || "(material sem nome de empreendimento)",
+    texto: _trechoCurto(linhas.join(" "), MAX_CHARS_ITEM_CATALOGO),
+    quando: String(quando || "").slice(0, 10),
+    origem: String(origem || "").slice(0, 80)
+  };
+}
+
+// Junta o que chegou agora ao que já existia, sem duplicar e sem deixar crescer pra sempre.
+export function fundirCatalogo(catalogoAtual = [], itensNovos = []) {
+  const saida = [];
+  const vistos = new Set();
+  for (const item of [...(Array.isArray(itensNovos) ? itensNovos : []), ...(Array.isArray(catalogoAtual) ? catalogoAtual : [])]) {
+    if (!item || !item.texto) continue;
+    const chave = _semAcentoMinuscula(`${item.nome}|${item.texto}`).replace(/\s+/g, " ").trim();
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    saida.push({
+      nome: String(item.nome || "").slice(0, 60),
+      texto: String(item.texto || "").slice(0, MAX_CHARS_ITEM_CATALOGO),
+      quando: String(item.quando || "").slice(0, 10),
+      origem: String(item.origem || "").slice(0, 80)
+    });
+    if (saida.length >= MAX_ITENS_CATALOGO) break;
+  }
+  return saida;
+}
+
+export async function guardarNoCatalogo(organizationId, itens = []) {
+  const novos = (Array.isArray(itens) ? itens : []).filter(Boolean);
+  if (!novos.length || !organizationId) return { guardados: 0 };
+  try {
+    const { getSupabaseAdmin } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return { guardados: 0 };
+    const { data } = await supabase.from("direciona_config").select("valor")
+      .eq("chave", CATALOGO_CHAVE).eq("organization_id", organizationId).maybeSingle();
+    const atual = Array.isArray(data?.valor?.itens) ? data.valor.itens : [];
+    const fundido = fundirCatalogo(atual, novos);
+    await upsertConfigComOrganizacao(supabase, organizationId, {
+      chave: CATALOGO_CHAVE,
+      valor: { itens: fundido, atualizadoEm: new Date().toISOString() },
+      atualizado_em: new Date().toISOString()
+    });
+    return { guardados: fundido.length - atual.length };
+  } catch (_) {
+    return { guardados: 0 };
+  }
+}
+
+export async function catalogoDaConta(organizationId = ORGANIZACAO_PADRAO_LEGADA) {
+  try {
+    const { getSupabaseAdmin } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase || !organizationId) return [];
+    const { data } = await supabase.from("direciona_config").select("valor")
+      .eq("chave", CATALOGO_CHAVE).eq("organization_id", organizationId).maybeSingle();
+    return Array.isArray(data?.valor?.itens) ? data.valor.itens : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+// Os nomes de produto que a conta já viu. É SÓ ISSO que o catálogo faz hoje: dizer se o nome que
+// apareceu numa sugestão é produto de verdade deste corretor ou invenção da IA.
+export function nomesDoCatalogo(itens = []) {
+  const nomes = [];
+  for (const item of (Array.isArray(itens) ? itens : [])) {
+    const nome = String(item?.nome || "").trim();
+    if (!nome || nome.startsWith("(")) continue;
+    if (!nomes.includes(nome)) nomes.push(nome);
+  }
+  return nomes;
+}
+
+// O que ESTA importação ensinou ao catálogo. Só material que O CORRETOR mandou: arte, PDF ou link
+// que veio do cliente é do cliente, não é produto da carteira dele.
+export function itensDeCatalogoDaConversa(timeline, corretorNome = "", lead = {}, leiturasVisuais = {}, leiturasLinks = {}) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const aliases = [lead?.clientName, ...(Array.isArray(lead?.participants) ? lead.participants : [])].filter(Boolean);
+  const arquivoDoCorretor = new Map();
+  const linkDoCorretor = new Map();
+  for (const m of arr) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
+    const quando = String(m?.date || "");
+    for (const nome of [...(Array.isArray(m?.anexos) ? m.anexos : []), m?.mediaFile].filter(Boolean)) {
+      arquivoDoCorretor.set(normalizeName(nome), quando);
+    }
+    for (const url of (String(m?.text || "").match(/https?:\/\/[^\s<>"')]+/gi) || [])) {
+      linkDoCorretor.set(url.replace(/[.,;)]+$/, ""), quando);
+    }
+  }
+  const itens = [];
+  for (const [nome, leitura] of Object.entries(leiturasVisuais || {})) {
+    if (leitura?.status !== "lido" || !leitura?.text) continue;
+    const quando = arquivoDoCorretor.get(normalizeName(nome));
+    if (quando === undefined) continue;
+    const item = itemDeCatalogoDoMaterial(leitura.text, { origem: nome, quando, aliases });
+    if (item) itens.push(item);
+  }
+  for (const [url, leitura] of Object.entries(leiturasLinks || {})) {
+    if (leitura?.status !== "lido" || !leitura?.text) continue;
+    const quando = linkDoCorretor.get(String(url).replace(/[.,;)]+$/, "")) || "";
+    const item = itemDeCatalogoDoMaterial(leitura.text, { origem: url, quando, aliases });
+    if (item) itens.push(item);
+  }
+  return itens;
+}
+
 // ─── O FICHÁRIO INTEIRO, JÁ EM TEXTO PRO PEDIDO ──────────────────────────────────────────────
 export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date()) {
   const blocos = [];
@@ -2434,12 +2603,24 @@ const _MAIUSCULA_COMUM = new Set([
   "quinta", "sexta", "sabado", "domingo", "whatsapp", "sim", "nao", "certo", "perfeito"
 ]);
 
+// v1335 — devolve os nomes separados em dois montes, porque são dois defeitos diferentes:
+//   • `inventados`: não estão na conversa, não estão no Cérebro e não são produto conhecido desta
+//     conta. Isso é a IA preenchendo vazio;
+//   • `deOutraConversa`: são produto REAL da carteira (o app aprendeu do material que o próprio
+//     corretor mandou, ver o catálogo da v1335) — só que apareceram na conversa errada. Foi o caso
+//     da Vanessa, e o aviso na tela precisa dizer isso com essas palavras.
 function _nomesForaDaConversa(texto, contextoConhecido) {
   const conversa = typeof contextoConhecido === "string" ? contextoConhecido : String(contextoConhecido?.conversa || "");
   const cerebro = typeof contextoConhecido === "string" ? "" : String(contextoConhecido?.cerebro || "");
-  if (!conversa.trim()) return [];
+  if (!conversa.trim()) return { inventados: [], deOutraConversa: [] };
   const base = " " + _semAcentoMinuscula(`${conversa} ${cerebro}`).replace(/\s+/g, " ") + " ";
-  const fora = [];
+  const catalogo = new Set(
+    (typeof contextoConhecido === "string" ? [] : (Array.isArray(contextoConhecido?.catalogo) ? contextoConhecido.catalogo : []))
+      .flatMap(nome => _semAcentoMinuscula(nome).split(/\s+/))
+      .filter(p => p.length > 2)
+  );
+  const inventados = [];
+  const deOutraConversa = [];
   _PALAVRA_MAIUSCULA.lastIndex = 0;
   let m;
   while ((m = _PALAVRA_MAIUSCULA.exec(String(texto || ""))) !== null) {
@@ -2447,9 +2628,10 @@ function _nomesForaDaConversa(texto, contextoConhecido) {
     const chave = _semAcentoMinuscula(nome);
     if (_MAIUSCULA_COMUM.has(chave)) continue;
     if (base.includes(` ${chave}`)) continue;
-    if (!fora.includes(nome)) fora.push(nome);
+    const monte = catalogo.has(chave) ? deOutraConversa : inventados;
+    if (!monte.includes(nome)) monte.push(nome);
   }
-  return fora;
+  return { inventados, deOutraConversa };
 }
 
 // "investir" e "investimento" são a mesma pergunta com outra terminação — por isso a comparação é
@@ -2474,7 +2656,8 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
     if (_ABERTURA_CONTANDO_DIAS.test(abertura)) motivos.push("abre contando os dias parados");
     if (PROMESSA_VAZIA.test(texto) && !texto.includes("?")) motivos.push("promete enviar e não pergunta nada");
     const forasteiros = _nomesForaDaConversa(texto, contextoConhecido);
-    if (forasteiros.length) motivos.push(`cita "${forasteiros.slice(0, 2).join('", "')}", que não aparece nesta conversa`);
+    if (forasteiros.inventados.length) motivos.push(`cita "${forasteiros.inventados.slice(0, 2).join('", "')}", que não aparece nesta conversa`);
+    if (forasteiros.deOutraConversa.length) motivos.push(`cita "${forasteiros.deOutraConversa.slice(0, 2).join('", "')}" — é produto seu, mas não foi falado com este cliente`);
     if (motivos.length) avisos.push({ qual: m.qual, motivos: [...new Set(motivos)] });
     perguntas.push({ qual: m.qual, pergunta: _perguntaFinal(texto) });
   }
@@ -5406,9 +5589,14 @@ ${revisaoSoDasMensagens}`;
     // tudo o que se sabe deste lead: a conversa inteira, as observações do corretor e o Cérebro.
     let avisosMensagens = [];
     try {
+      // v1335 — a conferência passa a conhecer os produtos REAIS desta conta (aprendidos do
+      // material que o próprio corretor mandou nas conversas, sem tabela digitada). Assim o aviso
+      // separa invenção da IA de produto certo na conversa errada. Falhou a leitura do catálogo?
+      // A conferência roda igual, só sem essa distinção.
+      const nomesConhecidos = nomesDoCatalogo(await catalogoDaConta(organizationId).catch(() => []));
       avisosMensagens = avisosDeQualidadeDasMensagens(
         [{ qual: "a", texto: msgA }, { qual: "b", texto: msgB }, { qual: "c", texto: msgC }],
-        { conversa: `${timelineTextFull}\n${observacoesManuaisTexto}`, cerebro: instrucoesCerebroTexto }
+        { conversa: `${timelineTextFull}\n${observacoesManuaisTexto}`, cerebro: instrucoesCerebroTexto, catalogo: nomesConhecidos }
       );
     } catch (erroAviso) {
       console.warn("[direciona] conferência das três mensagens falhou:", erroAviso?.message || erroAviso);
@@ -6737,6 +6925,18 @@ export async function finalizarAnaliseDaConversa(payload) {
     : null;
   analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, contextoIncremental, cerebroConfig, organizationId });
   analiseNovaTentada = true;
+
+  // v1335 — o material de venda que ESTE corretor mandou nesta conversa (arte, PDF, link já lidos
+  // acima) fica guardado como catálogo da conta. É o jeito de o app saber o que ele vende sem
+  // pedir que ele digite tabela nenhuma — e é só isso: o catálogo não entra no pedido que escreve
+  // as mensagens, ele serve pra conferência saber distinguir nome inventado de produto real.
+  // Qualquer falha aqui é silenciosa de propósito: a análise já está pronta e não pode se perder.
+  try {
+    const itensCatalogo = itensDeCatalogoDaConversa(timeline, corretorNomeGuess, lead, leiturasVisuais, leiturasLinks);
+    if (itensCatalogo.length) await guardarNoCatalogo(organizationId, itensCatalogo);
+  } catch (erroCatalogo) {
+    console.warn("[direciona] catálogo aprendido não pôde ser atualizado:", erroCatalogo?.message || erroCatalogo);
+  }
 
   // REDE DE SEGURANÇA: se a análise nova não serve (IA fora do ar, teto de análises do dia, retorno
   // sem as três mensagens), o corretor não pode FICAR SEM NADA por ter reimportado um cliente que
