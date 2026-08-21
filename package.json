@@ -6,14 +6,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",
+    "acorn": "^8.15.0",
     "esbuild": "0.25.5",
     "jszip": "3.10.1",
     "openai": "4.104.0"
   },
   "name": "corretor-pro",
-  "version": "7.1338.0",
-  "displayVersion": "1338",
-  "devDependencies": {
-    "acorn": "^8.15.0"
-  }
+  "version": "7.1339.0",
+  "displayVersion": "1339"
 }
