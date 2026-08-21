@@ -19,7 +19,9 @@ assert.match(
 );
 assert.match(
   pipeline,
-  /export function fusoDoCorretor\(config\)[\s\S]*?return "America\/Sao_Paulo";/,
+  // O nome do parâmetro mudou de `config` pra `configCerebro` quando a função foi reescrita junto do
+  // estado comercial determinístico; o que este teste guarda é o PADRÃO, não o nome do parâmetro.
+  /export function fusoDoCorretor\(config[A-Za-z]*\)[\s\S]*?return "America\/Sao_Paulo";/,
   'e o padrão, sem nada configurado, continua sendo Brasília'
 );
 // O Cérebro precisa ser carregado ANTES do relógio — senão o fuso é lido de uma variável que ainda

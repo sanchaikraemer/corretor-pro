@@ -224,6 +224,21 @@ function normalizeComparable(text = "") {
 // explícito em Agenda conta. Sem chamador desde que api/_persistence.js passou a zerar
 // confirmedAppointments incondicionalmente em toda leitura de lead.
 
+// v1339 — merge seguro das duas linhas de trabalho que chegaram a usar o número v1337.
+// O Motor Comercial determinístico precisa conviver com o fuso configurável do corretor.
+// Nunca confiamos em texto arbitrário vindo da configuração: Intl valida o identificador IANA
+// e qualquer valor ausente/inválido volta ao padrão histórico do produto (Brasília).
+export function fusoDoCorretor(configCerebro) {
+  const candidato = String(configCerebro?.fusoHorario || "").trim();
+  if (!candidato) return "America/Sao_Paulo";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidato }).format(new Date());
+    return candidato;
+  } catch (_) {
+    return "America/Sao_Paulo";
+  }
+}
+
 export function parseDateTime(date, time) {
   const [d, m, yRaw] = String(date).split("/").map(Number);
   const [hh, mm] = String(time).split(":").map(Number);
@@ -1343,15 +1358,53 @@ export function recusasDoCliente(timeline, corretorNome = "", lead = {}, agora =
 // escreveu "Posso te enviar o valor, as fotos e as condições de pagamento?" e o valor nunca foi.
 // A cliente sumiu ali mesmo. Cliente que pede informação e não recebe some.
 const _PROMESSA_DO_CORRETOR = /\b(te (envio|mando|passo|encaminho)|vou (te )?(enviar|mandar|passar|confirmar|conferir|verificar|checar)|posso te (enviar|mandar|passar)|j[áa] te (envio|mando|passo)|te (envio|mando|passo) (o|a|os|as)\b)/i;
+// Uma oferta com escolha explícita ainda depende da resposta do cliente — não é promessa assumida.
+// Ex.: “Posso te enviar fotos, valor e condições. O que você gostaria de ver primeiro?”
+// Sem esta distinção, uma pergunta de qualificação vira falsamente uma pendência do corretor.
+const _OFERTA_CONDICIONAL_DE_ENVIO = /\b(o que (?:voc[êe] )?gostaria de (?:ver|receber) primeiro|o que prefere (?:ver|receber) primeiro|prefere que eu (?:te )?(?:envie|mande|passe)|qual (?:deles?|dessas?|dessas informa[çc][õo]es) (?:voc[êe] )?prefere)\b/i;
 const _DIAS_PARA_CUMPRIR_PROMESSA = 3;
 
-function _pareceEntrega(texto) {
+// v1337 — promessa precisa ser conferida pelo CONTEÚDO prometido, não por "qualquer coisa enviada".
+// Antes, "te mando valor, fotos e condições" podia ser dado como cumprido porque depois apareceu
+// uma foto OU um número qualquer. Isso apaga justamente a pendência que explica parte do silêncio.
+const _ALVOS_DE_PROMESSA = [
+  { id: "valor", re: /\b(valor|pre[çc]o|quanto (?:fica|custa)|tabela)\b/i },
+  { id: "fotos", re: /\b(fotos?|imagens?|fachada)\b/i },
+  { id: "planta", re: /\b(planta(?: baixa)?|plantas)\b/i },
+  { id: "condicoes", re: /\b(condi[çc][õo]es|forma de pagamento|entrada|parcelas?|financiamento|simula[çc][ãa]o)\b/i },
+  { id: "material", re: /\b(material|apresenta[çc][ãa]o|folder|cat[áa]logo|pdf|documento)\b/i },
+  { id: "localizacao", re: /\b(localiza[çc][ãa]o|endere[çc]o|mapa)\b/i },
+  { id: "disponibilidade", re: /\b(disponibilidade|dispon[íi]veis|unidades? dispon[íi]veis)\b/i }
+];
+
+function _alvosDaPromessa(texto = "") {
   const t = String(texto || "");
-  if (/\[(Arquivo enviado|Imagem lida|Documento lido|Link lido|Áudio transcrito)/i.test(t)) return true;
-  if (/\(arquivo anexado\)/i.test(t)) return true;
-  if (/https?:\/\//i.test(t)) return true;
-  return valoresNaMensagem(t).length > 0;
+  return _ALVOS_DE_PROMESSA.filter(a => a.re.test(t)).map(a => a.id);
 }
+
+function _entregasDetectadas(texto = "") {
+  const t = String(texto || "");
+  const out = new Set();
+  const temArquivo = /\[(Arquivo enviado|Imagem lida|Documento lido|Link lido|Áudio transcrito)/i.test(t)
+    || /\(arquivo anexado\)/i.test(t) || /https?:\/\//i.test(t);
+  const temImagem = /\[(?:Arquivo enviado nesta mensagem: imagem|Imagem lida)/i.test(t)
+    || /\.(?:jpe?g|png|webp|heic)\b/i.test(t);
+  const temDocumento = /\[(?:Arquivo enviado nesta mensagem: documento|Documento lido)/i.test(t)
+    || /\.(?:pdf|docx?|xlsx?|pptx?)\b/i.test(t);
+  const valores = valoresNaMensagem(t);
+
+  if (valores.length || /\b(?:valor|pre[çc]o)\s*(?:é|fica|sai|:)\b/i.test(t)) out.add("valor");
+  if (temImagem && /\b(foto|imagem|fachada|segue|envio|mando)\b/i.test(t)) out.add("fotos");
+  if (/\b(planta(?: baixa)?|plantas)\b/i.test(t) && (temArquivo || temImagem || temDocumento)) out.add("planta");
+  if (/\b(condi[çc][õo]es|forma de pagamento|entrada|parcelas?|financiamento|simula[çc][ãa]o)\b/i.test(t)
+      && (/%|R\$|\b\d{1,3}\s*x\b|\b(?:entrada|parcela)\s+(?:de\s+)?(?:R\$|\d)/i.test(t)
+        || (/\bsimula[çc][ãa]o\b/i.test(t) && temArquivo))) out.add("condicoes");
+  if (temArquivo || temDocumento) out.add("material");
+  if (/\b(localiza[çc][ãa]o|endere[çc]o|mapa)\b/i.test(t) && (temArquivo || /https?:\/\//i.test(t) || /\b(?:rua|avenida|av\.|bairro)\b/i.test(t))) out.add("localizacao");
+  if (/\b(disponibilidade|dispon[íi]veis|unidades? dispon[íi]veis|temos (?:ainda )?(?:a|as|o|os)?\s*\d*)\b/i.test(t)) out.add("disponibilidade");
+  return out;
+}
+
 
 export function promessasNaoCumpridasDoCorretor(timeline, corretorNome = "", lead = {}, agora = new Date()) {
   const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
@@ -1362,20 +1415,33 @@ export function promessasNaoCumpridasDoCorretor(timeline, corretorNome = "", lea
     if (lados[i] !== "corretor") continue;
     const texto = String(arr[i]?.text || "").replace(/\s+/g, " ").trim();
     if (!texto || !_PROMESSA_DO_CORRETOR.test(texto)) continue;
+    if (_OFERTA_CONDICIONAL_DE_ENVIO.test(texto)) continue;
     const p = dataCivilDeMensagem(arr[i]);
     const diaPromessa = p?.dia ?? null;
-    let cumprida = false;
+    const alvos = _alvosDaPromessa(texto);
+    const entregues = new Set();
+    let houveEntregaGenerica = false;
     for (let j = i + 1; j < arr.length; j++) {
       if (lados[j] !== "corretor") continue;
       const dj = dataCivilDeMensagem(arr[j])?.dia ?? null;
       if (diaPromessa != null && dj != null && dj - diaPromessa > _DIAS_PARA_CUMPRIR_PROMESSA) break;
-      if (_pareceEntrega(String(arr[j]?.text || ""))) { cumprida = true; break; }
+      const depois = String(arr[j]?.text || "");
+      const detectadas = _entregasDetectadas(depois);
+      if (detectadas.size) houveEntregaGenerica = true;
+      for (const alvo of detectadas) entregues.add(alvo);
     }
+    // Quando a promessa diz O QUE seria enviado, todos os itens identificáveis precisam aparecer.
+    // Promessa genérica ("te mando") mantém o comportamento antigo: qualquer entrega concreta vale.
+    const cumprida = alvos.length
+      ? alvos.every(alvo => entregues.has(alvo))
+      : houveEntregaGenerica;
     if (cumprida) continue;
+    const faltando = alvos.filter(alvo => !entregues.has(alvo));
     abertas.push({
       data: p?.texto || "data não identificada",
       diasAtras: _diasDesde(diaPromessa, hojeDia),
-      trecho: _trechoCurto(texto, 160)
+      trecho: _trechoCurto(texto, 160),
+      ...(faltando.length ? { faltando } : {})
     });
   }
   return abertas.slice(-MAX_FICHARIO);
@@ -1615,6 +1681,118 @@ export function clienteSemCapitalHojeComPrazo(timeline, corretorNome = "", lead 
   return { ...fala, prazo, obraNaConversa };
 }
 
+// ─── v1337 — TÓPICOS COMERCIAIS QUE O CLIENTE JÁ DEFINIU ─────────────────────────────────────
+//
+// O fichário já carregava falas literais do cliente, mas uma conversa longa ainda obrigava a IA a
+// redescobrir que "3 dormitórios", "na planta pode ser" ou "até 800 mil" são respostas FECHADAS.
+// Aqui o código só classifica respostas explícitas em tópicos de venda. Não conclui intenção por
+// silêncio e sempre leva junto a fala original, para a IA poder conferir o contexto.
+const _TOPICOS_CLIENTE = [
+  { id: "finalidade", nome: "finalidade (moradia/investimento)", re: /\b(morar|moradia|uso pr[oó]prio|para investir|pra investir|quero investir|seria investimento|[ée] investimento|renda com aluguel|para alugar|pra alugar)\b/i },
+  { id: "dormitorios", nome: "quantidade de dormitórios", re: /\b(?:[1-6]|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis)\s*(?:dormit[oó]rios?|quartos?)\b/i },
+  { id: "suites", nome: "quantidade de suítes", re: /\b(?:[1-5]|uma|duas|dois|tr[eê]s|quatro|cinco)\s*su[ií]tes?\b/i },
+  { id: "momento_imovel", nome: "pronto x planta / prazo para receber", re: /\b(pronto(?: para morar)?|pronta para morar|na planta|em obra|em constru[çc][ãa]o|n[ãa]o temos pressa|n[ãa]o tenho pressa|posso esperar|podemos esperar|tenho pressa)\b/i },
+  { id: "financiamento", nome: "financiamento do saldo", re: /\b(pretendo financiar|quero financiar|vou financiar|vamos financiar|financiar o saldo|financio o saldo|com financiamento|sem financiamento|n[ãa]o quero financiar|a vista|à vista|recursos pr[oó]prios)\b/i },
+  { id: "garagem", nome: "vaga/box de garagem", re: /\b(?:[1-4]|uma|duas|dois|tr[eê]s|quatro)\s*(?:vagas?|boxes?)\b|\bbox duplo\b/i },
+  { id: "area", nome: "metragem", re: /\b\d{2,4}\s*m(?:²|2)\b/i },
+  { id: "prazo", nome: "prazo do cliente", re: /\b(n[ãa]o temos pressa|n[ãa]o tenho pressa|tenho pressa|em (?:um|dois|tr[eê]s|\d+) anos?|daqui a (?:um|dois|tr[eê]s|\d+) anos?|ano que vem)\b/i }
+];
+
+export function topicosComerciaisConfirmadosDoCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const porTopico = new Map();
+
+  for (const m of arr) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "cliente") continue;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || /^\[Arquivo enviado/i.test(texto)) continue;
+    // Classifica só os pedaços DECLARATIVOS. Assim "vocês têm no centro?" ou "dá pra financiar?"
+    // não viram preferência/condição confirmada. Se a mensagem for "Pode ser na planta. Qual o
+    // valor?", a primeira frase continua valendo.
+    const declarativo = texto.split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(x => x && !x.endsWith("?")).join(" ");
+    if (!declarativo) continue;
+    const p = dataCivilDeMensagem(m);
+    const encontrados = [];
+
+    for (const t of _TOPICOS_CLIENTE) if (t.re.test(declarativo)) encontrados.push({ id: t.id, nome: t.nome });
+
+    // Faixa de valor só é "respondida" quando a própria fala do cliente liga o número ao que pode
+    // pagar/investir. Preço que ELE apenas repete ou pergunta não vira orçamento.
+    const valores = valoresNaMensagem(declarativo);
+    if (_CLIENTE_DIZ_FAIXA.test(declarativo) || (valores.length && /\b(posso|consigo|pretendo|quero|investir|pagar|teto|or[çc]amento|limite|faixa|parcela)\b/i.test(declarativo))) {
+      encontrados.push({ id: "faixa_valor", nome: "faixa de valor/orçamento" });
+    }
+
+    // Entrada/permuta são tópicos separados de orçamento: saber o valor total não responde de onde
+    // vem a entrada, e vice-versa.
+    if (/\b(entrada|sinal|fgts)\b/i.test(declarativo) && (valores.length || /\b(tenho|consigo|dou|dar|usar)\b/i.test(declarativo))) {
+      encontrados.push({ id: "entrada", nome: "entrada disponível" });
+    }
+    if (PERMUTA_DO_CLIENTE.test(declarativo) && BEM_DE_PERMUTA.test(declarativo)) {
+      encontrados.push({ id: "permuta", nome: "bem oferecido em permuta/entrada" });
+    }
+
+    // Localização só fecha quando o cliente declara preferência/necessidade; uma pergunta como
+    // "vocês têm no centro?" não basta para cravar que centro é obrigatório.
+    if (/\b(prefiro|quero|procuro|busco|preciso|tem que ser|gostaria)\b.{0,60}\b(centro|central|bairro|regi[ãa]o|localiza[çc][ãa]o|perto|pr[oó]ximo)\b/i.test(declarativo)) {
+      encontrados.push({ id: "localizacao", nome: "localização/região" });
+    }
+
+    // Decisor só entra quando a dependência aparece expressamente na fala do cliente.
+    if (/\b(falar|conversar|ver|decidir|confirmar)\b.{0,30}\b(esposa|marido|filha|filho|fam[íi]lia|s[óo]cio|s[óo]cia)\b/i.test(declarativo)) {
+      encontrados.push({ id: "decisor", nome: "quem participa da decisão" });
+    }
+
+    for (const topico of encontrados) {
+      porTopico.set(topico.id, {
+        ...topico,
+        data: p?.texto || "data não identificada",
+        dia: p?.dia ?? null,
+        diasAtras: _diasDesde(p?.dia ?? null, hojeDia),
+        fala: _trechoCurto(texto, 190)
+      });
+    }
+  }
+
+  return [...porTopico.values()].sort((a, b) => (a.diasAtras ?? Number.MAX_SAFE_INTEGER) - (b.diasAtras ?? Number.MAX_SAFE_INTEGER));
+}
+
+// v1337 — um único retrato factual da conversa. Até aqui o prompt e as conferências chamavam
+// detectores separados em momentos diferentes; agora todos podem receber o MESMO estado calculado.
+// É a primeira separação explícita do motor em FATOS → leitura da IA → redação da IA.
+export function montarEstadoComercialDeterministico(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const valores = valoresCitadosNaConversa(timeline, corretorNome, lead, agora);
+  const tentativasSemResposta = tentativasSemRespostaDoCorretor(timeline, corretorNome, lead || {});
+  const perguntasJaFeitas = perguntasJaFeitasPeloCorretor(timeline, corretorNome, lead, agora);
+  const falasCliente = falasJaDitasPeloCliente(timeline, corretorNome, lead, agora);
+  const perguntasSemResposta = perguntasSemRespostaDoCliente(timeline, corretorNome, lead, agora);
+  const proximosPassos = proximosPassosJaPropostos(timeline, corretorNome, lead, agora);
+  const recusas = recusasDoCliente(timeline, corretorNome, lead, agora);
+  const promessasNaoCumpridas = promessasNaoCumpridasDoCorretor(timeline, corretorNome, lead, agora);
+  const topicosConfirmados = topicosComerciaisConfirmadosDoCliente(timeline, corretorNome, lead, agora);
+  const tiposPedidoIgnorados = tiposDePedidoJaIgnorados(tentativasSemResposta?.textos || []);
+  const temConversa = (Array.isArray(timeline) ? timeline : []).some(ehMensagemRealParaTempo);
+
+  return {
+    versao: 1,
+    valores,
+    tentativasSemResposta,
+    perguntasJaFeitas,
+    falasCliente,
+    perguntasSemResposta,
+    proximosPassos,
+    recusas,
+    promessasNaoCumpridas,
+    topicosConfirmados,
+    tiposPedidoIgnorados,
+    diasParaPropor: temConversa ? diasUteisParaPropor(agora, 3) : [],
+    caroSemFaixa: clienteDisseCaroSemDizerFaixa(timeline, corretorNome, lead, agora),
+    semCapitalHoje: clienteSemCapitalHojeComPrazo(timeline, corretorNome, lead, agora),
+    permuta: permutaOferecidaPeloCliente(timeline, corretorNome, lead, agora)
+  };
+}
+
 // ─── v1335 — O CATÁLOGO QUE O APP APRENDE SOZINHO, SEM TABELA NENHUMA ────────────────────────
 //
 // O dono, 20/08/2026, quando eu sugeri que ele colasse a tabela de produtos no Cérebro: *"não
@@ -1785,10 +1963,26 @@ export function itensDeCatalogoDaConversa(timeline, corretorNome = "", lead = {}
 }
 
 // ─── O FICHÁRIO INTEIRO, JÁ EM TEXTO PRO PEDIDO ──────────────────────────────────────────────
-export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date(), estadoPronto = null) {
   const blocos = [];
+  const estado = estadoPronto || montarEstadoComercialDeterministico(timeline, corretorNome, lead, agora);
+  const {
+    valores,
+    perguntasJaFeitas: perguntas,
+    falasCliente,
+    perguntasSemResposta: perguntasAbertas,
+    proximosPassos: passos,
+    recusas,
+    promessasNaoCumpridas: promessas,
+    tentativasSemResposta: semRespostaFichario,
+    topicosConfirmados,
+    tiposPedidoIgnorados: tiposIgnorados,
+    diasParaPropor,
+    caroSemFaixa,
+    semCapitalHoje: semCapital,
+    permuta
+  } = estado;
 
-  const valores = valoresCitadosNaConversa(timeline, corretorNome, lead, agora);
   if (valores.length) {
     const linhas = valores.map(v => {
       const repetido = v.vezes > 1 && v.primeiraData !== v.ultimaData ? ` (citado ${v.vezes}x; a primeira em ${v.primeiraData})` : "";
@@ -1799,7 +1993,6 @@ ${linhas.join("\n")}
 Um valor só vale como preço de hoje se for recente. Valor antigo não volta à conversa como o preço atual — se for preciso usá-lo, é como "vou confirmar o valor atualizado".`);
   }
 
-  const perguntas = perguntasJaFeitasPeloCorretor(timeline, corretorNome, lead, agora);
   if (perguntas.length) {
     const linhas = perguntas.map(q => {
       const repetida = q.vezes > 1 ? ` — JÁ FEITA ${q.vezes} VEZES` : "";
@@ -1810,7 +2003,6 @@ ${linhas.join("\n")}
 Antes de escrever uma pergunta, confira esta lista. Se a resposta já está na conversa, não pergunte de novo. Se a pergunta continua sem resposta e ainda é a mais importante, reconheça que já perguntou em vez de perguntar do zero — e considere se não há um caminho melhor que insistir na mesma pergunta.`);
   }
 
-  const falasCliente = falasJaDitasPeloCliente(timeline, corretorNome, lead, agora);
   if (falasCliente.length) {
     const linhas = falasCliente.map(f => {
       const repetida = f.vezes > 1 ? ` — repetida ${f.vezes}x` : "";
@@ -1821,15 +2013,20 @@ ${linhas.join("\n")}
 Antes de PEDIR qualquer informação ao cliente, confira esta lista. O que ele já disse não se pede de novo: parta do que ele disse e peça só o que falta de verdade (o detalhe, o documento, a confirmação). Pedir de volta o que já está escrito acima é a coisa que mais parece que ninguém leu a conversa.`);
   }
 
-  const semResposta = perguntasSemRespostaDoCliente(timeline, corretorNome, lead, agora);
-  if (semResposta.length) {
-    const linhas = semResposta.map(q => `- "${q.texto}" (perguntada em ${q.data}, ${_haQuantoTempo(q.diasAtras)})`);
+  if (topicosConfirmados.length) {
+    const linhas = topicosConfirmados.map(t => `- ${t.nome}: "${t.fala}" (${t.data}, ${_haQuantoTempo(t.diasAtras)})`);
+    blocos.push(`TÓPICOS COMERCIAIS QUE O CLIENTE JÁ RESPONDEU EXPLICITAMENTE:
+${linhas.join("\n")}
+Estes tópicos estão RESPONDIDOS. Não volte à pergunta genérica que originou a resposta (ex.: "2 ou 3 dormitórios?", "pronto ou planta?", "morar ou investir?"). Se ainda faltar um DETALHE dentro do mesmo assunto, parta da resposta acima e pergunte somente esse detalhe.`);
+  }
+
+  if (perguntasAbertas.length) {
+    const linhas = perguntasAbertas.map(q => `- "${q.texto}" (perguntada em ${q.data}, ${_haQuantoTempo(q.diasAtras)})`);
     blocos.push(`PERGUNTAS DO CORRETOR QUE O CLIENTE NUNCA RESPONDEU (o app procurou o assunto nas falas do cliente depois da pergunta e não achou):
 ${linhas.join("\n")}
 Estas são o contrário da lista de cima: aqui não é repetição, é buraco. Uma pergunta em aberto que ainda decide o atendimento (de onde vem o dinheiro, qual a faixa, morar ou investir, que prazo serve) vale mais do que inventar uma pergunta nova — sem a resposta dela o próximo passo é chute. Escolha a que ainda decide hoje, retome-a de forma natural, e ignore as que o tempo já respondeu. O app confere assunto, não intenção: o cliente pode ter respondido com outras palavras.`);
   }
 
-  const passos = proximosPassosJaPropostos(timeline, corretorNome, lead, agora);
   if (passos.length) {
     const linhas = passos.map(p => `- ${p.data} (${_haQuantoTempo(p.diasAtras)}): "${p.trecho}"`);
     blocos.push(`PRÓXIMOS PASSOS (visita, café, reunião, apresentação) QUE O CORRETOR JÁ PROPÔS NESTA CONVERSA: ${passos.length}.
@@ -1837,7 +2034,6 @@ ${linhas.join("\n")}
 Se o mesmo passo já foi proposto várias vezes e a conversa seguiu sem ele, propor de novo do mesmo jeito tende a repetir o mesmo resultado. Isso não proíbe insistir — obriga a decidir com esse fato na mão.`);
   }
 
-  const recusas = recusasDoCliente(timeline, corretorNome, lead, agora);
   if (recusas.length) {
     const linhas = recusas.map(r => {
       const naMesa = r.emDiscussao ? ` Na hora se falava de: "${r.emDiscussao}".` : "";
@@ -1849,9 +2045,14 @@ ${linhas.join("\n")}
 O motivo manda. Produto recusado por TAMANHO não volta porque a faixa de preço mudou; produto recusado por PREÇO pode voltar quando a faixa muda; recusado por LOCALIZAÇÃO, PRAZO ou POSIÇÃO só volta se aquilo mudou. Trazer de volta o que foi recusado, sem que o motivo tenha mudado, é o erro que faz o cliente sentir que ninguém escutou.`);
   }
 
-  const promessas = promessasNaoCumpridasDoCorretor(timeline, corretorNome, lead, agora);
   if (promessas.length) {
-    const linhas = promessas.map(q => `- ${q.data} (${_haQuantoTempo(q.diasAtras)}): "${q.trecho}"`);
+    const rotuloAlvo = { valor: "valor/preço", fotos: "fotos/imagens", planta: "planta", condicoes: "condições de pagamento", material: "material", localizacao: "localização/endereço", disponibilidade: "disponibilidade" };
+    const linhas = promessas.map(q => {
+      const faltando = Array.isArray(q.faltando) && q.faltando.length
+        ? ` — ainda não apareceu: ${q.faltando.map(x => rotuloAlvo[x] || x).join(", ")}`
+        : "";
+      return `- ${q.data} (${_haQuantoTempo(q.diasAtras)}): "${q.trecho}"${faltando}`;
+    });
     blocos.push(`O QUE O CORRETOR DISSE QUE IA ENVIAR E NÃO APARECE ENVIADO NESTA CONVERSA:
 ${linhas.join("\n")}
 Esta é a pendência REAL do atendimento — e costuma ser o motivo do silêncio do cliente: quem pede informação e não recebe, para de responder. Cumprir isto vale mais que qualquer pergunta nova. NÃO invente pendência que não está nesta lista.
@@ -1862,8 +2063,6 @@ DIA em que entrega. Prometer de novo sem data é repetir o erro que causou o sil
   }
 
   // v1334 — os quatro defeitos medidos na bateria, cada um virando fato com número e data.
-  const semRespostaFichario = tentativasSemRespostaDoCorretor(timeline, corretorNome, lead || {});
-  const tiposIgnorados = tiposDePedidoJaIgnorados(semRespostaFichario?.textos || []);
   if (tiposIgnorados.length) {
     blocos.push(`O TIPO DE PEDIDO QUE JÁ FOI FEITO E IGNORADO (${semRespostaFichario.tentativas} tentativa(s) sem resposta):
 ${tiposIgnorados.map(t => `- ${t}`).join("\n")}
@@ -1873,10 +2072,7 @@ foi mandado material e ninguém respondeu, peça UMA informação simples de res
 insistir — obriga a insistir por outro caminho.`);
   }
 
-  // Só faz sentido oferecer dia pra marcar quando existe conversa: sem mensagem nenhuma, o
-  // fichário continua vazio (e a análise segue como se ele não existisse).
-  const temConversa = (Array.isArray(timeline) ? timeline : []).some(ehMensagemRealParaTempo);
-  const diasParaPropor = temConversa ? diasUteisParaPropor(agora, 3) : [];
+  // Só faz sentido oferecer dia pra marcar quando existe conversa: o estado factual já calcula isso.
   if (diasParaPropor.length) {
     blocos.push(`DIAS ÚTEIS PARA PROPOR (calculados pelo app a partir de hoje): ${diasParaPropor.join(", ")}.
 Quando a jogada for encontro, visita, avaliação, simulação ou ligação, PROPONHA DIA E HORA com nome
@@ -1885,7 +2081,6 @@ marcada não é passo — foi o que a medição da bateria mais apontou. Se o C�
 horários que esta organização atende, são os dele que valem.`);
   }
 
-  const caroSemFaixa = clienteDisseCaroSemDizerFaixa(timeline, corretorNome, lead, agora);
   if (caroSemFaixa) {
     blocos.push(`O CLIENTE DISSE QUE ESTÁ CARO E NUNCA DISSE QUANTO PODE PAGAR:
 - ${caroSemFaixa.data} (${_haQuantoTempo(caroSemFaixa.diasAtras)}): "${caroSemFaixa.fala}"
@@ -1894,7 +2089,6 @@ repetir a mesma objeção. A pergunta que destrava é a faixa (ou a parcela que 
 simples e sem constranger.`);
   }
 
-  const semCapital = clienteSemCapitalHojeComPrazo(timeline, corretorNome, lead, agora);
   if (semCapital) {
     const prazo = semCapital.prazo ? ` Prazo que ele mesmo deu para ter: "${semCapital.prazo}".` : "";
     const obra = semCapital.obraNaConversa ? `\nNesta conversa já apareceu produto que não exige o dinheiro hoje: "${semCapital.obraNaConversa}".` : "";
@@ -1906,7 +2100,6 @@ durante a construção e recebe as chaves lá na frente. Antes de aceitar que a 
 verifique na conversa e no Cérebro se existe opção assim; só trate como fora se não existir.`);
   }
 
-  const permuta = permutaOferecidaPeloCliente(timeline, corretorNome, lead, agora);
   if (permuta) {
     const linhas = permuta.falasDoCliente.map(f => `- ${f.data} (${_haQuantoTempo(f.diasAtras)}): "${f.trecho}"`);
     const partes = [`ENTRADA QUE NÃO É DINHEIRO, OFERECIDA PELO PRÓPRIO CLIENTE (permuta/troca):
@@ -2138,19 +2331,6 @@ function numeroDiaCivil(y, m, d) {
   const check = new Date(dt);
   if (check.getUTCFullYear() !== y || check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) return null;
   return Math.floor(dt / 86400000);
-}
-
-// v1337 — o fuso da conta, validado. Texto que o Intl não reconhece volta pro padrão de Brasília:
-// um fuso inválido quebraria TODA a formatação de data da análise.
-export function fusoDoCorretor(config) {
-  const texto = String(config?.fusoHorario || "").trim();
-  if (!texto) return "America/Sao_Paulo";
-  try {
-    new Intl.DateTimeFormat("en-CA", { timeZone: texto }).format(new Date());
-    return texto;
-  } catch (_) {
-    return "America/Sao_Paulo";
-  }
 }
 
 function partesDataBR(date) {
@@ -2655,6 +2835,23 @@ function _raizes(palavras) {
   return fora;
 }
 
+// v1337 — conferência conservadora: só marca repetição quando a NOVA pergunta é genérica e o
+// tópico correspondente já foi explicitamente respondido pelo cliente. Pergunta de aprofundamento
+// (ex.: "as três precisam ser suítes?") não entra nesta rede.
+function _topicoGenericoDaPergunta(texto = "") {
+  const t = _semAcentoMinuscula(texto);
+  if (!t) return "";
+  if (/\b(morar|moradia)\b.{0,35}\b(investir|investimento)\b|\b(investir|investimento)\b.{0,35}\b(morar|moradia)\b/.test(t)) return "finalidade";
+  if (/\b(quantos?|2 ou 3|dois ou tres|tres ou dois)\b.{0,22}\b(dormitorio|dormitorios|quarto|quartos)\b/.test(t)) return "dormitorios";
+  if (/\b(pronto|pronta)\b.{0,35}\b(planta|obra|construcao)\b|\b(planta|obra|construcao)\b.{0,35}\b(pronto|pronta)\b/.test(t)) return "momento_imovel";
+  if (/\b(qual|quanto|ate quanto|que)\b.{0,30}\b(faixa|orcamento|teto|investir|investimento|pagar)\b/.test(t)) return "faixa_valor";
+  if (/\b(pretende|vai|quer|pensa|seria|consegue)\b.{0,22}\b(financiar|financiamento)\b|\bfinanciar o saldo\b/.test(t)) return "financiamento";
+  if (/\b(quanto|qual|tem|possui|dispoe|consegue)\b.{0,24}\b(entrada|sinal)\b/.test(t)) return "entrada";
+  if (/\b(qual|que|prefere)\b.{0,24}\b(bairro|regiao|localizacao)\b/.test(t)) return "localizacao";
+  if (/\b(quantas?|1 ou 2|uma ou duas)\b.{0,18}\b(vaga|vagas|box|boxes)\b/.test(t)) return "garagem";
+  return "";
+}
+
 export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido = null) {
   const lista = (Array.isArray(mensagens) ? mensagens : []).filter(m => m && String(m.texto || "").trim());
   const avisos = [];
@@ -2663,6 +2860,13 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
   for (const m of lista) {
     const texto = String(m.texto || "");
     const motivos = [];
+    const perguntaFinal = _perguntaFinal(texto);
+    const topicoPerguntado = _topicoGenericoDaPergunta(perguntaFinal);
+    const topicosRespondidos = Array.isArray(contextoConhecido?.topicosRespondidos) ? contextoConhecido.topicosRespondidos : [];
+    if (topicoPerguntado && topicosRespondidos.some(t => String(t?.id || t) === topicoPerguntado)) {
+      const rotulo = topicosRespondidos.find(t => String(t?.id || t) === topicoPerguntado)?.nome || topicoPerguntado;
+      motivos.push(`pergunta novamente sobre ${rotulo}, que o cliente já respondeu`);
+    }
     for (const motivo of fatosInventadosNaMensagem(texto, contextoConhecido)) motivos.push(motivo);
     // A abertura são as duas primeiras frases — é ali que a contagem de dias vira cobrança.
     const abertura = texto.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
@@ -2672,7 +2876,7 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
     if (forasteiros.inventados.length) motivos.push(`cita "${forasteiros.inventados.slice(0, 2).join('", "')}", que não aparece nesta conversa`);
     if (forasteiros.deOutraConversa.length) motivos.push(`cita "${forasteiros.deOutraConversa.slice(0, 2).join('", "')}" — é produto seu, mas não foi falado com este cliente`);
     if (motivos.length) avisos.push({ qual: m.qual, motivos: [...new Set(motivos)] });
-    perguntas.push({ qual: m.qual, pergunta: _perguntaFinal(texto) });
+    perguntas.push({ qual: m.qual, pergunta: perguntaFinal });
   }
 
   // Duas das três pedindo a mesma coisa: compara as PALAVRAS DE CONTEÚDO da última pergunta.
@@ -4902,16 +5106,10 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = "[Conversa longa: parte antiga omitida apenas por limite técnico da importação. Use as mensagens abaixo como histórico recente, sem análise antiga.]\n" + recentes.join("\n");
   }
 
-  // v1337 — o Cérebro é carregado ANTES do relógio da análise, porque agora é dele que sai o fuso
-  // horário da conta (antes o fuso era cravado em Brasília no código inteiro).
   const configCerebro = await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null);
-
   const _agoraDt = new Date();
-  // Data e hora atuais no fuso do corretor, fornecidas apenas como contexto técnico da análise.
-  // v1337 — o fuso deixou de ser cravado: vem do Cérebro da conta (padrão Brasília, que era o que
-  // estava no código). Quem atende em Manaus, Cuiabá, Rio Branco ou Noronha recebia a hora errada,
-  // e hora errada vira saudação errada na mensagem sugerida ("boa noite" às 19h em Brasília é
-  // "boa tarde" no Acre).
+  // v1339 — usa o fuso salvo no Cérebro; inválido/ausente mantém Brasília como padrão.
+  // Esta linha havia sido perdida quando o _pipeline.js da outra v1337 foi substituído inteiro.
   const fusoAnalise = fusoDoCorretor(configCerebro);
   let hoje, hojeSemana = "", dataHoraAtualAnalise = "";
   try {
@@ -5059,7 +5257,9 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // v1277 — quantas mensagens o corretor já mandou no fim da conversa sem NENHUMA resposta, e o
   // texto delas. Sem esse fato no pedido, a IA não tinha como saber que a oferta que ela ia
   // escrever era a mesma que o cliente já ignorou duas vezes (print do dono de 14/08/2026).
-  const semResposta = tentativasSemRespostaDoCorretor(timelineArr, corretorNome, lead || {});
+  // v1337 — calcula UMA vez o estado factual e reaproveita na leitura, na redação e na conferência.
+  const estadoComercial = montarEstadoComercialDeterministico(timelineArr, corretorNome, lead || {}, _agoraDt);
+  const semResposta = estadoComercial.tentativasSemResposta;
   const blocoTentativasSemResposta = semResposta.tentativas > 0
     ? `TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA: ${semResposta.tentativas}.
 TEXTOS DAS TENTATIVAS SEM RESPOSTA (fato histórico; não presuma o motivo do silêncio. Use o Cérebro para decidir se deve mudar pergunta, abordagem, canal ou próximo passo):
@@ -5070,7 +5270,7 @@ ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
   // corretor já fez, próximos passos que ele já propôs, e a entrada em permuta oferecida pelo
   // cliente com a faixa de compra que ela abre. Tudo calculado sobre o texto desta conversa —
   // ver montarFicharioDaConversa. String vazia quando a conversa não tem nada disso.
-  const ficharioDaConversa = montarFicharioDaConversa(timelineArr, corretorNome, lead || {}, _agoraDt);
+  const ficharioDaConversa = montarFicharioDaConversa(timelineArr, corretorNome, lead || {}, _agoraDt, estadoComercial);
 
   // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
@@ -5616,7 +5816,12 @@ ${revisaoSoDasMensagens}`;
       const nomesConhecidos = nomesDoCatalogo(await catalogoDaConta(organizationId).catch(() => []));
       avisosMensagens = avisosDeQualidadeDasMensagens(
         [{ qual: "a", texto: msgA }, { qual: "b", texto: msgB }, { qual: "c", texto: msgC }],
-        { conversa: `${timelineTextFull}\n${observacoesManuaisTexto}`, cerebro: instrucoesCerebroTexto, catalogo: nomesConhecidos }
+        {
+          conversa: `${timelineTextFull}\n${observacoesManuaisTexto}`,
+          cerebro: instrucoesCerebroTexto,
+          catalogo: nomesConhecidos,
+          topicosRespondidos: estadoComercial.topicosConfirmados
+        }
       );
     } catch (erroAviso) {
       console.warn("[direciona] conferência das três mensagens falhou:", erroAviso?.message || erroAviso);

@@ -44,3 +44,23 @@ parecer fracasso.
 
 Aberto no Chromium com uma carteira de teste (3 clientes, 2 respostas), em celular (390px) e
 computador (1280px): o bloco aparece no lugar certo, com o número certo, sem estourar a largura.
+
+---
+
+## Registro: o que aconteceu com os números 1337 e 1339
+
+Dois trabalhos correram ao mesmo tempo no mesmo dia e acabaram usando os mesmos números de versão.
+Fica registrado aqui pra ninguém se perder olhando o histórico depois:
+
+- **1337** saiu duas vezes. Uma é o **fuso horário do corretor** (o app deixou de achar que todo
+  corretor está no horário de Brasília); a outra é o **estado comercial determinístico** ("fatos
+  primeiro, IA depois"). As duas estão no ar e convivem: o arquivo `NOTAS-v1337.md` guarda a
+  segunda, e a primeira está descrita no pedido de junção #485 e no teste
+  `tests/v1337-fuso-do-corretor.test.mjs`.
+- **1339** também saiu duas vezes. Uma é a **trava da publicação que falha para o lado seguro**
+  (problema de máquina não pode parar o site); a outra é a **junção das duas linhas de 1337**. O
+  arquivo `NOTAS-v1339.md` guarda a segunda; a primeira está no pedido de junção #487 e no teste
+  `tests/v1338-portao-da-publicacao.test.mjs`.
+
+Nada se perdeu: as quatro coisas estão no código e cobertas por teste. O que sumiu foram só dois
+arquivos de notas, sobrescritos — e este parágrafo existe pra isso não virar buraco no histórico.
