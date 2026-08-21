@@ -5095,7 +5095,7 @@ function cp704Css(){
       const textoNaTela = cp1348TextoNaTela(cp704Text(m.text));
       const arquivoFaltando = /não veio no envio da conversa/.test(textoNaTela);
       const corpo = arquivoFaltando
-        ? `<button type="button" class="cp1350-faltou" onclick='event.stopPropagation();cp1350EnviarArquivoQueFaltou()'>📎 Toque para mandar este arquivo — o app lê e transcreve</button>`
+        ? `<button type="button" class="cp1350-faltou" onclick='event.stopPropagation();cp1350EnviarArquivoQueFaltou(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>📎 Toque para mandar este arquivo — o app lê e transcreve</button>`
         : `<p>${escapeHtml(textoNaTela)}</p>`;
       return `<div class="cp704-tmsg${wrapCls}${podeDesfazer?' cp704-tmsg-comundo':''}"${propAttr}><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b>${corpo}<small>${escapeHtml(cp704DataHora(m))}</small>${propHint}</div>${btnDesfazer}</div>`;
     }).join('') + btn;
@@ -5879,7 +5879,7 @@ function renderLeadFoco(lead){
           <input type="file" id="cp1349ArquivosInput" accept="image/*,application/pdf,audio/*,.opus,.ogg,.m4a,.mp3,.pdf" multiple hidden onchange="cp1349LerArquivos(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
             <button type="button" id="cp1250PrintBtn" onclick="document.getElementById('cp1250PrintInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler print da resposta</button>
-            <button type="button" id="cp1349ArquivosBtn" onclick="document.getElementById('cp1349ArquivosInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler fotos, PDFs e áudios</button>
+            <button type="button" id="cp1349ArquivosBtn" onclick="cp1352LimparAlvo();document.getElementById('cp1349ArquivosInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler fotos, PDFs e áudios</button>
             <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
             <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
           </div>
@@ -12469,6 +12469,8 @@ window.cp1250LerPrint = cp1250LerPrint;
 // aparelho e o app lê, com o MESMO leitor da importação.
 async function cp1349LerArquivos(input){
   const arquivosEscolhidos = Array.from(input?.files || []);
+  // Cancelou o seletor: o alvo não pode ficar guardado pro próximo clique, que pode ser outro.
+  if(!arquivosEscolhidos.length) cp1352Alvo = null;
   if(input) input.value = "";
   if(!arquivosEscolhidos.length) return;
   const status = qs("#cp7ObsStatus");
@@ -12512,6 +12514,29 @@ async function cp1349LerArquivos(input){
     }, 60000);
     const data = await res.json().catch(()=>({ ok:false }));
     if(data?.ok && data.texto){
+      // v1352 — veio da linha do histórico: o texto entra NA MENSAGEM, como sempre foi.
+      if(cp1352Alvo){
+        const alvo = cp1352Alvo; cp1352Alvo = null;
+        const primeiro = prontos[0] || {};
+        const tipo = /^audio\//i.test(primeiro.mime || "") ? "audio"
+          : (/pdf/i.test(primeiro.mime || "") ? "documento" : "imagem");
+        // Com um arquivo só, o nome do arquivo na frente do texto é ruído — a mensagem já é dele.
+        const texto = prontos.length === 1 ? String(data.texto).replace(/^[^:\n]{1,120}:\s*/, "") : data.texto;
+        const r2 = await fetchComTimeout("./api/reanalisar-lead", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(payloadComCerebro({ id: alvo.leadId, action:"preencher-arquivo", iso: alvo.iso, texto, tipo, nome: primeiro.nome || "" }))
+        }, 30000);
+        const d2 = await r2.json().catch(()=>({ ok:false }));
+        if(d2?.ok){
+          try{ invalidarLeadsCache(); }catch(_){}
+          try{ invalidarLeadDetail(alvo.leadId); }catch(_){}
+          aviso("--acao", tipo === "audio" ? "Áudio transcrito e colocado no histórico." : "Arquivo lido e colocado no histórico.");
+          try{ await recarregarLeadFoco(alvo.leadId); }catch(_){}
+          return;
+        }
+        aviso("--risco", escapeHtml(d2?.error || "Li o arquivo, mas não consegui colocar na mensagem."));
+        // Cai no caminho antigo pra ele não perder o que foi lido.
+      }
       if(ta){
         ta.value = (ta.value.trim() ? ta.value.trim()+"\n" : "") + data.texto;
         ta.focus();
@@ -12544,14 +12569,20 @@ window.cp1349LerArquivos = cp1349LerArquivos;
 
 // v1350 — abre o seletor de arquivos a partir da linha do histórico. Rola até o campo de
 // observação antes, senão o texto lido cai numa parte da tela que ele não está vendo.
-function cp1350EnviarArquivoQueFaltou(){
+// v1352 — guarda QUAL mensagem está esperando o arquivo. Com isso o texto lido volta pra dentro
+// dela, no minuto certo do histórico, em vez de virar observação em outro lugar da linha do tempo.
+let cp1352Alvo = null;
+function cp1350EnviarArquivoQueFaltou(leadId, iso){
   const input = qs("#cp1349ArquivosInput");
   if(!input){ toast("Abra o cliente pra mandar o arquivo."); return; }
-  const campo = qs("#cp7ObsTexto");
-  if(campo){ try{ campo.scrollIntoView({ behavior:"smooth", block:"center" }); }catch(_){ } }
+  cp1352Alvo = (leadId && iso) ? { leadId: String(leadId), iso: String(iso) } : null;
   input.click();
 }
 window.cp1350EnviarArquivoQueFaltou = cp1350EnviarArquivoQueFaltou;
+// O botão do campo de observação manda pra observação, como antes — então limpa qualquer alvo
+// que um toque anterior na linha do histórico tenha deixado guardado.
+function cp1352LimparAlvo(){ cp1352Alvo = null; }
+window.cp1352LimparAlvo = cp1352LimparAlvo;
 
 // Colar a imagem direto no campo (Ctrl+V no computador — é como o corretor recorta a tela e cola).
 // Um listener só, no documento, ligado uma vez: o campo de observação é redesenhado a cada

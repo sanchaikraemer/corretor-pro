@@ -208,6 +208,54 @@ async function reanalisarLeadHandler702(req, res) {
 
   const timeline = Array.isArray(row.timeline_json) ? row.timeline_json : [];
 
+  // v1352 — O ARQUIVO QUE FALTOU ENTRA NA PRÓPRIA MENSAGEM, NÃO COMO OBSERVAÇÃO.
+  //
+  // "tem que aparecer a transcrição como sempre foi" (dono, 21/08/2026). Ele está certo: quando o
+  // áudio vem dentro da conversa, a transcrição aparece NA MENSAGEM, no minuto em que ele foi
+  // enviado, com o rótulo de sempre. Mandar o arquivo pela tela e ver o texto virar "Observação"
+  // em outro lugar da linha do tempo não é a mesma coisa — é outro registro, com outra cara.
+  //
+  // Esta ação escreve o texto lido/transcrito DENTRO da mensagem que está lá, com exatamente os
+  // mesmos campos que a importação usa. Daí pra frente é indistinguível de um áudio que veio no
+  // ZIP: aparece igual no histórico, entra igual na análise e é reaproveitado igual numa próxima
+  // importação (o cache por lead procura o rótulo "[Áudio transcrito] ", que é o que se grava aqui).
+  //
+  // Trava: só substitui mensagem que hoje é APENAS marcador de arquivo não lido. Nunca escreve por
+  // cima de fala de gente nem de conteúdo que já tinha sido lido.
+  if (body?.action === "preencher-arquivo") {
+    const isoAlvo = String(body?.iso || "");
+    const texto = String(body?.texto || "").replace(/\s*\n\s*/g, " · ").trim();
+    const tipo = String(body?.tipo || "").toLowerCase();
+    if (!isoAlvo) return json(res, 400, { ok: false, error: "Informe a mensagem que recebe o arquivo." });
+    if (!texto) return json(res, 400, { ok: false, error: "Nada pra escrever nessa mensagem." });
+    const idx = timeline.findIndex(m => String(m?.iso || "") === isoAlvo);
+    if (idx < 0) return json(res, 404, { ok: false, error: "Essa mensagem não está mais no histórico." });
+    const alvo = timeline[idx];
+    const SO_MARCADOR = /^(?:\[Arquivo enviado nesta mensagem:[^\]]*\]|\[[ÁA]udio:[^\]]*\])$/i;
+    const linhas = String(alvo?.text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const soMarcador = linhas.length > 0 && linhas.every(l => SO_MARCADOR.test(l));
+    if (!soMarcador) {
+      return json(res, 400, { ok: false, error: "Essa mensagem já tem conteúdo — não dá pra escrever por cima." });
+    }
+    const nomeArquivo = String(body?.nome || "").split(/[\\/]/).pop().trim();
+    const nova = [...timeline];
+    if (tipo === "audio") {
+      nova[idx] = { ...alvo, type: "audio", source: "audio", audioStatus: "transcrito",
+        mediaFile: nomeArquivo || alvo.mediaFile || "", text: `[Áudio transcrito] ${texto}` };
+    } else {
+      const ehDoc = tipo === "documento";
+      nova[idx] = { ...alvo, type: ehDoc ? "documento" : "imagem", source: "visual", visualStatus: "lido",
+        mediaFile: nomeArquivo || alvo.mediaFile || "",
+        text: `[${ehDoc ? "Documento lido pela IA" : "Imagem lida pela IA"}] ${texto}` };
+    }
+    const { error: preencherErr } = await supabase
+      .from("whatsapp_processamentos")
+      .update({ timeline_json: nova, atualizado_em: new Date().toISOString() })
+      .eq("id", id).eq("organization_id", organizationId);
+    if (preencherErr) return json(res, 500, { ok: false, error: preencherErr.message });
+    return json(res, 200, { ok: true, mensagem: nova[idx] });
+  }
+
   // Excluir UM item da timeline (ex.: proposta duplicada). Identifica pelo iso. Não reanalisa.
   if (body?.action === "remover-item") {
     const isoAlvo = String(body?.iso || "");
