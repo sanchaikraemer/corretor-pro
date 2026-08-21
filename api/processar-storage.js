@@ -431,7 +431,9 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   // nome do arquivo) nem são descomprimidos: o texto deles já está pronto e entra direto em
   // `transcriptions` logo abaixo. Antes eles eram extraídos e subiam pro Storage só pra calcular
   // um hash que ninguém usaria — numa reimportação sem novidade era quase toda a espera da etapa.
-  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true, organizationId, audiosJaTranscritos: cacheDoLead }); // única extração
+  // v1333 — o que este cliente JÁ teve lido vai junto: o plano pula esses arquivos e desce a fila
+  // dos que ainda faltam, em vez de repetir os mesmos mais recentes a cada importação.
+  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true, organizationId, audiosJaTranscritos: cacheDoLead, visuaisJaLidos: cacheVisualDoLead, linksJaLidos: cacheLinksDoLead }); // única extração
   const extracted = prep._extractedFiles || {};
   delete prep._extractedFiles;
   // v1306 — IMAGEM E PDF DA CONVERSA VIRAM TEXTO AQUI.
