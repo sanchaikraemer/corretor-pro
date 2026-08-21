@@ -7069,10 +7069,41 @@ function assinaturaTimelineIncremental(m) {
   return sig.replace(/\|/g, "") ? sig : "";
 }
 
-function mesclarTimelineIncremental(antiga, nova) {
+// v1349 — REIMPORTAR A CONVERSA NÃO CONSERTAVA NADA. ESTE ERA O MOTIVO.
+//
+// "reimportar a conversa e mesma merda / cadê a transcrição de áudio????" (dono, 21/08/2026).
+//
+// A mesclagem abaixo compara mensagem por mensagem usando data+hora+autor+TEXTO. Quando a primeira
+// importação veio sem os arquivos, a mensagem ficou guardada como "[Arquivo enviado nesta
+// mensagem: … — conteúdo não analisado pela IA]" ou "[Áudio: … — não transcrito]". Reimportando a
+// MESMA conversa agora COM os arquivos, a mesma mensagem chega com outro texto (o nome do arquivo,
+// a leitura da foto, a transcrição do áudio) — texto diferente, assinatura diferente, então ela
+// entrava como se fosse OUTRA mensagem e a linha vazia continuava lá, no mesmo minuto, do mesmo
+// autor. Ou seja: reimportar nunca substituía a linha inútil. Ela era eterna.
+//
+// A regra nova é estreita de propósito: some SÓ a linha antiga que não carrega informação nenhuma
+// (é apenas marcador de arquivo/áudio não lido) E que tem exatamente a mesma data, hora e autor de
+// uma mensagem que a importação nova trouxe COM conteúdo. Fala de gente nunca é descartada, e
+// marcador novo jamais apaga conteúdo velho — o descarte só acontece no sentido "vazio → cheio".
+const _SO_MARCADOR_RE = /^(?:\[Arquivo enviado nesta mensagem:[^\]]*\]|\[[ÁA]udio:[^\]]*\])$/i;
+function _linhaSemConteudo(texto) {
+  const linhas = String(texto || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return linhas.length > 0 && linhas.every(l => _SO_MARCADOR_RE.test(l));
+}
+function _posicaoNaConversa(m) {
+  return [String(m?.date || "").trim(), String(m?.time || "").trim(), String(m?.author || "").trim().toLowerCase()].join("|");
+}
+
+export function mesclarTimelineIncremental(antiga, nova) {
+  const comConteudoAgora = new Set();
+  for (const m of (Array.isArray(nova) ? nova : [])) {
+    if (!_linhaSemConteudo(m?.text)) comConteudoAgora.add(_posicaoNaConversa(m));
+  }
+  const antigaUtil = (Array.isArray(antiga) ? antiga : [])
+    .filter(m => !(_linhaSemConteudo(m?.text) && comConteudoAgora.has(_posicaoNaConversa(m))));
   const out = [];
   const vistos = new Set();
-  for (const m of [...(Array.isArray(antiga) ? antiga : []), ...(Array.isArray(nova) ? nova : [])]) {
+  for (const m of [...antigaUtil, ...(Array.isArray(nova) ? nova : [])]) {
     const k = assinaturaTimelineIncremental(m);
     if (k && vistos.has(k)) continue;
     if (k) vistos.add(k);

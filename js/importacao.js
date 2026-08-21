@@ -828,7 +828,7 @@ async function renderProcessedResult(data, meta){
   // v1348 — o aviso falava SÓ dos áudios. Na exportação sem mídia não é só o áudio que fica de
   // fora: foto, PDF, catálogo, tabela de preço — tudo vira "<Mídia oculta>" e some junto. Foi o
   // caso do print do dono (21/08/2026): três arquivos nas últimas mensagens, nenhum deles no envio.
-  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8"><b>⚠️ Conversa enviada SEM os arquivos.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "arquivo ficou de fora" : "arquivos ficaram de fora"} — <b>foto, PDF e áudio não vieram</b>, então a IA sabe que houve envio mas não o que tinha dentro. Se algum deles tinha preço, planta ou condição, isso ficou fora da análise. Reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8"><b>⚠️ Conversa enviada SEM os arquivos.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "arquivo ficou de fora" : "arquivos ficaram de fora"} — <b>foto, PDF e áudio não vieram</b>, então a IA sabe que houve envio mas não o que tinha dentro. Se algum deles tinha preço, planta ou condição, isso ficou fora da análise. Abra o cliente e toque em <b>"Ler fotos, PDFs e áudios"</b> pra mandar esses arquivos agora — sem precisar exportar a conversa de novo.</div>` : "";
   // v1323 — FOTO E PDF QUE FICARAM DE FORA TAMBÉM PRECISAM APARECER AQUI.
   //
   // O aviso acima só existia pro caso da exportação sem mídia, e falava só dos áudios. Quando a
@@ -847,7 +847,7 @@ async function renderProcessedResult(data, meta){
         fotosForaCount ? `${fotosForaCount} ${fotosForaCount === 1 ? "foto" : "fotos"}` : "",
         docsForaCount ? `${docsForaCount} ${docsForaCount === 1 ? "PDF" : "PDFs"}` : "",
         semTipoCount ? `${semTipoCount} ${semTipoCount === 1 ? "arquivo que não veio no envio" : "arquivos que não vieram no envio"}` : ""
-      ].filter(Boolean).join(" e ")} desta conversa.</b> O que estiver escrito neles (preço, planta, condição) ficou de fora da análise. Reexporte a conversa no WhatsApp com <b>"Incluir mídia"</b> e importe de novo pra IA ler esse material.</div>`
+      ].filter(Boolean).join(" e ")} desta conversa.</b> O que estiver escrito neles (preço, planta, condição) ficou de fora da análise. Abra o cliente e toque em <b>"Ler fotos, PDFs e áudios"</b> pra mandar esse material agora.</div>`
     : "";
 
   // v1178 — ÁUDIO QUE NÃO VIROU TEXTO AGORA DIZ POR QUÊ.

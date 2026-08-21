@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolveOrganizationId, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste, lerPrintDaConversa, limitePrintDoDia, limitePrintDoDiaTeste, obterPlanoAtual, planoComercial, precoPlano, pacoteExtraBR } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste, lerPrintDaConversa, limitePrintDoDia, limitePrintDoDiaTeste, lerArquivosVisuais, verificarLimiteLeituraVisual, registrarConsumoLeituraVisual, obterPlanoAtual, planoComercial, precoPlano, pacoteExtraBR } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
 
@@ -445,6 +445,85 @@ export default async function handler(req, res) {
         return json(res, 200, { ok: true, texto });
       } catch (e) {
         return json(res, 200, { ok: false, error: e?.message || "Não consegui ler esse print." });
+      }
+    }
+
+    // AÇÃO (v1349): LER OS ARQUIVOS QUE NÃO VIERAM NA CONVERSA.
+    //
+    // Quando a conversa é exportada sem os arquivos, cada foto/PDF vira "<Mídia oculta>" e o
+    // conteúdo simplesmente não existe dentro do que chegou aqui — não tem o que ler. Até agora a
+    // única saída era mandar o corretor reexportar a conversa inteira no WhatsApp e importar de
+    // novo, por causa de dois ou três arquivos. É trabalho demais pra pouca coisa.
+    //
+    // Esta ação usa o MESMO leitor da importação (lerArquivosVisuais, v1306): ele escolhe as fotos
+    // e os PDFs no aparelho e o app lê o que está escrito neles. O texto volta pra tela, ele
+    // confere e salva como observação — o mesmo caminho já usado pela leitura de print (v1250).
+    // Nada é gravado sozinho.
+    if (body.action === "ler-arquivos") {
+      const openai = getOpenAI();
+      if (!openai) return json(res, 200, { ok: false, error: "Leitura de arquivo não configurada — não dá para ler agora." });
+      const arquivos = Array.isArray(body.arquivos) ? body.arquivos.slice(0, 10) : [];
+      if (!arquivos.length) return json(res, 200, { ok: false, error: "Nenhum arquivo recebido." });
+      // Mesmo teto do dia da leitura da importação: o custo é o mesmo, a rede de segurança também.
+      const limite = await verificarLimiteLeituraVisual(organizationId);
+      if (Number.isFinite(limite.restante) && limite.restante <= 0) {
+        return json(res, 429, { ok: false, error: "O limite de leitura de arquivos de hoje já foi atingido nesta conta. Tente de novo amanhã." });
+      }
+      const cabem = Number.isFinite(limite.restante) ? arquivos.slice(0, limite.restante) : arquivos;
+      const entradas = [];
+      // v1349 — áudio entra pela mesma porta. "cadê a transcrição de áudio????" (dono): quando a
+      // conversa vem sem os arquivos, o áudio também não vem, e a única saída era reexportar tudo.
+      // Aqui ele manda o áudio direto e o Whisper transcreve, igual à importação faz.
+      const audios = [];
+      for (let i = 0; i < cabem.length; i++) {
+        const a = cabem[i] || {};
+        const base64 = String(a.base64 || "").replace(/^data:[^;]+;base64,/, "");
+        if (!base64) continue;
+        let buffer;
+        try { buffer = Buffer.from(base64, "base64"); } catch (_) { continue; }
+        // 12 MB por arquivo: acima disso é vídeo ou digitalização gigante, que não é o caso de uso.
+        if (!buffer.length || buffer.length > 12 * 1024 * 1024) continue;
+        const nomeCru = String(a.nome || "").trim();
+        const ehAudio = /^audio\//i.test(String(a.mime || "")) || /\.(opus|ogg|mp3|m4a|wav|aac)$/i.test(nomeCru);
+        if (ehAudio) {
+          const ext = (nomeCru.match(/\.(opus|ogg|mp3|m4a|wav|aac)$/i) || [, "ogg"])[1];
+          audios.push({ name: nomeCru || `audio-${i + 1}.${ext}`, buffer, ext: "." + ext.toLowerCase() });
+          continue;
+        }
+        // O nome define como o leitor trata o arquivo (imagem x PDF), então ele precisa ter extensão.
+        const temExt = /\.(jpe?g|png|webp|gif|heic|bmp|tiff|pdf)$/i.test(nomeCru);
+        const ext = /pdf/i.test(String(a.mime || "")) ? "pdf" : "jpg";
+        entradas.push({ name: temExt ? nomeCru : `arquivo-${i + 1}.${ext}`, buffer });
+      }
+      if (!entradas.length && !audios.length) return json(res, 200, { ok: false, error: "Não consegui abrir esses arquivos. Mande foto (JPG/PNG), PDF ou áudio." });
+      try {
+        const partes = [];
+        let lidos = 0;
+        if (entradas.length) {
+          const { leituras } = await lerArquivosVisuais(entradas, organizationId, { deadlineTs: Date.now() + 40000 });
+          const ok = Object.entries(leituras || {}).filter(([, l]) => l?.status === "lido" && String(l.text || "").trim());
+          if (ok.length) await registrarConsumoLeituraVisual(organizationId, ok.length);
+          lidos += ok.length;
+          for (const [nome, l] of ok) partes.push(`${nome}: ${String(l.text).trim()}`);
+        }
+        if (audios.length) {
+          // Mesmo teto diário da transcrição de voz do Cérebro — o custo é o mesmo (Whisper).
+          const limiteVoz = await verificarLimiteDiario(organizationId, "cerebro-transcricao-voz", limiteTranscricaoVozDoDia(), limiteTranscricaoVozDoDiaTeste());
+          if (!limiteVoz.permitido) {
+            partes.push(`(o limite de transcrições de áudio de hoje já foi atingido — ${audios.length} ${audios.length === 1 ? "áudio ficou" : "áudios ficaram"} sem transcrever)`);
+          } else {
+            for (const a of audios) {
+              try {
+                const t = await transcreverBuffer(a.buffer, a.ext, openai, organizationId);
+                if (String(t || "").trim()) { partes.push(`${a.name}: ${String(t).trim()}`); lidos += 1; }
+              } catch (_) { /* um áudio ruim não derruba os outros */ }
+            }
+          }
+        }
+        if (!lidos) return json(res, 200, { ok: false, error: "Não achei nada escrito nem falado nesses arquivos." });
+        return json(res, 200, { ok: true, texto: partes.join("\n"), lidos, enviados: arquivos.length });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: e?.message || "Não consegui ler esses arquivos." });
       }
     }
 
