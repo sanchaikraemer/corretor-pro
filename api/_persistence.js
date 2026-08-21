@@ -1399,9 +1399,17 @@ const STATS_CACHE_WRITE_CONCURRENCY = 20;
 // É o teto que garante que a listagem SEMPRE responde rápido, mesmo no pior caso (virada do dia,
 // que vence o cache da carteira inteira de uma vez). O que não couber fica pra próxima carga, com
 // os números da carga anterior na tela. Configurável por variável de ambiente na Vercel.
+// v1345 — 150 baixou pra 60. O dono reclamou da demora pra carregar (print de 21/08/2026, 09h50 —
+// PRIMEIRA abertura do dia, que é justamente quando o cache da carteira inteira acabou de vencer).
+// Com 150, a carteira dele (197 leads) puxava três lotes de 50 conversas inteiras nessa abertura.
+// Com 60, a primeira abertura puxa um lote e pouco, e a carteira esquenta em ~4 cargas — a Home já
+// sincroniza sozinha a cada 2 minutos, então em poucos minutos está tudo recalculado. Enquanto
+// isso, os leads que faltam aparecem com os números de ontem, que é o que este desenho sempre
+// aceitou de propósito ("números de ontem na tela são melhores que zerar tudo", v1136).
+// Continua configurável por variável de ambiente na Vercel, pra dar pra ajustar sem publicar.
 const STATS_TIMELINES_POR_CARGA = Number(process.env.CORRETOR_PRO_STATS_TIMELINES_POR_CARGA) > 0
   ? Number(process.env.CORRETOR_PRO_STATS_TIMELINES_POR_CARGA)
-  : 150;
+  : 60;
 // v1087 — TETO DE TEMPO. Este cache vence por DIA (ver cacheStats.dia === hoje em
 // listRecentProcessings): à meia-noite ele vence pra CARTEIRA INTEIRA de uma vez. Na primeira
 // abertura do dia, então, a listagem recalculava tudo E AINDA ESPERAVA até 500 gravações no banco
@@ -1416,7 +1424,12 @@ const STATS_TIMELINES_POR_CARGA = Number(process.env.CORRETOR_PRO_STATS_TIMELINE
 // tudo de novo, e a carteira nunca "esquentava". Combinado com o teto de leituras logo abaixo
 // (STATS_TIMELINES_POR_CARGA), o volume por carga agora é conhecido e pequeno: dá pra gravar tudo
 // o que foi calculado nesta carga, que é o que faz a próxima ser rápida de verdade.
-const STATS_CACHE_WRITE_BUDGET_MS = 6000;
+// v1345 — 6000ms baixou pra 2500ms. Estas gravações são cache: a resposta JÁ está pronta antes
+// delas, e o corretor fica esperando por trabalho que não muda nada na tela dele. O orçamento de
+// 6s foi calibrado na v1146 pra um volume que hoje não existe mais — com o teto de leituras por
+// carga em 60, são no máximo ~3 rodadas de 20 gravações, que cabem folgadas em 2,5s. O que
+// eventualmente não couber é recalculado e regravado na carga seguinte, como sempre foi.
+const STATS_CACHE_WRITE_BUDGET_MS = 2500;
 export async function persistStatsCacheWriteBacks(supabase, pendentes, organizationId) {
   const comecou = Date.now();
   const lote = pendentes.slice(0, STATS_CACHE_MAX_WRITEBACKS);
@@ -1683,17 +1696,26 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     const precisamTimeline = [...semCacheNenhum, ...cacheDeOutraVersao, ...cacheDeOutroDia]
       .slice(0, STATS_TIMELINES_POR_CARGA);
     statsPendentes = Math.max(0, semCacheNenhum.length + cacheDeOutraVersao.length + cacheDeOutroDia.length - precisamTimeline.length);
-    for (let i = 0; i < precisamTimeline.length; i += 50) {
-      const fatia = precisamTimeline.slice(i, i + 50);
+    // v1345 — OS LOTES VÃO JUNTOS, NÃO UM DEPOIS DO OUTRO.
+    // Cada lote é uma ida ao banco que traz até 50 conversas inteiras. Em fila, três lotes são
+    // três esperas somadas — e é exatamente a primeira abertura do dia (quando o cache da carteira
+    // inteira venceu) que paga essa soma, que foi o "está demorando demais pra carregar" do dono
+    // (print de 21/08/2026, 09h50). Indo juntos, a espera passa a ser a do lote mais lento.
+    const fatias = [];
+    for (let i = 0; i < precisamTimeline.length; i += 50) fatias.push(precisamTimeline.slice(i, i + 50));
+    const respostas = await Promise.all(fatias.map(async (fatia) => {
       try {
         const { data: cheios, error: erroTl } = await supabase
           .from("whatsapp_processamentos")
           .select("id,timeline_json")
           .eq("organization_id", organizationId)
           .in("id", fatia);
-        if (erroTl || !Array.isArray(cheios)) continue;
-        for (const r of cheios) timelinesBuscadas.set(String(r.id), Array.isArray(r.timeline_json) ? r.timeline_json : []);
-      } catch (_) { /* melhor esforço — essas linhas seguem com o cache velho nesta carga */ }
+        if (erroTl || !Array.isArray(cheios)) return [];
+        return cheios;
+      } catch (_) { return []; /* melhor esforço — essas linhas seguem com o cache velho nesta carga */ }
+    }));
+    for (const cheios of respostas) {
+      for (const r of cheios) timelinesBuscadas.set(String(r.id), Array.isArray(r.timeline_json) ? r.timeline_json : []);
     }
   }
 

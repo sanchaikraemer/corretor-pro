@@ -187,13 +187,22 @@ function fakeSupabaseHonesto(linhas, { falharSegundaConsulta = false } = {}) {
 }
 
 // ---------- 6. Lotes de 50 na segunda consulta (não estourar a URL do PostgREST) ----------
+// v1345 — o teto de conversas lidas por carga caiu de 150 pra 60: o dono reclamou da demora na
+// PRIMEIRA abertura do dia (print de 21/08/2026, 09h50), que é justamente quando o cache da
+// carteira inteira acabou de vencer. Com 120 linhas frias, esta carga lê 60 (dois lotes: 50 + 10)
+// e deixa as outras 60 pra próxima — que é o desenho de sempre: número de ontem na tela em vez de
+// espera. O que continua guardado aqui é o tamanho do lote (50), que existe pra não estourar a
+// URL do PostgREST.
 {
   const linhas = Array.from({ length: 120 }, (_, i) => linhaBase(`lead-${i}`));
   const supa = fakeSupabaseHonesto(linhas);
-  await listRecentProcessings(200, { supabase: supa, organizationId: 'org-1', previewLimit: 8 });
+  const r = await listRecentProcessings(200, { supabase: supa, organizationId: 'org-1', previewLimit: 8 });
   const segundas = supa.registro.consultas.filter(c => c.ids);
-  assert.equal(segundas.length, 3, '120 linhas frias = 3 lotes (50+50+20)');
+  const idsLidos = segundas.reduce((n, c) => n + c.ids.length, 0);
+  assert.equal(idsLidos, 60, 'esta carga lê no máximo 60 conversas — o resto fica pra próxima');
+  assert.equal(segundas.length, 2, '60 conversas = 2 lotes (50 + 10)');
   assert.ok(segundas.every(c => c.ids.length <= 50), 'nenhum lote pode passar de 50 ids');
+  assert.equal(r.meta.statsPendentes, 60, 'e a resposta diz quantos ficaram pra próxima carga');
 }
 
 // ---------- 7. Guarda estática: a lista de colunas da listagem não pode voltar a ter a conversa ----------

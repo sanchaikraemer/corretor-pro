@@ -24,7 +24,11 @@ assert.doesNotMatch(rowSrc, /<span class="chr-dot"/, "a linha não pode mais ren
 assert.match(rowSrc, /chr-nm[\s\S]*chr-pr[\s\S]*chr-dd/, "a linha continua com nome, produto e dias (só a bolinha saiu)");
 
 // O grid não reserva mais coluna/área pra bolinha (nem no desktop nem no mobile).
-assert.match(app, /grid-template-columns:minmax\(0,1\.05fr\) minmax\(0,\.7fr\) 240px 42px;grid-template-areas:"nm pr bar dd"/,
+// v1345 — a largura da última coluna saiu de 42px pra 104px (o texto "atendido há 100d" precisa
+// de 97px e estava vazando por cima do número — print do dono de 21/08/2026). O que este teste
+// guarda é o que ele sempre guardou: são QUATRO áreas, "nm pr bar dd", e nenhuma delas é bolinha.
+// Cravar o número exato de pixels aqui só transformava um ajuste de largura em teste vermelho.
+assert.match(app, /grid-template-columns:minmax\(0,1\.05fr\) minmax\(0,\.7fr\) 240px \d+px;grid-template-areas:"nm pr bar dd"/,
   "grid desktop não reserva mais espaço pra bolinha");
 assert.match(app, /grid-template-columns:minmax\(0,1fr\) auto;grid-template-areas:"nm dd" "bar pr"/,
   "grid mobile não reserva mais espaço pra bolinha");
