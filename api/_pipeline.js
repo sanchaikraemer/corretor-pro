@@ -1305,6 +1305,91 @@ export function perguntasSemRespostaDoCliente(timeline, corretorNome = "", lead 
     .slice(0, MAX_PERGUNTAS_SEM_RESPOSTA);
 }
 
+// ─── 2-B. v1367 — O QUE O CLIENTE PERGUNTOU E NINGUÉM RESPONDEU ──────────────────────────────
+//
+// Print do dono, cliente Adairton (22/08/2026). A última coisa que o cliente escreveu foi
+// "Em qual cidade." — pergunta simples, direta, sem resposta até hoje. As três sugestões saíram
+// falando de marcar visita, e nenhuma respondia a cidade.
+//
+// Motivo: o app tinha a lista das perguntas do CORRETOR que o cliente não respondeu (bloco 2) e
+// não tinha a lista contrária. A pergunta do cliente afundava no meio de "o que o cliente já
+// disse", como se fosse mais uma fala qualquer — quando é a coisa mais importante da conversa:
+// tem alguém esperando resposta.
+//
+// DUAS DIFERENÇAS em relação à lista irmã, que vêm da conversa real:
+//   • cliente NÃO usa ponto de interrogação. "Em qual cidade." veio com ponto final. Por isso a
+//     forma de pergunta também é reconhecida pelo começo da frase ("qual", "quanto", "onde"...),
+//     inclusive com preposição na frente ("EM qual cidade").
+//   • pergunta de cliente é CURTA. O corte de tamanho da lista irmã (14 caracteres) jogaria fora
+//     justamente as que mais importam.
+const _COMECO_DE_PERGUNTA = /^(?:(?:em|de|do|da|no|na|pra|para|por|a|ao|até|com)\s+)?(?:qual|quais|quanto|quantos|quantas|quando|onde|aonde|como|quem|o\s+que|por\s*qu[êe]|porqu[êe]|pq)\b/i;
+
+export function perguntasDoClienteSemResposta(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const lados = arr.map(m => _ladoDaMensagem(m, corretorNome, lead));
+  const porChave = new Map();
+
+  for (let i = 0; i < arr.length; i++) {
+    if (lados[i] !== "cliente") continue;
+    const texto = String(arr[i]?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || /^\[(?:Arquivo enviado|Figurinha)/i.test(texto)) continue;
+    const p = dataCivilDeMensagem(arr[i]);
+
+    // O que o CORRETOR falou depois — é ali que a resposta estaria.
+    const depois = [];
+    for (let j = i + 1; j < arr.length; j++) {
+      if (lados[j] === "corretor") depois.push(String(arr[j]?.text || "").trim());
+    }
+    const ditoPeloCorretor = _palavrasDeConteudo(depois.join(" \n "));
+
+    for (const bruta of texto.split(/(?<=[.!?])\s+|\n+/)) {
+      const frase = String(bruta || "").trim();
+      if (!frase) continue;
+      const limpa = frase.replace(/^[^A-Za-zÀ-ÿ0-9]+/, "").trim();
+      if (limpa.length < 6) continue;
+      const nucleo = limpa
+        .replace(/^(bom dia|boa tarde|boa noite|ol[áa]|oi|opa|e a[íi])\b[\s,!.]*/i, "")
+        .trim();
+      if (!nucleo || PERGUNTA_DE_CORTESIA.test(nucleo)) continue;
+      // É pergunta? Ou tem "?" ou começa em palavra de pergunta (o cliente costuma omitir o "?").
+      const ehPergunta = limpa.includes("?") || _COMECO_DE_PERGUNTA.test(nucleo);
+      if (!ehPergunta) continue;
+      // Pedido de marcar ("podemos marcar uma visita?", "que dia dá?") NÃO entra aqui: isso é
+      // compromisso e tem bloco próprio, que reconstrói a coisa toda com autor e pendência. A
+      // lista irmã (perguntas do corretor) faz o mesmo corte pelo mesmo motivo. Sem isto, o
+      // pedido de visita do cliente virava "pergunta sem resposta" e disputava a vez com o
+      // compromisso que ele mesmo abriu.
+      if (_QUER_MARCAR.test(nucleo) || CONVITE_DO_CORRETOR.test(nucleo)) continue;
+
+      const assunto = _palavrasDeConteudo(nucleo);
+      if (!assunto.size) continue; // sem palavra de conteúdo não dá pra conferir resposta: não acusa
+
+      let respondida = false;
+      for (const palavra of assunto) {
+        if (ditoPeloCorretor.has(palavra)) { respondida = true; break; }
+      }
+      const chave = _semAcentoMinuscula(nucleo).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      if (!chave) continue;
+      if (respondida) { porChave.delete(chave); continue; }
+
+      porChave.set(chave, {
+        texto: _trechoCurto(nucleo, 160),
+        data: p?.texto || "data não identificada",
+        dia: p?.dia ?? null,
+        diasAtras: _diasDesde(p?.dia ?? null, hojeDia),
+        // Silêncio total depois da pergunta é o caso sem margem de dúvida: ninguém respondeu nada.
+        corretorNaoFalouMais: depois.length === 0
+      });
+    }
+  }
+
+  return [...porChave.values()]
+    .sort((a, b) => (Number(b.corretorNaoFalouMais) - Number(a.corretorNaoFalouMais))
+      || ((a.diasAtras ?? Number.MAX_SAFE_INTEGER) - (b.diasAtras ?? Number.MAX_SAFE_INTEGER)))
+    .slice(0, MAX_PERGUNTAS_SEM_RESPOSTA);
+}
+
 // ─── 3. QUE PRÓXIMO PASSO O CORRETOR JÁ PROPÔS ───────────────────────────────────────────────
 // Visita, café, reunião, apresentação. Quando o mesmo convite já foi feito quatro vezes e a
 // conversa seguiu sem ele, propor o quinto igual não é próximo passo.
@@ -1319,6 +1404,10 @@ export function proximosPassosJaPropostos(timeline, corretorNome = "", lead = {}
     if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
     const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
     if (!texto || !CONVITE_DO_CORRETOR.test(texto)) continue;
+    // v1367 — mesma razão do compromisso, na lista irmã: o "Quer agendar uma visita?" do robô do
+    // anúncio entrava aqui como "próximo passo que O CORRETOR já propôs". Ele não propôs nada —
+    // e o fichário usava esse número pra decidir se valia insistir no convite.
+    if (_SAUDACAO_AUTOMATICA_ANUNCIO.test(texto)) continue;
     const p = dataCivilDeMensagem(m);
     achados.push({
       data: p?.texto || "data não identificada",
@@ -1447,7 +1536,20 @@ export function promessasNaoCumpridasDoCorretor(timeline, corretorNome = "", lea
     const p = dataCivilDeMensagem(arr[i]);
     const diaPromessa = p?.dia ?? null;
     const alvos = _alvosDaPromessa(texto);
-    const entregues = new Set();
+    // v1367 — A DÍVIDA INVENTADA (print do dono, cliente Adairton, 22/08/2026).
+    //
+    // O corretor escreveu, numa mensagem só: "O valor é R$ 430 mil e pode ser financiado. Vou te
+    // mandar videos dele." O app extraía "valor" como alvo da promessa (a palavra está ali) e
+    // depois procurava a entrega SÓ nas mensagens seguintes — nunca na própria. Conclusão falsa:
+    // "prometeu o valor/preço e não entregou". Como o fichário manda reconhecer o atraso na
+    // primeira frase, as três sugestões saíram com "Demorei para te responder" e "vou te confirmar
+    // isso ainda hoje" — o corretor parecendo que não sabe o preço nem a cidade do próprio
+    // apartamento, na frente de um cliente que só tinha perguntado em qual cidade fica.
+    //
+    // O que muda: o que a PRÓPRIA mensagem da promessa já entrega conta como entregue. Quem diz
+    // "custa R$ 430 mil, te mando as fotos depois" entregou o valor e ainda deve as fotos — e é
+    // exatamente isso que a lista passa a dizer.
+    const entregues = new Set(_entregasDetectadas(texto));
     let houveEntregaGenerica = false;
     for (let j = i + 1; j < arr.length; j++) {
       if (lados[j] !== "corretor") continue;
@@ -1881,6 +1983,16 @@ export function compromissoDaConversa(timeline, corretorNome = "", lead = {}, ag
     if (!quem) continue;
     const texto = String(arr[i]?.text || "").replace(/\s+/g, " ").trim();
     if (!texto || /^\[Arquivo enviado/i.test(texto)) continue;
+    // v1367 — ANÚNCIO NÃO É COMPROMISSO (print do dono, cliente Adairton, 22/08/2026).
+    //
+    // A frase automática que o Facebook/Instagram dispara quando alguém clica no anúncio —
+    // "Anúncio do Facebook ... Quer agendar uma visita?" — era lida como se o corretor tivesse
+    // proposto uma visita de verdade. Daí saía um compromisso "de pé" com pendência de dia e
+    // hora, e o fichário mandava as três mensagens convergirem em marcar — enquanto o cliente só
+    // tinha perguntado "Em qual cidade.". Robô de anúncio não combina nada com ninguém: o
+    // compromisso começa quando UMA PESSOA fala em marcar. (Mesma peneira da v1308, que já tirava
+    // essas mensagens dos exemplos de como o corretor escreve.)
+    if (lados[i] === "corretor" && _SAUDACAO_AUTOMATICA_ANUNCIO.test(texto)) continue;
     const p = dataCivilDeMensagem(arr[i]);
 
     if (episodio) {
@@ -2076,6 +2188,8 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
   const perguntasJaFeitas = perguntasJaFeitasPeloCorretor(timeline, corretorNome, lead, agora);
   const falasCliente = falasJaDitasPeloCliente(timeline, corretorNome, lead, agora);
   const perguntasSemResposta = perguntasSemRespostaDoCliente(timeline, corretorNome, lead, agora);
+  // v1367 — a lista contrária: o que o CLIENTE perguntou e ninguém respondeu (caso Adairton).
+  const perguntasDoClienteAbertas = perguntasDoClienteSemResposta(timeline, corretorNome, lead, agora);
   const proximosPassos = proximosPassosJaPropostos(timeline, corretorNome, lead, agora);
   const recusas = recusasDoCliente(timeline, corretorNome, lead, agora);
   const promessasNaoCumpridas = promessasNaoCumpridasDoCorretor(timeline, corretorNome, lead, agora);
@@ -2094,6 +2208,7 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
     perguntasJaFeitas,
     falasCliente,
     perguntasSemResposta,
+    perguntasDoClienteAbertas,
     proximosPassos,
     recusas,
     promessasNaoCumpridas,
@@ -2378,6 +2493,7 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     perguntasJaFeitas: perguntas,
     falasCliente,
     perguntasSemResposta: perguntasAbertas,
+    perguntasDoClienteAbertas: perguntasDoCliente,
     proximosPassos: passos,
     recusas,
     promessasNaoCumpridas: promessas,
@@ -2432,6 +2548,25 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     }
   }
 
+  // v1367 — TEM ALGUÉM ESPERANDO RESPOSTA. Vem cedo no fichário de propósito: é o fato que manda
+  // em todos os outros. Caso Adairton (print do dono, 22/08/2026): o cliente perguntou "Em qual
+  // cidade." e as três sugestões falavam de marcar visita, sem responder.
+  if (perguntasDoCliente.length) {
+    const linhas = perguntasDoCliente.map(q => `- "${q.texto}" (${q.data}, ${_haQuantoTempo(q.diasAtras)})${q.corretorNaoFalouMais ? " — e o corretor NÃO escreveu mais nada depois disso" : ""}`);
+    blocos.push(`O CLIENTE PERGUNTOU E NINGUÉM RESPONDEU (lido da conversa pelo app):
+${linhas.join("\n")}
+RESPONDER ISTO VEM ANTES DE QUALQUER JOGADA. Cliente que pergunta e não recebe resposta é o motivo
+mais comum de silêncio — e nenhum convite, nenhuma visita e nenhuma pergunta nova valem mais do que
+a resposta que ele está esperando. A mensagem recomendada RESPONDE isto, logo na primeira frase.
+NÃO transforme a resposta numa promessa ("vou verificar e te confirmo") quando for informação que o
+corretor obviamente tem sobre o próprio produto (cidade, bairro, endereço, tamanho, preço já dito):
+prometer conferir o óbvio faz o corretor parecer que não conhece o que está vendendo. Se a resposta
+NÃO estiver na conversa nem no Cérebro, escreva a mensagem com um espaço claro para o corretor
+completar — nunca invente o dado, e nunca troque a resposta por um convite.
+Convite para visita, se couber, vem DEPOIS da resposta, na mesma mensagem ou nas outras duas.
+O app confere assunto, não intenção: se a resposta já foi dada com outras palavras, siga em frente.`);
+  }
+
   // v1364 — O COMPROMISSO DA CONVERSA, fala a fala, com autor em cada linha (caso Vande: a análise
   // atribuiu ao cliente o adiamento que foi do corretor, tratou remarcação de agenda como perda de
   // força e inventou três objetivos quando o único avanço era marcar dia e hora).
@@ -2479,7 +2614,12 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     if (c.recente && c.continuaValido && (c.naoAconteceu || c.adiamento) && !c.motivoComercial) {
       comoUsar.push(`- Remarcação por agenda NÃO é perda de força, objeção nem esfriamento. Se o único fato for "ainda sem nova data", o campo ondePerdeuForca fica VAZIO — falta de data é pendência de condução, não deterioração. E não reabra qualificação já respondida pelo comportamento dele (quem pediu visita não precisa ser perguntado se ainda tem interesse).`);
     }
-    if (c.recente && c.continuaValido && c.pendencia) {
+    // v1367 — O COMPROMISSO CEDE A VEZ PRA PERGUNTA SEM RESPOSTA (caso Adairton).
+    //
+    // Quando existe pergunta do cliente esperando resposta, mandar as três convergirem em marcar
+    // dia e hora é passar por cima de quem perguntou. Responder vem primeiro; o compromisso
+    // continua no fichário como fato, mas sem a instrução de convergência.
+    if (c.recente && c.continuaValido && c.pendencia && !perguntasDoCliente.length) {
       comoUsar.push(`- O próximo avanço é UM só: ${c.pendencia}. As três mensagens podem — e neste caso devem — buscar ESSE MESMO avanço, mudando só a FORMA: uma propõe um horário concreto; outra oferece duas opções reais de horário; outra retoma o combinado de leve e conduz à confirmação. Não invente um segundo objetivo, não traga outro produto e não faça pergunta nova só para as três ficarem diferentes.`);
       if (c.preferencia && c.preferencia.quem === "cliente") {
         comoUsar.push(`- Ao propor horário, respeite o período que o cliente disse que serve (${c.preferencia.periodo}) — oferecer o período que ele já descartou é não ter lido a conversa.`);
