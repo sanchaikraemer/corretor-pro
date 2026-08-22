@@ -32,13 +32,13 @@ for(const titulo of ['Enviar conversa', 'O que a IA aprendeu', 'Instalar app']){
   assert.match(html, new RegExp('menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `o card "${titulo}" deve continuar no Menu`);
 }
 
-// v894: o topo do lead é a barra de ícones. v908 adicionou mais ícones (Proposta/Arquivar/
-// Mensagens/Excluir), então a barra ficou maior — janela ampliada. Reanalisar segue antes de Agendar.
-const acoes = app.match(/cp704-toolbar">[\s\S]{0,4000}/);
+// v894 pôs tudo como ícone na barra; a v1365 (ordem do dono, 22/08/2026) enxugou a barra pro
+// dia a dia e guardou o Reanalisar no menu "⋯". O que se garante agora: Agendar continua
+// visível na barra, e Reanalisar continua existindo — dentro do menu.
+const acoes = app.match(/cp704-toolbar">[\s\S]{0,6000}/);
 assert.ok(acoes, 'não achei a barra de ícones do topo do lead');
-assert.ok(
-  acoes[0].indexOf('Reanalisar') < acoes[0].indexOf('Agendar'),
-  'o Reanalisar precisa vir antes de "Agendar"'
-);
+assert.ok(acoes[0].includes('Agendar'), 'o Agendar continua visível na barra');
+assert.match(app, /id="cp704MoreMenu"[\s\S]*?title="Reanalisar"/,
+  'o Reanalisar mora no menu "⋯"');
 
 console.log('v866-ui-limpeza: ok');

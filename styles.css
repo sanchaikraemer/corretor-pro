@@ -414,7 +414,9 @@ html[data-theme="dark"]{
   --soft:#D6E0E4;
   --secondary:#C2CDD2;      /* Secundário */
   --dim:#A9B8BE;
-  --muted:#8FA0A8;          /* Auxiliar */
+  /* v1365 — contraste do texto auxiliar subiu um degrau (era #8FA0A8): na avaliação de
+     22/08/2026 as explicações secundárias em cinza ficavam apagadas demais sobre o verde escuro. */
+  --muted:#9FB2BB;          /* Auxiliar */
   --accent:#FF6258;         /* Coral oficial — igual nos dois temas */
   --accent-soft:rgba(255,98,88,.14);
   --accent-line:rgba(255,98,88,.42);
@@ -640,7 +642,10 @@ html[data-theme="dark"]{
   --cp-border-strong:#205665;       /* Borda oficial */
   --cp-text:#F7FAFB;        /* Texto */
   --cp-soft:#C2CDD2;        /* Secundário */
-  --cp-muted:#8FA0A8;       /* Auxiliar */
+  /* v1365 — contraste do auxiliar subiu um degrau (era #8FA0A8): avaliação de 22/08/2026, as
+     explicações em cinza ficavam apagadas sobre o verde escuro. ESTA é a camada que renderiza
+     (o bloco #657 é o último e manda em --muted); o token lá de cima foi ajustado junto. */
+  --cp-muted:#9FB2BB;       /* Auxiliar */
   --cp-coral:#FF6258;       /* Coral oficial */
   --cp-coral-2:#FF6258;
   --cp-green:#61C7E8;   /* v1214 — era verde */

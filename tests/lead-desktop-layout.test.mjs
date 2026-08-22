@@ -12,9 +12,14 @@ assert.match(app,
 assert.match(app,
   /<div class="cp704-workspace">[\s\S]*?<main class="cp704-primary">[\s\S]*?<aside class="cp704-secondary">/,
   'render do lead deve separar conteúdo principal e painel lateral');
+// v1365 — mudou por ordem do dono (avaliação de 22/08/2026): "Resumo e histórico deveriam poder
+// recolher/expandir. Quem quer investigar abre; quem quer agir não precisa atravessar tudo."
+// Detalhes comerciais continua no painel lateral, mas agora começa RECOLHIDO.
 assert.match(app,
-  /<aside class="cp704-secondary">[\s\S]*?<details class="cp704-details" open><summary>Detalhes comerciais<\/summary>/,
-  'Detalhes comerciais deve abrir no painel lateral e iniciar visível');
+  /<aside class="cp704-secondary">[\s\S]*?<details class="cp704-details"><summary>Detalhes comerciais<\/summary>/,
+  'Detalhes comerciais deve estar no painel lateral, recolhível');
+assert.ok(!/<details class="cp704-details" open><summary>Detalhes comerciais/.test(app),
+  'Detalhes comerciais não pode voltar a iniciar aberto (ordem do dono, v1365)');
 assert.match(app,
   /@media\(max-width:999px\)\{[^}]*\.cp704-lead\{max-width:760px\}[^}]*\.cp704-workspace\{grid-template-columns:minmax\(0,1fr\)\}/,
   'tablet e celular devem voltar ao fluxo de uma coluna');

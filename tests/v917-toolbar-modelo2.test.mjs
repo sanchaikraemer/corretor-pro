@@ -16,14 +16,15 @@ const trecho = app.slice(abreToolbar, abreToolbar + 400);
 assert.match(trecho, /^<div class="cp704-toolbar"><button class="cp704-back"/,
   'o botão Voltar (.cp704-back) precisa ser o primeiro filho dentro de .cp704-toolbar');
 assert.match(trecho, /<span class="lb">Voltar<\/span><\/button><button type="button" class="cp704-ico"/,
-  'depois do Voltar vem direto o próximo ícone (Proposta), sem nada entre os dois');
+  'depois do Voltar vem direto o próximo ícone visível (Mensagens), sem nada entre os dois');
 
-// 2. A toolbar virou um grid fixo de 4 colunas — todo botão tem exatamente a mesma largura,
-// não importa em qual das 2 linhas caiu (o bug do print era a 2ª linha mais larga que a 1ª).
-assert.match(app, /\.cp704-toolbar\{display:grid;grid-template-columns:repeat\(4,1fr\);gap:8px\}/,
-  'toolbar precisa ser um grid de 4 colunas iguais (não mais flex-wrap)');
+// 2. v1365 (ordem do dono, 22/08/2026): a barra encolheu pra 5 lugares — Voltar, Mensagens,
+// Agendar, Atendido/Marcar e o menu "⋯". Grid fixo de 5 colunas iguais: uma linha só, sem
+// linha esticada (o princípio do Modelo 2 continua — largura igual pra todo botão).
+assert.match(app, /\.cp704-toolbar\{display:grid;grid-template-columns:repeat\(5,1fr\);gap:8px\}/,
+  'toolbar precisa ser um grid de 5 colunas iguais (não mais flex-wrap)');
 
-// 3. O grid de 4 colunas continua valendo no mobile (é o que fecha 8 ícones em 2 linhas certas).
+// 3. Sem sobras do flex antigo no mobile.
 const mobile = app.match(/@media\(max-width:560px\)\{[\s\S]*?\}\}/)[0];
 assert.doesNotMatch(mobile, /\.cp704-ico\{flex:1 1 calc\(25% - 6px\)/,
   'não pode sobrar o flex-basis antigo (esticava a 2ª linha) no mobile');
