@@ -2059,6 +2059,43 @@ export function itensDeCatalogoDaConversa(timeline, corretorNome = "", lead = {}
   return itens;
 }
 
+// v1357 — DE ONDE SAIU O "VOCÊS"?
+//
+// Print do dono (22/08/2026): as três sugestões falavam com o cliente no plural — "Esse horário
+// funciona para vocês?", "vocês preferem mais cedo", "que funcione para vocês". O cliente é UMA
+// pessoa: em toda a conversa ele fala de si no singular ("estou em visita", "não vou chegar",
+// "te confirmo"), e o corretor o trata por "o Sr". O plural foi inventado — e cliente percebe,
+// porque parece mensagem de modelo, mandada pra qualquer um.
+//
+// Isto NÃO vira instrução nova de escrita no miolo do prompt (regra do dono, v1247). Vira FATO
+// calculado do texto, no fichário — o remédio que funcionou na v1317, v1329 e v1334: o app conta,
+// e a conversa diz.
+const _PLURAL_DE_SI = /\b(n[óo]s|a gente|nosso|nossa|nossos|nossas|somos|estamos|moramos|queremos|precisamos|vamos ver|vamos analisar)\b/i;
+const _TRATA_FORMAL = /\b(o\s+sr\.?|a\s+sra\.?|senhor|senhora)\b/i;
+const _TRATA_PLURAL = /\bvoc[êe]s\b/i;
+
+export function tratamentoDoCliente(timeline, corretorNome = "", lead = {}) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  let clientePlural = false, corretorPlural = false, corretorFormal = false, falasDoCliente = 0;
+  for (const m of arr) {
+    const texto = String(m?.text || "");
+    if (!texto.trim() || /^\[Arquivo enviado|^\[Figurinha/.test(texto)) continue;
+    const lado = _ladoDaMensagem(m, corretorNome, lead);
+    if (lado === "cliente") {
+      falasDoCliente += 1;
+      if (_PLURAL_DE_SI.test(texto)) clientePlural = true;
+    } else if (lado === "corretor") {
+      if (_TRATA_PLURAL.test(texto)) corretorPlural = true;
+      if (_TRATA_FORMAL.test(texto)) corretorFormal = true;
+    }
+  }
+  return {
+    falasDoCliente,
+    ehUmaPessoaSo: falasDoCliente > 0 && !clientePlural && !corretorPlural,
+    comoOCorretorChama: corretorPlural ? "vocês" : (corretorFormal ? "o Sr" : "você")
+  };
+}
+
 // ─── O FICHÁRIO INTEIRO, JÁ EM TEXTO PRO PEDIDO ──────────────────────────────────────────────
 export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date(), estadoPronto = null) {
   const blocos = [];
@@ -2079,6 +2116,16 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     semCapitalHoje: semCapital,
     permuta
   } = estado;
+
+  {
+    const trato = tratamentoDoCliente(timeline, corretorNome, lead);
+    if (trato.ehUmaPessoaSo) {
+      blocos.push(`COM QUEM VOCÊ ESTÁ FALANDO (lido da conversa pelo app):
+- É UMA pessoa só. Em nenhuma mensagem o cliente falou de si no plural, e o corretor nunca escreveu "vocês".
+- O corretor trata este cliente por "${trato.comoOCorretorChama}".
+Escreva no singular e mantenha esse tratamento. Não use "vocês", "de vocês", "para vocês", "preferem", "funciona para vocês" — plural inventado faz a mensagem parecer modelo mandado pra qualquer um, e o cliente percebe.`);
+    }
+  }
 
   if (valores.length) {
     const linhas = valores.map(v => {
@@ -6513,6 +6560,24 @@ const PDF_EXT = /\.pdf$/i;
 const MAX_BYTES_IMAGEM_LEITURA = 5 * 1024 * 1024;
 const MAX_BYTES_PDF_LEITURA = 8 * 1024 * 1024;
 
+// v1357 — A SENHA "SEM CONTEUDO COMERCIAL" ESTAVA PASSANDO BATIDO QUANDO VINHA COM ACENTO.
+//
+// Print do dono (22/08/2026): a linha do joinha da Scania entrou na conversa como
+// "[Imagem lida pela IA] SEM CONTEÚDO COMERCIAL". A leitura funcionou e respondeu certo — que ali
+// não havia nada comercial. Só que a conferência procurava exatamente "SEM CONTEUDO COMERCIAL",
+// sem acento, e a resposta veio com "Ú". Não bateu: o app tratou a senha como se fosse o conteúdo
+// da imagem e mandou essa frase pra dentro da análise, como fato da conversa.
+//
+// Compara sem acento, sem caixa e sem pontuação final — a senha é uma senha, não um texto exato.
+export function ehSemConteudoComercial(texto) {
+  const t = String(texto || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.!\s]+$/g, "")
+    .trim()
+    .toUpperCase();
+  return t === "SEM CONTEUDO COMERCIAL";
+}
+
 export function arquivoVisualLegivel(nome) {
   const n = String(nome || "");
   // v1356 — figurinha nunca vai pra leitura: não tem texto comercial e ainda custa uma chamada paga.
@@ -6579,7 +6644,7 @@ async function lerUmArquivoVisual(nome, buffer, openai, organizationId) {
   }), { tries: 2 });
   await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloUsado, rota: "leitura-visual-import", usage: completion?.usage });
   const texto = String(completion?.choices?.[0]?.message?.content || "").replace(/\s+$/, "").trim();
-  if (!texto || /^SEM CONTEUDO COMERCIAL$/i.test(texto)) return { status: "sem_conteudo_comercial", text: "" };
+  if (!texto || ehSemConteudoComercial(texto)) return { status: "sem_conteudo_comercial", text: "" };
   return { status: "lido", text: texto };
 }
 
@@ -6874,7 +6939,7 @@ export async function lerLinksDaConversa(urls = [], organizationId = ORGANIZACAO
       }), { tries: 2 });
       await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloTarefasSimples(), rota: "leitura-link-import", usage: completion?.usage });
       const resumo = String(completion?.choices?.[0]?.message?.content || "").trim();
-      leituras[url] = (!resumo || /^SEM CONTEUDO COMERCIAL$/i.test(resumo))
+      leituras[url] = (!resumo || ehSemConteudoComercial(resumo))
         ? { status: "sem_conteudo_comercial", text: "" }
         : { status: "lido", text: resumo };
     } catch (error) {
