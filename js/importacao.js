@@ -855,30 +855,11 @@ async function renderProcessedResult(data, meta){
     : "";
 
   const sm = data.metrics || {};
-  // v1348 — o aviso falava SÓ dos áudios. Na exportação sem mídia não é só o áudio que fica de
-  // fora: foto, PDF, catálogo, tabela de preço — tudo vira "<Mídia oculta>" e some junto. Foi o
-  // caso do print do dono (21/08/2026): três arquivos nas últimas mensagens, nenhum deles no envio.
-  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8"><b>⚠️ Conversa enviada SEM os arquivos.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "arquivo ficou de fora" : "arquivos ficaram de fora"} — <b>foto, PDF e áudio não vieram</b>, então a IA sabe que houve envio mas não o que tinha dentro. Se algum deles tinha preço, planta ou condição, isso ficou fora da análise. Abra o cliente e toque em <b>"Ler fotos, PDFs e áudios"</b> pra mandar esses arquivos agora — sem precisar exportar a conversa de novo.</div>` : "";
-  // v1323 — FOTO E PDF QUE FICARAM DE FORA TAMBÉM PRECISAM APARECER AQUI.
-  //
-  // O aviso acima só existia pro caso da exportação sem mídia, e falava só dos áudios. Quando a
-  // conversa vinha com os nomes dos arquivos mas eles não eram lidos (teto do dia, arquivo que não
-  // veio no ZIP, conversa importada antes de o app saber ler imagem/PDF), a tela ficava muda: o
-  // corretor recebia a análise sem saber que a arte com o preço nunca tinha sido vista pela IA.
-  const naoLido = (analysis && typeof analysis.materialNaoLido === "object" && analysis.materialNaoLido) || null;
-  const fotosForaCount = Number(naoLido?.imagens) || 0;
-  const docsForaCount = Number(naoLido?.documentos) || 0;
-  // v1348 — arquivo sem tipo ("<Mídia oculta>") também conta. Quando a exportação tem áudio E
-  // linhas de mídia oculta, o aviso de cima não dispara e este era o único que poderia avisar —
-  // e ele não enxergava esse caso.
-  const semTipoCount = Number(naoLido?.arquivos) || 0;
-  const materialNaoLidoHtml = (!sm.exportadoSemMidia && (fotosForaCount + docsForaCount + semTipoCount) > 0)
-    ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8"><b>⚠️ A IA não leu ${[
-        fotosForaCount ? `${fotosForaCount} ${fotosForaCount === 1 ? "foto" : "fotos"}` : "",
-        docsForaCount ? `${docsForaCount} ${docsForaCount === 1 ? "PDF" : "PDFs"}` : "",
-        semTipoCount ? `${semTipoCount} ${semTipoCount === 1 ? "arquivo que não veio no envio" : "arquivos que não vieram no envio"}` : ""
-      ].filter(Boolean).join(" e ")} desta conversa.</b> O que estiver escrito neles (preço, planta, condição) ficou de fora da análise. Abra o cliente e toque em <b>"Ler fotos, PDFs e áudios"</b> pra mandar esse material agora.</div>`
-    : "";
+  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> Os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  // v1360 — o aviso de "material não lido" saiu daqui. Ele existia por causa de foto e PDF, que
+  // desde a v1358 nem são enviados: avisava de um problema que não existe mais. Áudio que não vira
+  // texto já tem o seu próprio aviso, logo abaixo (audioSemTextoHtml, v1178).
+  const materialNaoLidoHtml = "";
 
   // v1178 — ÁUDIO QUE NÃO VIROU TEXTO AGORA DIZ POR QUÊ.
   //

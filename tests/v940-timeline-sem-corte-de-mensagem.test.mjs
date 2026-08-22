@@ -24,7 +24,7 @@ assert.doesNotMatch(fn, /\.slice\(0,\s*520\)/, 'a mensagem não pode mais ser co
 // Fala de gente não é tocada. A regra desta versão continua valendo e está conferida logo abaixo.
 assert.match(fn, /const textoNaTela = cp1348TextoNaTela\(cp704Text\(m\.text\)\);/,
   'o texto da mensagem sai inteiro do registro, sem corte');
-assert.match(fn, /: `<p>\$\{escapeHtml\(textoNaTela\)\}<\/p>`;/,
+assert.match(fn, /const corpo = `<p>\$\{escapeHtml\(textoNaTela\)\}<\/p>`;/,
   'a mensagem precisa ser renderizada por completo, sem corte de tamanho');
 {
   const curtaMatch = app.match(/function cp1348TextoNaTela\(texto\)\{[\s\S]*?\n  \}/);
@@ -32,11 +32,7 @@ assert.match(fn, /: `<p>\$\{escapeHtml\(textoNaTela\)\}<\/p>`;/,
   assert.doesNotMatch(curtaMatch[0], /\.slice\(|\.substr|\.substring\(|…|\.\.\./,
     'o que entra no caminho da mensagem não pode cortar texto — é isso que a v940 protege');
   // Rodando de verdade: fala longa do corretor sai igualzinha, sem perder um caractere.
-  const fonte = [
-    app.match(/const CP1348_MARCADOR = [\s\S]*?\n  \};/)[0],
-    app.match(/const CP1356_FIGURINHA = [\s\S]*?;/)[0],
-    curtaMatch[0]
-  ].join('\n');
+  const fonte = [app.match(/const CP1348_MARCADOR = [\s\S]*?\n  \};/)[0], curtaMatch[0]].join('\n');
   const curto = new Function(`${fonte}\nreturn cp1348TextoNaTela;`)();
   const longa = 'transferir o financiamento para outro comprador recebendo o que pagou nele até então, '
     + 'e isso daria como entrada em outro e financiaria saldo. Outra opção... Para entender melhor '

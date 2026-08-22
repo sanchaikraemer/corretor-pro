@@ -57,7 +57,9 @@ assert.equal(tratamentoDoCliente(null).ehUmaPessoaSo, false);
   const fichario = montarFicharioDaConversa(parseWhatsappTxt(CONVERSA_DO_DONO), "Sanchai", LEAD, new Date("2026-08-22T12:00:00Z"));
   assert.match(fichario, /COM QUEM VOCÊ ESTÁ FALANDO/, "o fichário precisa dizer com quem se está falando");
   assert.match(fichario, /É UMA pessoa só/);
-  assert.match(fichario, /trata este cliente por "o Sr"/, "com o tratamento lido da própria conversa");
+  assert.match(fichario, /O tratamento desta conversa é "o Sr"/, "com o tratamento lido da própria conversa");
+  // v1360 — e limitado: "mantenha esse tratamento" fez a IA enfiar "o Sr" em cada frase.
+  assert.match(fichario, /NO MÁXIMO UMA VEZ por mensagem/);
   assert.match(fichario, /Não use "vocês"/, "e a instrução concreta, não meta-instrução");
 }
 {

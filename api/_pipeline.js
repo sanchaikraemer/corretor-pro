@@ -10,7 +10,12 @@ const AUDIO_INLINE_RE = /\.(opus|ogg|mp3|m4a|wav|aac)\b/i;
 const IMAGE_INLINE_RE = /\.(jpg|jpeg|png|gif|webp|heic|bmp|tiff)\b/i;
 const VIDEO_INLINE_RE = /\.(mp4|mov|avi|webm|mkv|3gp|m4v)\b/i;
 const DOC_INLINE_RE = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|csv|vcf|txt)\b/i;
-// v1356 — FIGURINHA É REAÇÃO, NÃO É MATERIAL PRA ANALISAR.
+// v1360 — FIGURINHA SOME DA CONVERSA (ordem do dono, 22/08/2026: "suma com isso").
+//
+// A v1356 deixou ela aparecer como "reação do cliente". O dono não quis nem isso: figurinha não
+// entra na conversa, não conta como material, não vai pra leitura. Some.
+//
+// Contexto de por que ela precisou ser reconhecida (v1356):
 //
 // Print do dono (22/08/2026): o cliente respondeu com o joinha da Scania — uma figurinha, o "ok,
 // combinado" dele. O app registrou "Foto enviada — a IA não leu o conteúdo", contou como foto
@@ -46,7 +51,7 @@ const HIDDEN_MEDIA_BARE_RE = /^\s*(imagem|foto|v[ií]deo|[áa]udio|documento|arq
 // quando a exportação INCLUI os arquivos). Este é o mesmo remédio pro formato sem arquivos.
 function marcadorDeMidiaOculta(linha) {
   const t = String(linha || "").toLowerCase();
-  if (/figurinha|adesivo|sticker/.test(t)) return "[Figurinha enviada — é uma reação, não tem texto pra ler]";
+  if (/figurinha|adesivo|sticker/.test(t)) return "";
   if (/imagem|foto|image|photo|gif/.test(t)) return "[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]";
   if (/v[ií]deo|video/.test(t)) return "[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]";
   if (/[áa]udio|voz|voice|ptt/.test(t)) return "[Arquivo enviado nesta mensagem: áudio — conteúdo não analisado pela IA]";
@@ -341,7 +346,9 @@ export function parseWhatsappTxt(txt) {
         if (!trimmed) continue;
         // v1258 — vira marcador em vez de sumir (ver marcadorDeMidiaOculta).
         if (HIDDEN_MEDIA_ONLY_RE.test(trimmed) || HIDDEN_MEDIA_BARE_RE.test(trimmed)) {
-          kept.push(marcadorDeMidiaOculta(trimmed));
+          // v1360 — figurinha devolve "" (o dono mandou sumir com ela): linha vazia não entra.
+          const marca = marcadorDeMidiaOculta(trimmed);
+          if (marca) kept.push(marca);
           continue;
         }
         if (ATTACHED_SUFFIX_RE.test(trimmed)) {
@@ -350,7 +357,7 @@ export function parseWhatsappTxt(txt) {
           // arquivo foi enviado ali (não só o conteúdo, que já era certo não inventar). Mantém
           // um marcador factual, sem tentar descrever o que tem na imagem/vídeo/documento.
           const nomeAnexo = trimmed.replace(ATTACHED_SUFFIX_RE, "").trim();
-          if (ehFigurinha(nomeAnexo)) { kept.push("[Figurinha enviada — é uma reação, não tem texto pra ler]"); continue; }
+          if (ehFigurinha(nomeAnexo)) continue;
           if (IMAGE_INLINE_RE.test(trimmed)) { anexos.push(nomeAnexo); kept.push("[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]"); continue; }
           if (VIDEO_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]"); continue; }
           if (DOC_INLINE_RE.test(trimmed)) { anexos.push(nomeAnexo); kept.push("[Arquivo enviado nesta mensagem: documento/PDF — conteúdo não analisado pela IA]"); continue; }
@@ -361,7 +368,8 @@ export function parseWhatsappTxt(txt) {
           // v1258 — o texto continua, e o FATO do envio passa a ficar registrado do lado dele.
           const cleaned = trimmed.replace(HIDDEN_MEDIA_CLEAN_RE, "").trim();
           if (cleaned) kept.push(cleaned);
-          kept.push(marcadorDeMidiaOculta(trimmed));
+          const marcaTag = marcadorDeMidiaOculta(trimmed);
+          if (marcaTag) kept.push(marcaTag);
           continue;
         }
         kept.push(trimmed);
@@ -1582,7 +1590,17 @@ export function permutaOferecidaPeloCliente(timeline, corretorNome = "", lead = 
 // analisado pela IA" — e nada na tela dizia isso. O corretor lia a análise achando que a IA tinha
 // visto a arte com o preço, e ela não tinha visto nada. Vídeo fica fora da conta de propósito:
 // ele nunca é lido, por decisão do dono, então não é surpresa nenhuma.
-// v1348 — O FURO QUE DEIXAVA O CORRETOR NO ESCURO: o marcador SEM TIPO não era contado.
+// v1360 — A CONTA PASSOU A SER SÓ DE ÁUDIO.
+//
+// "como assim a IA não leu um PDF se não importa PDF?" (dono, 22/08/2026). Ele está certo: desde a
+// v1358, por ordem dele, foto e PDF NÃO são enviados na importação. Então avisar "a IA ainda não
+// leu 1 PDF desta conversa" virou aviso de uma coisa que nunca vai acontecer — e ainda mandava
+// reimportar, o que não resolveria nada. Um aviso desses só gasta atenção.
+//
+// Sobra o ÁUDIO, que continua sendo enviado e transcrito. Se um áudio não virou texto, há motivo
+// de verdade (teto do dia, falha na transcrição) e reimportar pode resolver — aí o aviso serve.
+//
+// Contexto do que existiu antes (v1323/v1348), pra ninguém reabrir isso sem saber:
 //
 // Print do dono (21/08/2026, 15h22): as três últimas mensagens da conversa, logo depois de ele
 // perguntar sobre entrada e permuta, eram "[Arquivo enviado nesta mensagem: arquivo — conteúdo não
@@ -1598,21 +1616,14 @@ export function permutaOferecidaPeloCliente(timeline, corretorNome = "", lead = 
 // contavam como uma.
 export function contarMaterialNaoLido(timeline) {
   const quantos = (t, re) => (String(t).match(re) || []).length;
-  let imagens = 0, documentos = 0, audios = 0, arquivos = 0;
+  let audios = 0;
   for (const m of (Array.isArray(timeline) ? timeline : [])) {
     const t = String(m?.text || "");
-    // Figurinha não entra: ela não tem o que ler, então avisar que "a IA não leu" seria mentira.
-    imagens += quantos(t, /imagem — conteúdo não analisado/gi);
-    documentos += quantos(t, /documento\/PDF — conteúdo não analisado/gi);
     audios += quantos(t, /[áa]udio — conteúdo não analisado/gi)
       + quantos(t, /\.opus \(arquivo anexado\)/gi)
       + quantos(t, /^\[[ÁA]udio:\s/gm);
-    // O genérico: veio de "<Mídia oculta>"/"Media omitted" — o arquivo NÃO está no que foi enviado
-    // pro app, então nem dá pra tentar ler. O conserto é outro (reexportar com mídia), e por isso
-    // ele vive num campo separado: a tela precisa dizer a coisa certa pra cada caso.
-    arquivos += quantos(t, /arquivo — conteúdo não analisado/gi);
   }
-  return { imagens, documentos, audios, arquivos, total: imagens + documentos + audios + arquivos };
+  return { audios, total: audios };
 }
 
 // ─── v1334 — OS QUATRO DEFEITOS QUE A MEDIÇÃO APONTOU, VIRADOS EM FATO ───────────────────────
@@ -2117,13 +2128,42 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     permuta
   } = estado;
 
+  // v1360 — "FAZ 7 DIAS?" — O NÚMERO ERRADO, E O JEITO ERRADO DE ABRIR.
+  //
+  // Print do dono (22/08/2026): as três sugestões abriam com "Faz 7 dias que deixamos a visita...".
+  // A última mensagem tinha sido no dia anterior. Os 7 dias são o PRAZO DE RETOMADA que ele
+  // configurou — um prazo pra frente, não tempo parado. Os dois números chegavam no pedido um do
+  // lado do outro e a IA somou as duas coisas numa frase só.
+  //
+  // Aqui o app diz o número de verdade, com todas as letras, e separa os dois conceitos. E deixa
+  // claro que abrir mensagem contando dia parado é cobrança — o próprio app já reprova isso na
+  // conferência (_ABERTURA_CONTANDO_DIAS), então a mensagem saía com tarja vermelha e tudo.
+  {
+    let ultima = null;
+    for (const m of (Array.isArray(timeline) ? timeline : [])) {
+      const d = dataCivilDeMensagem(m);
+      if (d && (!ultima || d.dia > ultima.dia)) ultima = d;
+    }
+    const hojeDia = _hojeDiaCivil(agora);
+    const diasParados = ultima ? _diasDesde(ultima.dia, hojeDia) : null;
+    if (diasParados != null) {
+      const quanto = diasParados === 0 ? "HOJE MESMO"
+        : diasParados === 1 ? "ONTEM — 1 dia parado"
+        : `há ${diasParados} dias`;
+      blocos.push(`HÁ QUANTO TEMPO ESTA CONVERSA ESTÁ PARADA (contado pelo app):
+- Última mensagem: ${ultima.texto} — ${quanto}.
+- Este é o ÚNICO número de dias que pode ser dito ao cliente. O "prazo de retomada" que aparece no contexto técnico é uma regra do corretor pra decidir QUANDO falar — é tempo pra frente, não tempo parado. Nunca escreva esse prazo como se fossem dias que já passaram.
+- E não abra mensagem contando dia parado ("faz X dias que...", "há X dias sem falar"). Isso soa como cobrança e o app reprova a mensagem por isso. Comece pelo assunto.`);
+    }
+  }
+
   {
     const trato = tratamentoDoCliente(timeline, corretorNome, lead);
     if (trato.ehUmaPessoaSo) {
       blocos.push(`COM QUEM VOCÊ ESTÁ FALANDO (lido da conversa pelo app):
 - É UMA pessoa só. Em nenhuma mensagem o cliente falou de si no plural, e o corretor nunca escreveu "vocês".
-- O corretor trata este cliente por "${trato.comoOCorretorChama}".
-Escreva no singular e mantenha esse tratamento. Não use "vocês", "de vocês", "para vocês", "preferem", "funciona para vocês" — plural inventado faz a mensagem parecer modelo mandado pra qualquer um, e o cliente percebe.`);
+- Escreva no singular. Não use "vocês", "de vocês", "para vocês", "preferem" — plural inventado faz a mensagem parecer modelo mandado pra qualquer um, e o cliente percebe.
+- O tratamento desta conversa é "${trato.comoOCorretorChama}". Use NO MÁXIMO UMA VEZ por mensagem, e só se fizer falta. Escrever "o Sr" em toda frase soa formal demais e artificial — o normal é chamar a pessoa pelo NOME na abertura e depois falar direto, sem repetir pronome de tratamento nenhum.`);
     }
   }
 
