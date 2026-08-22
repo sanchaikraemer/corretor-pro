@@ -3391,17 +3391,25 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
       motivos.push(`pergunta novamente sobre ${rotulo}, que o cliente já respondeu`);
     }
     for (const motivo of fatosInventadosNaMensagem(texto, contextoConhecido)) motivos.push(motivo);
-    // v1364 — três conferências apoiadas no compromisso reconstruído pelo app (caso Vande):
-    // autoria trocada, compromisso pendente ignorado e desinteresse inventado em cima de agenda.
+    // v1364 — duas conferências apoiadas no compromisso reconstruído pelo app (caso Vande):
+    // autoria trocada e desinteresse inventado em cima de um cancelamento de agenda.
+    //
+    // v1366 — A TERCEIRA FOI APAGADA POR ORDEM DO DONO (print de 22/08/2026, cliente Pâmela).
+    //
+    // Ela carimbava "não conduz para o compromisso pendente" em TODA mensagem que não empurrasse
+    // a visita enquanto houvesse visita combinada sem dia e hora. No print, as três sugestões
+    // respondiam o que a cliente tinha acabado de perguntar (outro edifício, sem piscina) — que é
+    // a coisa certa a fazer, e o próprio documento de análise diz isso: pedido do cliente vem
+    // primeiro. Resultado: três tarjas vermelhas em cima de três mensagens corretas.
+    //
+    // A régua era minha e estava grosseira. NÃO A RECRIE em outra forma: se um dia isso voltar,
+    // volta como FATO no fichário (o app já entrega o compromisso pendente lá, e a IA decide com
+    // o Cérebro), nunca como reprovação automática da mensagem escrita.
     const comp = contextoConhecido?.compromisso || null;
     if (comp) {
       if (comp.adiamento && comp.adiamento.quem === "corretor"
         && /\b(?:como|conforme|j[áa] que|do jeito que)?\s*(?:voc[êe]|o senhor|a senhora|o sr\.?|a sra\.?)\s+(?:pediu|preferiu|sugeriu|quis|escolheu|combinou)\b[^.!?]{0,60}\b(?:semana|adiar|deixar|outro dia|depois|mais (?:pra|para) frente)\b/i.test(texto)) {
         motivos.push("atribui ao cliente o adiamento que foi proposto pelo corretor");
-      }
-      if (comp.recente && comp.continuaValido && comp.pendencia && !contextoConhecido?.temPromessaPendente
-        && !/\b(visitas?|visitar|marcar|agendar|remarcar|hor[áa]rio|que horas|\d{1,2}\s*(?:h\b|hs\b|:\d{2})|amanh[ãa]|hoje|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|caf[ée]|reuni[ãa]o|encontro|te receber|nos vemos|pessoalmente|semana)\b/i.test(texto)) {
-        motivos.push(`não conduz para o compromisso pendente (${comp.tipo} ainda sem dia e horário)`);
       }
       if (comp.recente && comp.naoAconteceu && !comp.motivoComercial && !comp.desistiu
         && /\b(esfriou|perdeu o interesse|desistiu|desist[êe]ncia|sem interesse|se (?:ainda|voc[êe] ainda) (?:tem|tiver) interesse|caso (?:ainda )?tenha interesse|retomar (?:o|seu) interesse)\b/i.test(texto)) {
@@ -6383,10 +6391,11 @@ ${revisaoSoDasMensagens}`;
           cerebro: instrucoesCerebroTexto,
           catalogo: nomesConhecidos,
           topicosRespondidos: estadoComercial.topicosConfirmados,
-          // v1364 — o compromisso reconstruído e se há promessa do corretor em aberto (entregar o
-          // prometido é motivo legítimo pra uma das três não falar do compromisso).
-          compromisso: estadoComercial.compromisso,
-          temPromessaPendente: (estadoComercial.promessasNaoCumpridas || []).length > 0
+          // v1364 — o compromisso reconstruído pelo app, usado pela conferência pra pegar autoria
+          // trocada e desinteresse inventado em cima de agenda.
+          // v1366 — `temPromessaPendente` saiu junto com a régua apagada por ordem do dono: ela
+          // era a única leitora, e dado que ninguém lê é dado que engana o próximo a mexer aqui.
+          compromisso: estadoComercial.compromisso
         }
       );
     } catch (erroAviso) {
