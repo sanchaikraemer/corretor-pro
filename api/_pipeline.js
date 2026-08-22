@@ -2484,6 +2484,81 @@ export function tratamentoDoCliente(timeline, corretorNome = "", lead = {}) {
   };
 }
 
+// ─── v1369 — INTERESSE SEM QUALIFICAÇÃO: NÃO VOLTAR PARA PERGUNTA GENÉRICA ────────────────────
+//
+// Caso real que revelou o buraco (Julsimar, 22/08/2026): o cliente disse que analisou o material,
+// "gostei da ideia" e que já tinha ouvido as condições. O corretor então explicou entrada/saldo e
+// terminou com "Você já tem algo em mente? se quiser posso lhe encaminhar mais informações". O
+// cliente respondeu só "Joia.". A leitura certa não é "cliente sem interesse" nem "mande mais
+// material": é interesse positivo, mas ainda sem qualificação financeira. A pergunta aberta não
+// extraiu nada e não deve ser repetida; a próxima pergunta precisa ser a que muda a seleção.
+//
+// Isto é propositalmente GENÉRICO. Nenhum nome, produto, preço ou regra comercial fica cravado:
+// o detector só reconhece a forma da conversa (interesse + pagamento em pauta + falta de faixa).
+const _INTERESSE_POSITIVO_CLIENTE = /\b(gostei|gostamos|me interessa|nos interessa|tenho interesse|temos interesse|achei interessante|achamos interessante|curti|curtimos)\b/i;
+const _PAGAMENTO_EM_PAUTA = /\b(condi[çc][õo]es? de pagamento|forma de pagamento|entrada|parcelas?|refor[çc]os?|financiamento|saldo\s+(?:em|de)|direto com (?:a|o)|ve[ií]culo.{0,40}entrada)\b/i;
+const _CTA_GENERICO_CORRETOR = /\b(algo em mente|alguma d[úu]vida|algum ponto|mais informa[çc][õo]es|o que achou|o que acha|gostaria de conversar|quer conversar|tem interesse|teria interesse|se quiser)\b/i;
+const _CORTESIA_SEM_DADO = /^\s*(joia|j[oó]ia|ok|certo|beleza|show|entendi|legal|perfeito|tranquilo|t[áa] bom|obrigad[oa]|valeu|vlw|blz)[.!\s]*$/i;
+
+export function momentoDeQualificacaoComercial(timeline, corretorNome = "", lead = {}, estadoPronto = null) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const estado = estadoPronto || montarEstadoComercialDeterministico(timeline, corretorNome, lead, new Date());
+  const topicos = Array.isArray(estado?.topicosConfirmados) ? estado.topicosConfirmados : [];
+  const ids = new Set(topicos.map(t => String(t?.id || "")));
+
+  let interessePositivo = null;
+  let pagamentoEmPauta = false;
+  for (const m of arr) {
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || /^\[Arquivo enviado/i.test(texto)) continue;
+    const lado = _ladoDaMensagem(m, corretorNome, lead);
+    if (lado === "cliente" && _INTERESSE_POSITIVO_CLIENTE.test(texto)) {
+      interessePositivo = { texto: _trechoCurto(texto, 150), data: String(m?.date || "data não identificada") };
+    }
+    if (_PAGAMENTO_EM_PAUTA.test(texto)) pagamentoEmPauta = true;
+  }
+
+  // Última troca: pergunta aberta/genérica do corretor + resposta de cortesia do cliente.
+  let ctaGenerico = null;
+  for (let i = arr.length - 1; i >= 1; i--) {
+    if (_ladoDaMensagem(arr[i], corretorNome, lead) !== "cliente") continue;
+    const resp = String(arr[i]?.text || "").trim();
+    if (!_CORTESIA_SEM_DADO.test(resp)) break;
+    for (let j = i - 1; j >= 0; j--) {
+      if (_ladoDaMensagem(arr[j], corretorNome, lead) !== "corretor") continue;
+      const fala = String(arr[j]?.text || "").replace(/\s+/g, " ").trim();
+      if (_CTA_GENERICO_CORRETOR.test(fala)) {
+        ctaGenerico = {
+          pergunta: _trechoCurto(fala, 190),
+          resposta: _trechoCurto(resp, 80),
+          data: String(arr[i]?.date || "data não identificada")
+        };
+      }
+      break;
+    }
+    break;
+  }
+
+  const faixaRespondida = ids.has("faixa_valor");
+  const entradaRespondida = ids.has("entrada");
+  const financiamentoRespondido = ids.has("financiamento");
+  const temObjecaoConcreta = (Array.isArray(estado?.recusas) && estado.recusas.length > 0)
+    || !!estado?.caroSemFaixa || !!estado?.semCapitalHoje;
+
+  return {
+    interessePositivo,
+    pagamentoEmPauta,
+    faixaRespondida,
+    entradaRespondida,
+    financiamentoRespondido,
+    temObjecaoConcreta,
+    ctaGenerico,
+    // Este é o padrão que interessa: cliente avançou no interesse/produto, pagamento já entrou na
+    // conversa, mas o corretor ainda não sabe o tamanho financeiro da oportunidade.
+    interesseSemQualificacaoFinanceira: !!interessePositivo && pagamentoEmPauta && !faixaRespondida && !temObjecaoConcreta
+  };
+}
+
 // ─── O FICHÁRIO INTEIRO, JÁ EM TEXTO PRO PEDIDO ──────────────────────────────────────────────
 export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date(), estadoPronto = null) {
   const blocos = [];
@@ -2508,6 +2583,30 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     papelDoContato,
     sinaisFortes
   } = estado;
+
+  // v1369 — leitura comercial do momento ANTES dos detalhes do fichário. Quando o cliente já
+  // mostrou interesse e pagamento entrou na conversa, mas a faixa ainda não existe, o modelo
+  // recebe a hierarquia certa: não voltar para curiosidade genérica; descobrir o dado que muda a
+  // seleção. Se a última pergunta foi vaga e veio só "Joia/ok/beleza", isso é cortesia, não
+  // resposta comercial nem objeção.
+  {
+    const q = momentoDeQualificacaoComercial(timeline, corretorNome, lead, estado);
+    if (q.interesseSemQualificacaoFinanceira) {
+      const linhas = [
+        `- Há SINAL POSITIVO dado pelo próprio cliente: "${q.interessePositivo.texto}". Isso sustenta interesse; não invente objeção nem trate como lead frio.`,
+        `- Condições/forma de pagamento JÁ entraram nesta conversa. Portanto, voltar para "ficou com dúvida?", "quer mais informações?" ou mandar material genérico não faz o atendimento avançar.`,
+        `- A FAIXA DE VALOR/ORÇAMENTO ainda NÃO foi definida pelo cliente. Este é, em regra, o dado financeiro de maior valor agora porque muda quais opções e condições realmente cabem.`
+      ];
+      if (q.ctaGenerico) {
+        linhas.push(`- A última condução do corretor foi aberta demais e terminou em "${q.ctaGenerico.resposta}". Essa resposta é CORTESIA/RECONHECIMENTO, não resposta ao conteúdo comercial da pergunta. Não repita a pergunta genérica; substitua por uma pergunta específica que extraia decisão.`);
+      }
+      if (!q.entradaRespondida) {
+        linhas.push(`- Depois de descobrir a faixa total, a próxima qualificação financeira útil tende a ser ENTRADA DISPONÍVEL e capacidade/forma de pagamento — não tudo de uma vez na mesma mensagem.`);
+      }
+      linhas.push(`- Condução preferida: faça UMA pergunta objetiva de faixa (ex.: quanto pretende investir / em que faixa quer ficar), explique em uma frase para que ela serve e, com a resposta, selecione poucas opções concretas. Só troque essa prioridade se outro critério já visível na conversa mudar a seleção mais do que o dinheiro.`);
+      blocos.push(`INTERESSE POSITIVO, MAS AINDA SEM QUALIFICAÇÃO FINANCEIRA (lido da conversa pelo app):\n${linhas.join("\n")}\nIsto é diagnóstico de estágio, não roteiro fixo: preserve qualquer critério específico que o cliente já tenha dado e nunca peça de novo o que já está respondido.`);
+    }
+  }
 
   // v1360 — "FAZ 7 DIAS?" — O NÚMERO ERRADO, E O JEITO ERRADO DE ABRIR.
   //
@@ -3168,9 +3267,23 @@ function _valorNormalizado(bruto) {
 }
 
 
+// v1369 — telefone não é orçamento.
+//
+// Resposta automática real do WhatsApp: "Em caso de urgência ligar para 54 993276608...". Como
+// `valoresNaMensagem` aceitava número puro, o telefone virava centenas de milhões de reais e, pela
+// palavra "posso" em "não posso responder", o tópico de faixa era marcado como RESPONDIDO. Antes
+// de procurar dinheiro, quando a frase claramente fala de contato/telefone, removemos apenas
+// sequências com formato de telefone. Valores escritos com R$, mil/milhão ou números menores
+// continuam intactos.
+function _semTelefonesProvaveis(texto) {
+  const t = String(texto || "");
+  if (!/\b(ligar|liga[çc][ãa]o|telefone|fone|tel\.?|whats(?:app)?|contato)\b/i.test(t)) return t;
+  return t.replace(/(?:\+?\d[\s().-]*){7,12}\d/g, " ");
+}
+
 // Os valores que a MENSAGEM afirma, já normalizados — pra cruzar com os antigos da conversa.
 export function valoresNaMensagem(texto) {
-  const t = String(texto || "");
+  const t = _semTelefonesProvaveis(texto);
   const out = new Set();
   _VALOR_NA_FRASE.lastIndex = 0;
   let m;
