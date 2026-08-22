@@ -4899,6 +4899,8 @@ function cp704Css(){
          o que ele paga pra ver não pode ficar escondido atrás de rolagem). */
       .cp704-agora{border-color:var(--accent-line);box-shadow:0 12px 36px rgba(255,98,88,.10)}
       .cp704-agora .cp704-card-title h2{color:var(--accent)}
+      .cp704-agora.cp704-aguardar{border-color:rgba(184,194,201,.35);box-shadow:none}
+      .cp704-agora.cp704-aguardar .cp704-card-title h2{color:var(--soft)}
       /* v1365 — o "Resumo do contato" recolhível herda as metalinhas do topo; a primeira não
          precisa da régua de cima que ela tinha no herói. */
       .cp1365-resumo .cp704-metaline:first-child{margin-top:0;padding-top:0;border-top:0}
@@ -5790,6 +5792,10 @@ function renderLeadFoco(lead){
     // caso o corretor decida contatar mesmo assim, só que com esse aviso em destaque acima.
     const aguardarContato=analiseAtualValida752(a) && a?.recomendacaoContato?.aguardar===true;
     const motivoAguardar=cp704Text(a?.recomendacaoContato?.motivo)||'A leitura da conversa aponta que ainda não é a hora de retomar contato.';
+    // v1370 — se a orientação é esperar, o card não pode gritar "Fazer agora". O estado visual
+    // passa a obedecer a própria análise: AGUARDAR agora, mensagem preparada para a retomada.
+    const tituloAcao=aguardarContato?'Aguardar':'Fazer agora';
+    const subtituloMensagens=aguardarContato?'Mensagem preparada para a retomada · escolha a melhor quando chegar a hora':'Sugestões de mensagem · copie a melhor opção';
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     // v937 — "Última mensagem" puxa a hora da PRÓPRIA última mensagem real (mesma fonte do
@@ -5896,10 +5902,10 @@ function renderLeadFoco(lead){
       <div class="cp704-workspace">
         <main class="cp704-primary">
           ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
-          <section class="cp704-card cp704-agora">
-            <div class="cp704-card-title"><h2>Fazer agora</h2></div>
+          <section class="cp704-card cp704-agora${aguardarContato?' cp704-aguardar':''}">
+            <div class="cp704-card-title"><h2>${escapeHtml(tituloAcao)}</h2></div>
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
-            <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
+            <div class="cp704-msg-sub">${escapeHtml(subtituloMensagens)}</div>
             ${cp1308FaixaModoHtml(a)}
             ${cp1225LinhaDeOndeVeio(a)}
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
