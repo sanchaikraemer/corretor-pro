@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
-import { escolherVisuaisDoZip, VISUAL_KEEP_RE, MAX_VISUAIS_NO_ENVIO, LIMITE_ENVIO_BYTES, MARGEM_ENVIO_BYTES } from "../js/enxugar-zip.js";
+import { escolherVisuaisDoZip, VISUAL_KEEP_RE, MAX_VISUAIS_NO_ENVIO, MAX_BYTES_VISUAIS_NO_ENVIO, LIMITE_ENVIO_BYTES, MARGEM_ENVIO_BYTES } from "../js/enxugar-zip.js";
 
 // v1353 — A LEITURA DE IMAGEM E PDF NUNCA TEVE CHANCE: O CELULAR APAGAVA OS ARQUIVOS ANTES DE ENVIAR.
 //
@@ -71,16 +71,54 @@ const MB = 1024 * 1024;
   const r = escolherVisuaisDoZip({
     txt: TXT,
     visuais: [
-      { caminho: "IMG-20260821-WA0001.jpg", bytes: 40 * MB },
-      { caminho: "IMG-20260821-WA0002.jpg", bytes: 40 * MB },
-      { caminho: "tabela-de-precos.pdf", bytes: 40 * MB }
+      { caminho: "IMG-20260821-WA0001.jpg", bytes: 3 * MB },
+      { caminho: "IMG-20260821-WA0002.jpg", bytes: 3 * MB },
+      { caminho: "tabela-de-precos.pdf", bytes: 3 * MB }
     ],
-    bytesJaUsados: 60 * MB
+    maxBytesTotal: 7 * MB
   });
   assert.equal(r.manter.length, 2, "só cabem dois");
   assert.ok(!r.manter.includes("IMG-20260821-WA0001.jpg"),
     "o que sai é o mais antigo — o citado primeiro na conversa");
   assert.ok(r.manter.includes("tabela-de-precos.pdf"), "o mais recente fica");
+}
+
+// ── v1355 — O TETO PRÓPRIO DAS FOTOS ─────────────────────────────────────────────────────────
+// A v1353 deixou foto e PDF entrarem "no que sobrar do envio", e o resultado foi um ZIP de 56,5 MB
+// RECUSADO pelo armazenamento: a importação do dono morreu no envio, com uma conversa que antes
+// subia. Peso novo não pode empurrar pra fora o que já funcionava.
+{
+  const pesadas = Array.from({ length: 12 }, (_, i) => `IMG-20260821-WA00${String(i).padStart(2, "0")}.jpg`);
+  const txtPesadas = pesadas.map((n, i) => `[21/08/2026 1${i % 9}:00] Gordo: ${n} (arquivo anexado)`).join("\n");
+  const r = escolherVisuaisDoZip({
+    txt: txtPesadas,
+    visuais: pesadas.map(n => ({ caminho: n, bytes: 2 * MB }))
+  });
+  assert.ok(r.resumo.bytesVisuais <= MAX_BYTES_VISUAIS_NO_ENVIO,
+    `as fotos não podem passar do teto delas (${Math.round(r.resumo.bytesVisuais / MB)} MB)`);
+  assert.ok(r.manter.length < pesadas.length, "o que não coube no teto fica de fora");
+  assert.equal(r.resumo.tetoVisuais, MAX_BYTES_VISUAIS_NO_ENVIO);
+}
+// Um arquivo gigante sozinho não come o teto inteiro nem entra.
+{
+  const r = escolherVisuaisDoZip({
+    txt: TXT,
+    visuais: [
+      { caminho: "tabela-de-precos.pdf", bytes: 30 * MB },
+      { caminho: "IMG-20260821-WA0002.jpg", bytes: 400 * 1024 }
+    ]
+  });
+  assert.deepEqual(r.manter, ["IMG-20260821-WA0002.jpg"],
+    "o PDF gigante fica de fora e não impede a foto de ir");
+}
+// E o teto das fotos NUNCA pode empurrar pra fora o texto e o áudio, que já estavam no envio.
+{
+  const r = escolherVisuaisDoZip({
+    txt: TXT,
+    visuais: [{ caminho: "IMG-20260821-WA0002.jpg", bytes: MB }],
+    bytesJaUsados: LIMITE_ENVIO_BYTES - MARGEM_ENVIO_BYTES - 1000
+  });
+  assert.deepEqual(r.manter, [], "sem espaço no envio, foto nenhuma entra — mesmo cabendo no teto delas");
 }
 
 // Arquivo que o texto não cita não viaja: o servidor não teria como ligar ele a mensagem nenhuma.

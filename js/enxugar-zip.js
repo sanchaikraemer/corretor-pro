@@ -28,7 +28,13 @@
 // Espelha DEFAULT_MAX_ZIP_BYTES de api/processar-storage.js — quem recusa o arquivo é a rota de
 // envio, e é esse número que o aparelho precisa respeitar ANTES de tentar. O teste
 // v1270 confere que os dois continuam iguais.
-export const LIMITE_ENVIO_BYTES = 150 * 1024 * 1024;
+// v1355 — ERA 150 MB, E ERA MENTIRA. O print do dono mostra o envio RECUSADO com 56,5 MB: quem
+// recusa não é esta conta nem esta rota, é o armazenamento, que na prática não aceita arquivo
+// acima de ~50 MB. Enquanto o aparelho achava que podia mandar 150 MB, toda conversa entre 50 e
+// 150 MB era montada, subida por minutos e recusada no fim — beco sem saída, igual ao da v1270,
+// só que mais tarde. Com o número real aqui, a escolha de áudio corta ANTES de enviar e a conversa
+// entra (sem os áudios mais antigos, com o aviso na tela), em vez de morrer no envio.
+export const LIMITE_ENVIO_BYTES = 45 * 1024 * 1024;
 // Sobra pro cabeçalho do ZIP e pra qualquer diferença entre o tamanho estimado aqui e o tamanho
 // real do arquivo gerado no celular. Melhor mandar um pouco menos do que voltar pro beco sem saída.
 export const MARGEM_ENVIO_BYTES = 5 * 1024 * 1024;
@@ -268,6 +274,17 @@ export const VISUAL_KEEP_RE = /\.(jpe?g|png|webp|heic|bmp|tiff|gif|pdf)$/i;
 // O servidor lê alguns arquivos por importação (maxVisuaisPorImportacao, api/_pipeline.js).
 // Mandar muito mais que isso é gastar internet do corretor com arquivo que não vai ser lido.
 export const MAX_VISUAIS_NO_ENVIO = 12;
+// v1355 — TETO PRÓPRIO PRA FOTO/PDF, E APERTADO.
+//
+// A v1353 deixou foto e PDF entrarem "no que sobrar do envio". Sobrar do envio é muito espaço, e o
+// resultado foi um ZIP de 56,5 MB que o armazenamento RECUSOU — a importação do dono morreu na
+// hora do envio, com uma conversa que antes subia. Peso novo não pode empurrar pra fora o que já
+// funcionava. Agora as fotos têm um teto só delas, pequeno: o que interessa nelas é o TEXTO que
+// está escrito (preço, planta, condição), e pra ler isso não é preciso mandar a foto inteira em
+// resolução máxima. Acima disso, entram as mais recentes até encher, e o resto fica de fora.
+export const MAX_BYTES_VISUAIS_NO_ENVIO = 8 * 1024 * 1024;
+// Um PDF ou uma digitalização gigante sozinha comeria o teto inteiro e deixaria as fotos de fora.
+export const MAX_BYTES_POR_VISUAL = 4 * 1024 * 1024;
 
 export function escolherVisuaisDoZip({
   txt = "",
@@ -275,7 +292,9 @@ export function escolherVisuaisDoZip({
   bytesJaUsados = 0,
   limiteBytes = LIMITE_ENVIO_BYTES,
   margemBytes = MARGEM_ENVIO_BYTES,
-  maxItens = MAX_VISUAIS_NO_ENVIO
+  maxItens = MAX_VISUAIS_NO_ENVIO,
+  maxBytesTotal = MAX_BYTES_VISUAIS_NO_ENVIO,
+  maxBytesPorItem = MAX_BYTES_POR_VISUAL
 } = {}) {
   const lista = (visuais || []).map(v => ({
     caminho: String(v?.caminho || ""),
@@ -302,11 +321,19 @@ export function escolherVisuaisDoZip({
   const alvoBytes = Math.max(0, limiteBytes - margemBytes);
   const manter = [];
   const fora = [];
-  let usados = Math.max(0, Number(bytesJaUsados) || 0);
+  const jaUsados = Math.max(0, Number(bytesJaUsados) || 0);
+  let usados = jaUsados;      // total do envio (texto + áudio + o que as fotos forem somando)
+  let usadosVisuais = 0;      // só as fotos/PDFs — o teto apertado da v1355
   for (const v of ordenada) {
     const custo = v.bytes + CUSTO_POR_ARQUIVO_BYTES;
-    if (manter.length >= maxItens || v.pos < 0 || usados + custo > alvoBytes) { fora.push(v.caminho); continue; }
+    const cabe = manter.length < maxItens
+      && v.pos >= 0
+      && v.bytes <= maxBytesPorItem
+      && usadosVisuais + custo <= maxBytesTotal
+      && usados + custo <= alvoBytes;
+    if (!cabe) { fora.push(v.caminho); continue; }
     usados += custo;
+    usadosVisuais += custo;
     manter.push(v.caminho);
   }
   // Devolve na ordem do ZIP, como o resto do enxugamento faz.
@@ -314,7 +341,8 @@ export function escolherVisuaisDoZip({
   return {
     manter: lista.filter(v => manterSet.has(v.caminho)).map(v => v.caminho),
     fora,
-    resumo: { total: lista.length, mantidos: manter.length, cortados: fora.length, bytesEstimados: usados, alvoBytes }
+    resumo: { total: lista.length, mantidos: manter.length, cortados: fora.length,
+      bytesEstimados: usados, bytesVisuais: usadosVisuais, alvoBytes, tetoVisuais: maxBytesTotal }
   };
 }
 
