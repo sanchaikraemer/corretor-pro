@@ -7222,12 +7222,33 @@ function _posicaoNaConversa(m) {
   return [String(m?.date || "").trim(), String(m?.time || "").trim(), String(m?.author || "").trim().toLowerCase()].join("|");
 }
 
+export // v1363 — LINHA QUE O APP NÃO ESCREVE MAIS PRECISA SUMIR DA CONVERSA JÁ SALVA.
+//
+// Print do dono (22/08/2026, 03h20, app já na 1360): a linha "[Figurinha enviada — é uma reação,
+// não tem texto pra ler]" continuava no histórico, e a análise continuava raciocinando em cima
+// dela ("a última interação do contato foi apenas uma figurinha"). A v1360 fez o app parar de
+// ESCREVER essa linha — mas a que já estava salva nunca saía: a mesclagem preserva o que está no
+// banco, e como a importação nova não produz nada naquele lugar, não havia o que substituir. Linha
+// velha imortal, mesmo reimportando.
+//
+// Aqui ficam as marcas que o app APOSENTOU. Elas são varridas da conversa salva na primeira
+// reimportação. A lista é fechada e literal de propósito: só sai daqui o que o próprio app
+// escreveu um dia e decidiu não escrever mais — nunca fala de gente.
+const MARCAS_APOSENTADAS = [
+  /^\[Figurinha enviada[^\]]*\]$/i
+];
+function _linhaAposentada(texto) {
+  const linhas = String(texto || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return linhas.length > 0 && linhas.every(l => MARCAS_APOSENTADAS.some(re => re.test(l)));
+}
+
 export function mesclarTimelineIncremental(antiga, nova) {
   const comConteudoAgora = new Set();
   for (const m of (Array.isArray(nova) ? nova : [])) {
     if (!_linhaSemConteudo(m?.text)) comConteudoAgora.add(_posicaoNaConversa(m));
   }
   const antigaUtil = (Array.isArray(antiga) ? antiga : [])
+    .filter(m => !_linhaAposentada(m?.text))
     .filter(m => !(_linhaSemConteudo(m?.text) && comConteudoAgora.has(_posicaoNaConversa(m))));
   const out = [];
   const vistos = new Set();

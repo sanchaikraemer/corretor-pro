@@ -18,6 +18,19 @@ const PRECO_USD_POR_1M_TOKENS = {
   "gpt-4.1-nano": { entrada: 0.10, saida: 0.40 },
   "gpt-4o": { entrada: 2.50, saida: 10.00 },
   "gpt-4o-mini": { entrada: 0.15, saida: 0.60 },
+  // v1362 — O MODELO DA ANÁLISE NUNCA ESTEVE NESTE MAPA, E ISSO INFLAVA TUDO.
+  //
+  // A análise principal usa gpt-5.6-terra desde a v1308. O mapa nunca ganhou essa linha, então
+  // TODA análise — a chamada mais cara e mais frequente do app — caía no "_padrao" ($5/$15), que
+  // existe de propósito pra ser exagero. Resultado: o custo da análise aparecia cerca de CINCO
+  // VEZES maior do que é ($1/$6). Quem olhasse o painel pra decidir preço ou pra decidir cortar
+  // qualidade estava olhando um número errado, pra cima.
+  //
+  // Preços da tabela pública da OpenAI, modo Standard, contexto curto, conferidos em 22/08/2026.
+  // "sol" fica FORA de propósito: não tenho o preço dele conferido, e chutar pra baixo é o único
+  // erro que engana de verdade — sem a linha, ele cai no "_padrao" e aparece nomeado como aviso.
+  "gpt-5.6-terra": { entrada: 1.00, saida: 6.00 },
+  "gpt-5.6-luna": { entrada: 0.10, saida: 0.60 },
   "_padrao": { entrada: 5.00, saida: 15.00 }
 };
 const PRECO_USD_POR_MINUTO_WHISPER = 0.006;
