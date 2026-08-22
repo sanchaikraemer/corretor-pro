@@ -222,10 +222,12 @@ import './js/pwa-install.js?v=__VERSION__';
   };
 })();
 
-// v1353 — foto e PDF voltam a viajar no envio. Eles eram apagados aqui, no celular, e por isso a
-// leitura de imagem/PDF do servidor (v1306) nunca teve o que ler numa importação de verdade.
-// Vídeo continua de fora: o app não lê vídeo, por decisão do dono.
-export const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac|jpe?g|png|webp|heic|bmp|tiff|gif|pdf)$/i;
+// v1358 — ORDEM DO DONO (22/08/2026): foto e PDF voltam a NÃO ser enviados na importação.
+//
+// A v1353 tinha feito eles viajarem junto (eram apagados aqui e por isso a leitura de imagem/PDF
+// do servidor nunca tinha o que ler). O envio ficou mais pesado e a importação dele foi recusada
+// com 56,5 MB; o dono mandou reverter. Só texto e áudio sobem.
+export const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac)$/i;
 
 // ===== v929 — atividade de uso (Desempenho): análises, importações e tempo no app =====
 // Fica só no localStorage DESTE aparelho (não sincroniza celular↔PC) — é contagem de USO, não

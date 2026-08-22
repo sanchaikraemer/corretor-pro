@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
-import { planejarConteudoDoZip, escolherVisuaisDoZip, LIMITE_ENVIO_BYTES, MARGEM_ENVIO_BYTES,
-         MAX_BYTES_VISUAIS_NO_ENVIO, MAX_BYTES_POR_VISUAL } from "../js/enxugar-zip.js";
+import { planejarConteudoDoZip, LIMITE_ENVIO_BYTES, MARGEM_ENVIO_BYTES } from "../js/enxugar-zip.js";
 
 // v1355 — O ENVIO MORRIA COM 56,5 MB, E EU TINHA ENGORDADO O ENVIO NA VERSÃO ANTERIOR.
 //
@@ -48,39 +47,19 @@ assert.equal(LIMITE_ENVIO_BYTES, 45 * MB, "o aparelho precisa mirar no teto que 
   assert.ok(plano.resumo.cortouPorTamanho, "o corte fica registrado, pra a tela poder avisar");
 }
 
-// ── 3. As fotos não engordam mais o envio ────────────────────────────────────────────────────
-{
-  const nomes = Array.from({ length: 20 }, (_, i) => `IMG-20260821-WA00${String(i).padStart(2, "0")}.jpg`);
-  const txt = nomes.map((n, i) => `[21/08/2026 1${i % 9}:00] Gordo: ${n} (arquivo anexado)`).join("\n");
-  const r = escolherVisuaisDoZip({ txt, visuais: nomes.map(n => ({ caminho: n, bytes: 3 * MB })) });
-  assert.ok(r.resumo.bytesVisuais <= MAX_BYTES_VISUAIS_NO_ENVIO,
-    `foto e PDF juntos não passam de ${Math.round(MAX_BYTES_VISUAIS_NO_ENVIO / MB)} MB (ficaram ${Math.round(r.resumo.bytesVisuais / MB)} MB)`);
-  assert.ok(MAX_BYTES_VISUAIS_NO_ENVIO < LIMITE_ENVIO_BYTES / 4,
-    "o teto das fotos tem que ser uma fração pequena do envio — elas são o acréscimo, não o principal");
-}
-// Arquivo único acima do teto por item não entra (senão come sozinho o espaço de todas).
-{
-  const r = escolherVisuaisDoZip({
-    txt: "[21/08/2026 14:52] Gordo: digitalizacao.pdf (arquivo anexado)",
-    visuais: [{ caminho: "digitalizacao.pdf", bytes: MAX_BYTES_POR_VISUAL + 1 }]
-  });
-  assert.deepEqual(r.manter, []);
-}
+// ── 3. (v1358) A parte das fotos saiu daqui junto com o envio delas ─────────────────────────
+// O dono mandou voltar a mandar SÓ texto e áudio, então não há mais foto pra caber ou não caber.
+// O que sobra desta versão — e continua valendo — é o teto real do envio, conferido acima e
+// exercitado abaixo. A regra do "só texto e áudio" tem teste próprio: v1358.
 
-// ── 4. A ordem de prioridade continua: texto > áudio > foto ──────────────────────────────────
-// Esta é a regra que impede a correção de virar um novo problema: o que já subia continua subindo.
+// ── 4. Conversa cheia de áudio continua cabendo ─────────────────────────────────────────────
 {
   const audios = Array.from({ length: 40 }, (_, i) => ({ caminho: `PTT-${i}.opus`, bytes: 1000 * 1024 }));
-  const txt = audios.map((a, i) => `[2${i % 9}/08/2026 10:00] Gordo: ${a.caminho} (arquivo anexado)`).join("\n")
-    + "\n[21/08/2026 15:00] Gordo: ARTE.jpg (arquivo anexado)";
+  const txt = audios.map((a, i) => `[2${i % 9}/08/2026 10:00] Gordo: ${a.caminho} (arquivo anexado)`).join("\n");
   const plano = planejarConteudoDoZip({ txt, audios, bytesTexto: 100 * 1024 });
-  const visuais = escolherVisuaisDoZip({
-    txt, visuais: [{ caminho: "ARTE.jpg", bytes: 2 * MB }],
-    bytesJaUsados: plano.resumo.bytesEstimados
-  });
-  const total = plano.resumo.bytesEstimados + (visuais.resumo.bytesVisuais || 0);
-  assert.ok(total <= LIMITE_ENVIO_BYTES - MARGEM_ENVIO_BYTES,
-    `texto + áudio + foto precisa caber no envio (deu ${Math.round(total / MB)} MB)`);
+  assert.ok(plano.resumo.bytesEstimados <= LIMITE_ENVIO_BYTES - MARGEM_ENVIO_BYTES,
+    `texto + áudio precisa caber no envio (deu ${Math.round(plano.resumo.bytesEstimados / MB)} MB)`);
+  assert.ok(plano.manter.length > 0, "e os mais recentes vão");
 }
 
 console.log("v1355-envio-nao-morre-por-tamanho: ok");

@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseWhatsappTxt, contarMaterialNaoLido, ehFigurinha, arquivoVisualLegivel } from "../api/_pipeline.js";
-import { escolherVisuaisDoZip } from "../js/enxugar-zip.js";
 
 // v1356 — FIGURINHA É REAÇÃO, NÃO É MATERIAL PRA ANALISAR.
 //
@@ -58,18 +57,9 @@ assert.equal(arquivoVisualLegivel("STK-20260821-WA0012.webp"), false,
   "figurinha não vai pra leitura de imagem: não tem texto comercial e a chamada é paga");
 assert.equal(arquivoVisualLegivel("IMG-20260821-WA0009.jpg"), true);
 assert.equal(arquivoVisualLegivel("tabela.pdf"), true);
-{
-  const txt = [
-    "[21/08/2026 12:24] Vande: STK-20260821-WA0012.webp (arquivo anexado)",
-    "[21/08/2026 12:31] Vande: IMG-20260821-WA0009.jpg (arquivo anexado)"
-  ].join("\n");
-  const r = escolherVisuaisDoZip({ txt, visuais: [
-    { caminho: "STK-20260821-WA0012.webp", bytes: 60 * 1024 },
-    { caminho: "IMG-20260821-WA0009.jpg", bytes: 300 * 1024 }
-  ] });
-  assert.deepEqual(r.manter, ["IMG-20260821-WA0009.jpg"],
-    "a figurinha não ocupa o espaço apertado das fotos que têm conteúdo");
-}
+// v1358 — a parte do envio saiu: por ordem do dono, nenhum arquivo visual viaja mais na
+// importação (nem figurinha, nem foto, nem PDF). O que continua valendo aqui é que figurinha não
+// conta como material pendente e não vai pra leitura.
 
 // ── 4. Na tela, uma linha que o corretor entende ─────────────────────────────────────────────
 {
