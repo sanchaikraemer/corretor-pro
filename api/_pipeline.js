@@ -1809,6 +1809,264 @@ export function topicosComerciaisConfirmadosDoCliente(timeline, corretorNome = "
   return [...porTopico.values()].sort((a, b) => (a.diasAtras ?? Number.MAX_SAFE_INTEGER) - (b.diasAtras ?? Number.MAX_SAFE_INTEGER));
 }
 
+// ─── v1364 — O COMPROMISSO DA CONVERSA (visita, reunião, ligação), RECONSTRUÍDO PELO APP ─────
+//
+// Caso real do Vande (22/08/2026, trazido pelo dono com a leitura correta do atendimento): o
+// cliente respondeu ao anúncio pedindo ELE MESMO a visita ("Podemos agendar para amanhã à
+// tarde?"), desmarcou por agenda ("estou em visita ao cliente e não vou chegar a tempo") e disse
+// que de manhã fica melhor. A análise publicada errou tudo isso de uma vez: disse que o VANDE
+// pediu pra deixar pra semana seguinte (foi o corretor), tratou a remarcação como perda de força,
+// classificou o contato como corretor/parceiro por causa do "estou em visita ao cliente" e mandou
+// três mensagens com três objetivos inventados quando o único avanço era marcar dia e hora.
+//
+// O app já estruturava valores, perguntas, recusas e promessas — mas o COMPROMISSO, que é o fato
+// mais forte de uma negociação, não existia como fato. Aqui ele passa a existir: quem pediu, quem
+// propôs cada dia/horário, quem ficou de confirmar, quem adiou, por que não aconteceu (agenda ou
+// objeção comercial de verdade), preferência de período e o que falta. Cada conclusão carrega a
+// frase que a sustenta — a IA recebe o fato pronto em vez de reconstruir (e errar) a autoria.
+//
+// Como funciona: a conversa é varrida em ordem. Uma mensagem com vontade de marcar (agendar,
+// marcar, "quero conhecer", "passo aí") ABRE um assunto de compromisso; enquanto o assunto está
+// aberto, as mensagens seguintes são lidas como parte dele (proposta de dia/horário, "te
+// confirmo", "não vou conseguir", "deixa pra semana que vem", desistência). O assunto fecha
+// sozinho depois de 6 mensagens sem nenhum evento ou de mais de 7 dias de silêncio — e pode
+// reabrir mais adiante; vale sempre o assunto mais recente. Não é regex de frase pronta: são
+// famílias de vocabulário + a janela de contexto, pra "Às 14h fica bom?" contar como proposta
+// sem precisar repetir a palavra "visita".
+// ATENÇÃO À ARMADILHA DO `\b` COM ACENTO (a mesma do "você\b" achada na v1326): depois de "amanhã",
+// "café" ou "aí" o `\b` nunca fecha, porque pro regex sem modo unicode o acento já é caractere de
+// fora. Toda alternativa que pode terminar em letra acentuada fecha com `(?![\p{L}\d])` + flag `u`.
+const _COMPROMISSO_TIPOS = [
+  { tipo: "visita", re: /\b(visitas?|visitar(?:mos)?|conhecer(?: o| a| pessoalmente)?|ver o (?:im[óo]vel|apartamento|apto|decorado)|decorado|passo a[íi]|te receber|receb[êe]-l[oa]|ir a[íi])(?![\p{L}\d])/iu },
+  { tipo: "reunião/café", re: /\b(reuni[ãa]o|um caf[ée]|sentamos|sentarmos|conversar pessoalmente|presencialmente)(?![\p{L}\d])/iu },
+  { tipo: "ligação", re: /\b(liga[çc][ãa]o|te ligo|me liga|posso (?:te )?ligar|chamada de v[íi]deo)(?![\p{L}\d])/iu }
+];
+const _QUER_MARCAR = /\b(agendar(?:mos)?|marcar(?:mos)?|remarcar|reagendar|consigo ir|posso ir|que dia|qual dia|que horas?|qual (?:o )?hor[áa]rio)(?![\p{L}\d])/iu;
+const _INTENCAO_DE_IR = /\b(quero|queria|gostaria|podemos|posso|pode(?: ser)?|consigo|vamos|d[áa] (?:pra|para)|quer)\b/i;
+const _DIA_PROPOSTO = /\b(amanh[ãa]|hoje|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|semana que vem|pr[óo]xima semana|fim de semana|\d{1,2}\/\d{1,2})(?![\p{L}\d])/iu;
+const _HORARIO_PROPOSTO = /\b\d{1,2}\s*(?:h\b|hs\b|:\d{2}|horas?\b)/i;
+// Preferência de período exige VERBO de preferência colado ("fica melhor", "prefiro") — "Bom dia,
+// tudo bem?" é saudação; "Bom dia fica melhor" é o cliente dizendo que manhã serve mais.
+const _PREFERE_PERIODO = /\b(?:prefiro|seria melhor|fica (?:bom|melhor|[óo]timo))\b[^.!?]{0,30}?\b(manh[ãa]|tarde|noite|meio[- ]dia|cedo)(?![\p{L}\d])|\b(bom dia|boa tarde|boa noite|de manh[ãa]|pela manh[ãa]|[àa] tarde|de tarde|[àa] noite|de noite|meio[- ]dia|mais cedo|mais tarde)(?![\p{L}\d])[^.!?]{0,30}?\b(?:fica (?:bom|melhor|[óo]timo)|[ée] melhor|seria melhor|prefiro|melhor (?:pra|para) mim|me atende melhor)\b/iu;
+const _FICOU_DE_CONFIRMAR = /\b(te confirmo|confirmo (?:at[ée]|amanh[ãa]|hoje|depois|mais tarde)|vou confirmar|te aviso|te retorno|te dou retorno|te falo (?:amanh[ãa]|depois|mais tarde))(?![\p{L}\d])/iu;
+const _NAO_VAI_DAR = /\b(n[ãa]o vou (?:conseguir|chegar|poder|dar conta)|n[ãa]o consigo (?:ir|hoje|amanh[ãa]|chegar|nesse)|n[ãa]o vai dar|n[ãa]o d[áa] (?:pra|para)|imprevisto|surgiu (?:um|uma)|n[ãa]o poderei|n[ãa]o chego a tempo)(?![\p{L}\d])/iu;
+const _ADIAMENTO = /\b(deixar? (?:pra|para) (?:a )?(?:semana que vem|pr[óo]xima semana|outro (?:dia|momento)|depois|mais (?:pra|para) frente)|fica(?:mos)? (?:pra|para) (?:a )?(?:semana que vem|pr[óo]xima semana|outro (?:dia|momento))|semana q(?:ue)? vem (?:a gente |n[óo]s )?(?:sentamos|marcamos|falamos|conversamos|consigo|vemos|combinamos)|deixa(?:mos)? (?:pra|para) depois)(?![\p{L}\d])/iu;
+const _DESISTENCIA_DO_COMPROMISSO = /\b(desisti(?:mos)?|n[ãa]o (?:quero|tenho) mais(?: interesse)?|deixa (?:pra l[áa]|quieto)|esquece|pode cancelar|vamos cancelar|n[ãa]o vou (?:mais )?comprar)(?![\p{L}\d])/iu;
+const _CONFIRMACAO_DE_COMPROMISSO = /\b(confirmad[oa]|fechado(?: ent[ãa]o)?|combinado(?: ent[ãa]o)?|t[áa] marcado|marcado ent[ãa]o|nos vemos (?:l[áa]|amanh[ãa]|ent[ãa]o))(?![\p{L}\d])/iu;
+
+function _periodoDaFala(pedaco) {
+  const t = _semAcentoMinuscula(String(pedaco || ""));
+  if (/bom dia|manha|cedo/.test(t)) return "manhã";
+  if (/meio.dia/.test(t)) return "meio-dia";
+  if (/boa tarde|tarde/.test(t)) return "tarde";
+  if (/boa noite|noite/.test(t)) return "noite";
+  return "";
+}
+
+export function compromissoDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const lados = arr.map(m => _ladoDaMensagem(m, corretorNome, lead));
+
+  const JANELA_MSGS = 6;
+  const JANELA_DIAS = 7;
+
+  let episodio = null;   // o assunto de compromisso aberto agora
+  let fechado = null;    // o último assunto que já fechou (vale o mais recente no fim)
+  let msgsSemEvento = 0;
+  let ultimoDiaComEvento = null;
+
+  for (let i = 0; i < arr.length; i++) {
+    const quem = lados[i];
+    if (!quem) continue;
+    const texto = String(arr[i]?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || /^\[Arquivo enviado/i.test(texto)) continue;
+    const p = dataCivilDeMensagem(arr[i]);
+
+    if (episodio) {
+      const gapDias = (p?.dia != null && ultimoDiaComEvento != null) ? p.dia - ultimoDiaComEvento : 0;
+      if (msgsSemEvento >= JANELA_MSGS || gapDias > JANELA_DIAS) { fechado = episodio; episodio = null; }
+    }
+
+    const querMarcar = _QUER_MARCAR.test(texto);
+    const tipoAqui = _COMPROMISSO_TIPOS.find(t => t.re.test(texto)) || null;
+    const anota = (oQue, extra = {}) => episodio.eventos.push({
+      oQue, quem, trecho: _trechoCurto(texto, 160),
+      data: p?.texto || "data não identificada", dia: p?.dia ?? null,
+      diasAtras: _diasDesde(p?.dia ?? null, hojeDia), ...extra
+    });
+
+    if (!episodio) {
+      // Abrir o assunto exige intenção: verbo de marcar, ou o tipo de encontro com vontade junto.
+      if (!(querMarcar || (tipoAqui && _INTENCAO_DE_IR.test(texto)))) continue;
+      episodio = { eventos: [], tipos: new Set() };
+      if (tipoAqui) episodio.tipos.add(tipoAqui.tipo);
+      const hor = _HORARIO_PROPOSTO.exec(texto);
+      anota("quer-marcar", { horario: hor ? hor[0].trim() : "", comData: !!(hor || _DIA_PROPOSTO.test(texto)) });
+      msgsSemEvento = 0;
+      ultimoDiaComEvento = p?.dia ?? ultimoDiaComEvento;
+      continue;
+    }
+
+    if (tipoAqui) episodio.tipos.add(tipoAqui.tipo);
+    const antes = episodio.eventos.length;
+    const desistiuAqui = quem === "cliente" && _DESISTENCIA_DO_COMPROMISSO.test(texto);
+    const naoVaiDarAqui = _NAO_VAI_DAR.test(texto);
+    const adiamentoAqui = _ADIAMENTO.test(texto);
+    const confirmarAqui = _FICOU_DE_CONFIRMAR.test(texto);
+    if (desistiuAqui) anota("desistencia");
+    if (naoVaiDarAqui) anota("nao-vai-dar");
+    if (adiamentoAqui) anota("adiamento");
+    if (confirmarAqui && !desistiuAqui && !naoVaiDarAqui) anota("ficou-de-confirmar");
+    const pref = _PREFERE_PERIODO.exec(texto);
+    if (pref) anota("preferencia-periodo", { periodo: _periodoDaFala(pref[1] || pref[2] || "") });
+    if (!desistiuAqui && !naoVaiDarAqui && !adiamentoAqui && !confirmarAqui) {
+      const hor = _HORARIO_PROPOSTO.exec(texto);
+      if (querMarcar || hor || _DIA_PROPOSTO.test(texto)) {
+        anota("quer-marcar", { horario: hor ? hor[0].trim() : "", comData: !!(hor || _DIA_PROPOSTO.test(texto)) });
+      }
+      if (_CONFIRMACAO_DE_COMPROMISSO.test(texto)) anota("confirmacao");
+    }
+    if (episodio.eventos.length > antes) {
+      msgsSemEvento = 0;
+      ultimoDiaComEvento = p?.dia ?? ultimoDiaComEvento;
+    } else {
+      msgsSemEvento += 1;
+    }
+  }
+
+  const ep = episodio || fechado;
+  if (!ep || !ep.eventos.length) return null;
+
+  const evs = ep.eventos;
+  const tipo = ["visita", "reunião/café", "ligação"].find(t => ep.tipos.has(t)) || "encontro";
+  const pedidos = evs.filter(e => e.oQue === "quer-marcar");
+  const acharUltimo = oQue => [...evs].reverse().find(e => e.oQue === oQue) || null;
+  const prefs = evs.filter(e => e.oQue === "preferencia-periodo" && e.periodo);
+  const preferencia = [...prefs].reverse().find(e => e.quem === "cliente") || prefs[prefs.length - 1] || null;
+  const naoAconteceu = acharUltimo("nao-vai-dar");
+  const adiamento = acharUltimo("adiamento");
+  const desistencia = evs.find(e => e.oQue === "desistencia") || null;
+  const confirmacao = acharUltimo("confirmacao");
+  const ficouDeConfirmar = acharUltimo("ficou-de-confirmar");
+  // Motivo COMERCIAL só quando a própria fala do cliente que desmarcou/adiou carrega objeção real
+  // (caro, fora do orçamento, "vou deixar pra outro momento" com preço junto...). Agenda não é.
+  const motivoComercial = [naoAconteceu, adiamento, desistencia]
+    .some(e => e && e.quem === "cliente" && _MOTIVO_DE_RECUSA.some(m => m.re.test(e.trecho)));
+  const desistiu = !!desistencia;
+  const continuaValido = !desistiu && !motivoComercial;
+  const idx = e => (e ? evs.indexOf(e) : -1);
+  const remarcacaoPendente = !!(naoAconteceu || adiamento)
+    && idx(confirmacao) < Math.max(idx(naoAconteceu), idx(adiamento));
+  let pendencia = "";
+  if (continuaValido) {
+    if (remarcacaoPendente) pendencia = "transformar o combinado em dia e horário definidos";
+    else if (!confirmacao && pedidos.length) pendencia = "confirmar o dia e o horário";
+  }
+  // Um compromisso parado há mais de 45 dias não é mais "de pé": os FATOS continuam valendo
+  // (autoria, motivo, preferência), mas as ordens de condução (convergir as três na remarcação)
+  // só fazem sentido enquanto o combinado está quente.
+  const idades = evs.map(e => e.diasAtras).filter(d => d != null);
+  const diasDesdeUltimoEvento = idades.length ? Math.min(...idades) : null;
+  const recente = diasDesdeUltimoEvento != null && diasDesdeUltimoEvento <= 45;
+  return {
+    tipo,
+    quemPediuPrimeiro: evs[0].quem,
+    clientePediu: pedidos.some(e => e.quem === "cliente"),
+    clientePropoDataEspontaneamente: pedidos.some(e => e.quem === "cliente" && e.comData),
+    diasDesdeUltimoEvento,
+    recente,
+    pedidos,
+    horarioProposto: ([...pedidos].reverse().find(e => e.horario) || {}).horario || "",
+    preferencia,
+    ficouDeConfirmar,
+    naoAconteceu,
+    adiamento,
+    quemPropsAdiamento: adiamento ? adiamento.quem : "",
+    desistencia,
+    desistiu,
+    motivoComercial,
+    continuaValido,
+    confirmado: !!confirmacao && !remarcacaoPendente,
+    pendencia,
+    eventos: evs.slice(-12)
+  };
+}
+
+// ─── v1364 — ESTE CONTATO É MESMO CORRETOR/PARCEIRO? ─────────────────────────────────────────
+//
+// O Vande disse "estou em visita ao cliente" — falando do trabalho DELE, que pode ser qualquer
+// ramo — e a análise concluiu "atua como corretor/parceiro pelo contexto". Aqui o app separa
+// sinal FORTE (dizer-se corretor, CRECI, comissão, parceria, "meu cliente" na mesma frase que
+// imóvel) de sinal FRACO (mencionar cliente do próprio trabalho). Fraco sem nenhum forte gera um
+// aviso factual no fichário; havendo forte, nada muda em relação a hoje.
+const _INTERMEDIARIO_FORTE = /\bsou corretor(?:a)?\b(?!\s+de\s+(?:seguros|investimentos|c[âa]mbio|planos))|\b(sou da imobili[áa]ria|trabalho com im[óo]veis|sou do ramo imobili[áa]rio|creci|minha comiss[ãa]o|qual (?:a |seria a )?comiss[ãa]o|parceria|parceir[oa]s?)\b/i;
+const _IMOVEL_NA_FRASE = /\b(im[óo]vel|im[óo]veis|apartamento|apto|casa|sala|terreno|lote|unidade|empreendimento|material|tabela|proposta|comprar|chaves?)\b/i;
+const _INTERMEDIARIO_FRACO = /\b(visita (?:a|ao) (?:um |uma |meu )?cliente|atendendo (?:um|uma|o|a|meu) cliente|com (?:um|o|meu) cliente (?:agora|aqui)|meu cliente est[áa] me esperando|reuni[ãa]o com (?:um|o|meu) cliente)\b/i;
+
+export function sinaisDeIntermediario(timeline, corretorNome = "", lead = {}) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const fortes = [];
+  const fracos = [];
+  for (const m of arr) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "cliente") continue;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || /^\[Arquivo enviado/i.test(texto)) continue;
+    if (_INTERMEDIARIO_FORTE.test(texto)
+      || (/\bmeu cliente\b/i.test(texto) && _IMOVEL_NA_FRASE.test(texto))) {
+      fortes.push(_trechoCurto(texto, 140));
+      continue;
+    }
+    if (_INTERMEDIARIO_FRACO.test(texto) || /\bmeu cliente\b/i.test(texto)) {
+      fracos.push(_trechoCurto(texto, 140));
+    }
+  }
+  return { fortes: fortes.slice(0, 6), fracos: fracos.slice(0, 6) };
+}
+
+// ─── v1364 — SINAIS COMERCIAIS FORTES DADOS PELO PRÓPRIO CLIENTE ─────────────────────────────
+//
+// "Podemos agendar para amanhã à tarde?" vale mais do que qualquer contagem de mensagens — e no
+// caso Vande esse sinal entrou na análise como texto solto, enquanto o convite do CORRETOR entrava
+// com destaque no fichário. Aqui as falas do cliente que definem estágio (pedir visita, perguntar
+// pagamento, pedir contrato, fazer contraproposta, dizer que interessa) viram lista com data,
+// pra pesarem mais do que volume, saudação e reação.
+const _SINAL_FORTE_DO_CLIENTE = [
+  { rotulo: "pediu para marcar visita/encontro", re: /\b(podemos (?:agendar|marcar)|quero (?:visitar|conhecer|marcar)|posso (?:visitar|conhecer)|consigo ir|vamos marcar|agendar (?:uma )?visita|como fa[çc]o (?:pra|para) visitar)\b/i },
+  { rotulo: "perguntou como fechar/avançar", re: /\b(como (?:fa[çc]o|fazemos) (?:pra|para) (?:fechar|comprar|reservar)|quero fechar|vamos fechar|como funciona a compra|posso reservar)\b/i },
+  { rotulo: "perguntou valores/condições de pagamento", re: /\b(condi[çc][õo]es de pagamento|forma de pagamento|qual o valor|quanto (?:custa|fica|est[áa]|sai)|como (?:fica|funciona) o (?:pagamento|financiamento)|aceita (?:financiamento|permuta|troca|carro)|d[áa] (?:pra|para) financiar|qual a entrada|valor da parcela)\b/i },
+  { rotulo: "pediu contrato/reserva/documentação", re: /\b(contrato|minuta|fazer a reserva|documenta[çc][ãa]o necess[áa]ria|que documentos)\b/i },
+  { rotulo: "perguntou disponibilidade de unidade", re: /\b(ainda (?:tem|est[áa] dispon[íi]vel)|tem dispon[íi]vel|quais unidades|qual andar|sala \d+|unidade \d+)\b/i },
+  { rotulo: "fez contraproposta", re: /\b(fa[çc]o por|se (?:fizer|sair) por|fecho (?:hoje |agora )?por|minha (?:proposta|oferta))\b/i },
+  { rotulo: "disse que o produto interessa", re: /\b(me interessa|tenho interesse|gostei (?:muito )?(?:do|da))\b/i }
+];
+
+export function sinaisFortesDoCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const achados = [];
+  const vistos = new Set();
+  for (const m of arr) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "cliente") continue;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto || /^\[Arquivo enviado/i.test(texto)) continue;
+    const p = dataCivilDeMensagem(m);
+    for (const s of _SINAL_FORTE_DO_CLIENTE) {
+      if (!s.re.test(texto)) continue;
+      const chave = `${s.rotulo}|${_semAcentoMinuscula(texto)}`;
+      if (vistos.has(chave)) continue;
+      vistos.add(chave);
+      achados.push({
+        rotulo: s.rotulo,
+        trecho: _trechoCurto(texto, 150),
+        data: p?.texto || "data não identificada",
+        diasAtras: _diasDesde(p?.dia ?? null, hojeDia)
+      });
+    }
+  }
+  return achados.slice(-MAX_FICHARIO);
+}
+
 // v1337 — um único retrato factual da conversa. Até aqui o prompt e as conferências chamavam
 // detectores separados em momentos diferentes; agora todos podem receber o MESMO estado calculado.
 // É a primeira separação explícita do motor em FATOS → leitura da IA → redação da IA.
@@ -1827,6 +2085,10 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
 
   return {
     versao: 1,
+    // v1364 — o compromisso da conversa, quem é o contato e os sinais fortes do cliente
+    compromisso: compromissoDaConversa(timeline, corretorNome, lead, agora),
+    papelDoContato: sinaisDeIntermediario(timeline, corretorNome, lead),
+    sinaisFortes: sinaisFortesDoCliente(timeline, corretorNome, lead, agora),
     valores,
     tentativasSemResposta,
     perguntasJaFeitas,
@@ -2125,7 +2387,10 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     diasParaPropor,
     caroSemFaixa,
     semCapitalHoje: semCapital,
-    permuta
+    permuta,
+    compromisso,
+    papelDoContato,
+    sinaisFortes
   } = estado;
 
   // v1360 — "FAZ 7 DIAS?" — O NÚMERO ERRADO, E O JEITO ERRADO DE ABRIR.
@@ -2165,6 +2430,80 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
 - Escreva no singular. Não use "vocês", "de vocês", "para vocês", "preferem" — plural inventado faz a mensagem parecer modelo mandado pra qualquer um, e o cliente percebe.
 - O tratamento desta conversa é "${trato.comoOCorretorChama}". Use NO MÁXIMO UMA VEZ por mensagem, e só se fizer falta. Escrever "o Sr" em toda frase soa formal demais e artificial — o normal é chamar a pessoa pelo NOME na abertura e depois falar direto, sem repetir pronome de tratamento nenhum.`);
     }
+  }
+
+  // v1364 — O COMPROMISSO DA CONVERSA, fala a fala, com autor em cada linha (caso Vande: a análise
+  // atribuiu ao cliente o adiamento que foi do corretor, tratou remarcação de agenda como perda de
+  // força e inventou três objetivos quando o único avanço era marcar dia e hora).
+  if (compromisso) {
+    const c = compromisso;
+    const rotuloDeQuem = quem => (quem === "cliente" ? "O PRÓPRIO CLIENTE" : "o corretor");
+    const linhas = [`- Tipo: ${c.tipo}.`];
+    const espontaneo = c.pedidos.find(e => e.quem === "cliente" && e.comData) || c.pedidos.find(e => e.quem === "cliente");
+    if (espontaneo) {
+      linhas.push(`- Quem pediu/propôs marcar foi O PRÓPRIO CLIENTE, por iniciativa dele: "${espontaneo.trecho}" (${espontaneo.data}, ${_haQuantoTempo(espontaneo.diasAtras)}). Este é o sinal comercial mais forte da conversa — vale mais que qualquer contagem de mensagens.`);
+    } else if (c.pedidos.length) {
+      linhas.push(`- Quem propôs marcar: ${rotuloDeQuem(c.pedidos[0].quem)} ("${c.pedidos[0].trecho}", ${c.pedidos[0].data}). O cliente ainda não pediu por iniciativa própria.`);
+    }
+    for (const ev of c.pedidos.filter(e => e.horario)) {
+      linhas.push(`- Horário já posto na mesa ${ev.quem === "cliente" ? "pelo PRÓPRIO CLIENTE" : "pelo corretor"}: "${ev.trecho}" (${ev.data}).`);
+    }
+    if (c.ficouDeConfirmar) {
+      linhas.push(`- ${rotuloDeQuem(c.ficouDeConfirmar.quem)} ficou de confirmar: "${c.ficouDeConfirmar.trecho}" (${c.ficouDeConfirmar.data}).`);
+    }
+    if (c.naoAconteceu) {
+      linhas.push(`- Não aconteceu/desmarcou: ${rotuloDeQuem(c.naoAconteceu.quem)} avisou "${c.naoAconteceu.trecho}" (${c.naoAconteceu.data}) — ${c.motivoComercial
+        ? "e nessa fala HÁ objeção comercial: o motivo está na própria frase, trate-o antes de tentar remarcar"
+        : "motivo de AGENDA, não comercial: nessa fala não há objeção de preço, de produto nem desistência"}.`);
+    }
+    if (c.adiamento) {
+      linhas.push(`- Quem propôs deixar para depois foi ${c.adiamento.quem === "corretor" ? "O CORRETOR" : "o cliente"}: "${c.adiamento.trecho}" (${c.adiamento.data}).${c.adiamento.quem === "corretor"
+        ? " O cliente NÃO pediu esse adiamento — não escreva que a decisão foi dele."
+        : ""}`);
+    }
+    if (c.preferencia) {
+      linhas.push(`- Preferência de período dita ${c.preferencia.quem === "cliente" ? "pelo cliente" : "pelo corretor"}: ${c.preferencia.periodo} ("${c.preferencia.trecho}").`);
+    }
+    if (c.desistiu) {
+      linhas.push(`- O cliente DESISTIU deste compromisso: "${c.desistencia.trecho}" (${c.desistencia.data}). Ele não está mais de pé.`);
+    } else if (!c.continuaValido) {
+      linhas.push(`- Situação: o cliente recuou com motivo COMERCIAL (a fala está acima). A objeção vem antes de qualquer remarcação.`);
+    } else if (c.confirmado) {
+      linhas.push(`- Situação: CONFIRMADO. A pendência agora é realizar o combinado, não remarcá-lo.`);
+    } else if (c.pendencia && c.recente) {
+      linhas.push(`- Situação: o compromisso CONTINUA DE PÉ. Pendência: ${c.pendencia}.`);
+    } else if (c.pendencia) {
+      linhas.push(`- Situação: o combinado ficou no ar e nunca virou data — o assunto parou ${_haQuantoTempo(c.diasDesdeUltimoEvento)}. Os fatos acima continuam valendo (quem disse cada coisa), mas o combinado não está mais quente: leia a conversa recente antes de retomá-lo como se fosse de ontem.`);
+    }
+    const comoUsar = [];
+    if (c.recente && c.continuaValido && (c.naoAconteceu || c.adiamento) && !c.motivoComercial) {
+      comoUsar.push(`- Remarcação por agenda NÃO é perda de força, objeção nem esfriamento. Se o único fato for "ainda sem nova data", o campo ondePerdeuForca fica VAZIO — falta de data é pendência de condução, não deterioração. E não reabra qualificação já respondida pelo comportamento dele (quem pediu visita não precisa ser perguntado se ainda tem interesse).`);
+    }
+    if (c.recente && c.continuaValido && c.pendencia) {
+      comoUsar.push(`- O próximo avanço é UM só: ${c.pendencia}. As três mensagens podem — e neste caso devem — buscar ESSE MESMO avanço, mudando só a FORMA: uma propõe um horário concreto; outra oferece duas opções reais de horário; outra retoma o combinado de leve e conduz à confirmação. Não invente um segundo objetivo, não traga outro produto e não faça pergunta nova só para as três ficarem diferentes.`);
+      if (c.preferencia && c.preferencia.quem === "cliente") {
+        comoUsar.push(`- Ao propor horário, respeite o período que o cliente disse que serve (${c.preferencia.periodo}) — oferecer o período que ele já descartou é não ter lido a conversa.`);
+      }
+    }
+    blocos.push(`O COMPROMISSO DESTA CONVERSA (${c.tipo} — reconstruído fala a fala pelo app, com quem disse cada coisa):
+${linhas.join("\n")}${comoUsar.length ? `\nCOMO USAR ISTO:\n${comoUsar.join("\n")}` : ""}`);
+  }
+
+  // v1364 — "estou em visita ao cliente" não faz de ninguém corretor. O aviso só aparece quando há
+  // menção fraca a "cliente" SEM nenhum sinal imobiliário de verdade — havendo sinal forte, nada
+  // muda em relação a hoje.
+  if (papelDoContato && papelDoContato.fracos.length && !papelDoContato.fortes.length) {
+    blocos.push(`QUEM É ESTE CONTATO (conferido pelo app nas falas dele):
+- Ele mencionou "cliente" falando do PRÓPRIO trabalho (ex.: "${papelDoContato.fracos[0]}"), e o app procurou nas falas dele algum sinal de que atue no mercado imobiliário (dizer-se corretor, CRECI, comissão, parceria, "meu cliente" tratando de imóvel) — NÃO achou nenhum.
+- Não classifique este contato como corretor/parceiro por isso: profissional de qualquer ramo visita e atende clientes. Sem evidência imobiliária, trate-o como cliente comprador.`);
+  }
+
+  // v1364 — os sinais que definem estágio, ditos pelo próprio cliente, cada um com a idade.
+  if (sinaisFortes.length) {
+    const linhas = sinaisFortes.map(s => `- ${s.rotulo}: "${s.trecho}" (${s.data}, ${_haQuantoTempo(s.diasAtras)})`);
+    blocos.push(`SINAIS COMERCIAIS FORTES DADOS PELO PRÓPRIO CLIENTE (lidos da fala dele pelo app):
+${linhas.join("\n")}
+Sinal desses, com a idade que está aí do lado, vale MAIS que qualquer métrica de volume (quantidade de mensagens, saudações, "obrigado", reações) na hora de definir estágio e próximo passo. Sinal forte RECENTE, sem nada depois que o desdiga, é cliente quente — não trate como retomada fria.`);
   }
 
   if (valores.length) {
@@ -3052,6 +3391,23 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
       motivos.push(`pergunta novamente sobre ${rotulo}, que o cliente já respondeu`);
     }
     for (const motivo of fatosInventadosNaMensagem(texto, contextoConhecido)) motivos.push(motivo);
+    // v1364 — três conferências apoiadas no compromisso reconstruído pelo app (caso Vande):
+    // autoria trocada, compromisso pendente ignorado e desinteresse inventado em cima de agenda.
+    const comp = contextoConhecido?.compromisso || null;
+    if (comp) {
+      if (comp.adiamento && comp.adiamento.quem === "corretor"
+        && /\b(?:como|conforme|j[áa] que|do jeito que)?\s*(?:voc[êe]|o senhor|a senhora|o sr\.?|a sra\.?)\s+(?:pediu|preferiu|sugeriu|quis|escolheu|combinou)\b[^.!?]{0,60}\b(?:semana|adiar|deixar|outro dia|depois|mais (?:pra|para) frente)\b/i.test(texto)) {
+        motivos.push("atribui ao cliente o adiamento que foi proposto pelo corretor");
+      }
+      if (comp.recente && comp.continuaValido && comp.pendencia && !contextoConhecido?.temPromessaPendente
+        && !/\b(visitas?|visitar|marcar|agendar|remarcar|hor[áa]rio|que horas|\d{1,2}\s*(?:h\b|hs\b|:\d{2})|amanh[ãa]|hoje|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|caf[ée]|reuni[ãa]o|encontro|te receber|nos vemos|pessoalmente|semana)\b/i.test(texto)) {
+        motivos.push(`não conduz para o compromisso pendente (${comp.tipo} ainda sem dia e horário)`);
+      }
+      if (comp.recente && comp.naoAconteceu && !comp.motivoComercial && !comp.desistiu
+        && /\b(esfriou|perdeu o interesse|desistiu|desist[êe]ncia|sem interesse|se (?:ainda|voc[êe] ainda) (?:tem|tiver) interesse|caso (?:ainda )?tenha interesse|retomar (?:o|seu) interesse)\b/i.test(texto)) {
+        motivos.push("trata como desinteresse um cancelamento que foi só de agenda");
+      }
+    }
     // A abertura são as duas primeiras frases — é ali que a contagem de dias vira cobrança.
     const abertura = texto.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
     if (_ABERTURA_CONTANDO_DIAS.test(abertura)) motivos.push("abre contando os dias parados");
@@ -3069,8 +3425,13 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
       // O que a pergunta PEDE, não as palavras em volta: duas mensagens podem citar as mesmas
       // cidades e ainda assim perguntar coisas diferentes. Só as palavras que decidem uma venda
       // (valor, faixa, prazo, tamanho, financiamento…) contam pra dizer que é a mesma pergunta.
-      const a = _raizes([..._palavrasDeConteudo(perguntas[i].pergunta)].filter(p => _PALAVRA_QUE_DECIDE.has(p)));
-      const b = _raizes([..._palavrasDeConteudo(perguntas[j].pergunta)].filter(p => _PALAVRA_QUE_DECIDE.has(p)));
+      // v1364 — quando existe compromisso PENDENTE e válido, convergir as três na visita é o
+      // comportamento CERTO (caso Vande): "visita/visitar" sai da comparação pra que a
+      // convergência pedida pelo fichário não ganhe tarja vermelha da própria conferência.
+      const compPendente = contextoConhecido?.compromisso?.recente && contextoConhecido?.compromisso?.continuaValido && contextoConhecido?.compromisso?.pendencia;
+      const decide = p => _PALAVRA_QUE_DECIDE.has(p) && !(compPendente && (p === "visita" || p === "visitar"));
+      const a = _raizes([..._palavrasDeConteudo(perguntas[i].pergunta)].filter(decide));
+      const b = _raizes([..._palavrasDeConteudo(perguntas[j].pergunta)].filter(decide));
       if (!a.size || !b.size) continue;
       let iguais = 0;
       for (const palavra of a) if (b.has(palavra)) iguais += 1;
@@ -6021,7 +6382,11 @@ ${revisaoSoDasMensagens}`;
           conversa: `${timelineTextFull}\n${observacoesManuaisTexto}`,
           cerebro: instrucoesCerebroTexto,
           catalogo: nomesConhecidos,
-          topicosRespondidos: estadoComercial.topicosConfirmados
+          topicosRespondidos: estadoComercial.topicosConfirmados,
+          // v1364 — o compromisso reconstruído e se há promessa do corretor em aberto (entregar o
+          // prometido é motivo legítimo pra uma das três não falar do compromisso).
+          compromisso: estadoComercial.compromisso,
+          temPromessaPendente: (estadoComercial.promessasNaoCumpridas || []).length > 0
         }
       );
     } catch (erroAviso) {
