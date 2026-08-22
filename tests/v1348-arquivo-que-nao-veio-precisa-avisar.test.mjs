@@ -139,6 +139,7 @@ assert.equal(contarMaterialNaoLido(null).total, 0, "e nada quebra com entrada va
 {
   const fonte = [
     app.match(/const CP1348_MARCADOR = [\s\S]*?\n  \};/)[0],
+    app.match(/const CP1356_FIGURINHA = [\s\S]*?;/)[0],
     app.match(/function cp1348TextoNaTela\(texto\)\{[\s\S]*?\n  \}/)[0]
   ].join("\n");
   const curto = new Function(`${fonte}\nreturn cp1348TextoNaTela;`)();

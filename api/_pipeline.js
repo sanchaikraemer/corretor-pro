@@ -10,6 +10,24 @@ const AUDIO_INLINE_RE = /\.(opus|ogg|mp3|m4a|wav|aac)\b/i;
 const IMAGE_INLINE_RE = /\.(jpg|jpeg|png|gif|webp|heic|bmp|tiff)\b/i;
 const VIDEO_INLINE_RE = /\.(mp4|mov|avi|webm|mkv|3gp|m4v)\b/i;
 const DOC_INLINE_RE = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|csv|vcf|txt)\b/i;
+// v1356 — FIGURINHA É REAÇÃO, NÃO É MATERIAL PRA ANALISAR.
+//
+// Print do dono (22/08/2026): o cliente respondeu com o joinha da Scania — uma figurinha, o "ok,
+// combinado" dele. O app registrou "Foto enviada — a IA não leu o conteúdo", contou como foto
+// pendente e a análise montou o plano do dia em cima disso: "esclarecer o conteúdo e a intenção da
+// imagem enviada". A mensagem sugerida ia perguntar ao cliente o que ele quis dizer com a imagem.
+// Ridículo, e pior: fazia o corretor passar vergonha com o cliente.
+//
+// O WhatsApp nomeia figurinha com o prefixo STK- (e a linha da exportação sem mídia diz
+// "figurinha"/"sticker"). Daqui pra frente ela é tratada como o que é: uma reação, sem conteúdo
+// pra ler. Não vira foto pendente, não é mandada pra leitura de imagem (custo à toa) e a conversa
+// diz claramente o que aconteceu, pra a IA não inventar intenção onde não há.
+const STICKER_NOME_RE = /(^|[/\\_-])stk[-_]?\d|(^|[/\\])stk[-_]/i;
+const STICKER_PALAVRA_RE = /figurinha|adesivo|sticker/i;
+export function ehFigurinha(nome) {
+  const n = String(nome || "");
+  return STICKER_NOME_RE.test(n) || (STICKER_PALAVRA_RE.test(n) && /\.webp$/i.test(n));
+}
 const HIDDEN_MEDIA_TAG_RE = /<[^>]*(omitida|oculta|omitido|ocultado|omitted|hidden)[^>]*>/i;
 const HIDDEN_MEDIA_CLEAN_RE = /<[^>]*(omitida|oculta|omitido|ocultado|omitted|hidden)[^>]*>/gi;
 const HIDDEN_MEDIA_ONLY_RE = /^\s*<[^>]*(omitida|oculta|omitido|ocultado|omitted|hidden)[^>]*>\s*$/i;
@@ -28,7 +46,8 @@ const HIDDEN_MEDIA_BARE_RE = /^\s*(imagem|foto|v[ií]deo|[áa]udio|documento|arq
 // quando a exportação INCLUI os arquivos). Este é o mesmo remédio pro formato sem arquivos.
 function marcadorDeMidiaOculta(linha) {
   const t = String(linha || "").toLowerCase();
-  if (/imagem|foto|image|photo|figurinha|adesivo|sticker|gif/.test(t)) return "[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]";
+  if (/figurinha|adesivo|sticker/.test(t)) return "[Figurinha enviada — é uma reação, não tem texto pra ler]";
+  if (/imagem|foto|image|photo|gif/.test(t)) return "[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]";
   if (/v[ií]deo|video/.test(t)) return "[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]";
   if (/[áa]udio|voz|voice|ptt/.test(t)) return "[Arquivo enviado nesta mensagem: áudio — conteúdo não analisado pela IA]";
   if (/documento|document|pdf|planilha|arquivo|file/.test(t)) return "[Arquivo enviado nesta mensagem: documento/PDF — conteúdo não analisado pela IA]";
@@ -331,6 +350,7 @@ export function parseWhatsappTxt(txt) {
           // arquivo foi enviado ali (não só o conteúdo, que já era certo não inventar). Mantém
           // um marcador factual, sem tentar descrever o que tem na imagem/vídeo/documento.
           const nomeAnexo = trimmed.replace(ATTACHED_SUFFIX_RE, "").trim();
+          if (ehFigurinha(nomeAnexo)) { kept.push("[Figurinha enviada — é uma reação, não tem texto pra ler]"); continue; }
           if (IMAGE_INLINE_RE.test(trimmed)) { anexos.push(nomeAnexo); kept.push("[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]"); continue; }
           if (VIDEO_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]"); continue; }
           if (DOC_INLINE_RE.test(trimmed)) { anexos.push(nomeAnexo); kept.push("[Arquivo enviado nesta mensagem: documento/PDF — conteúdo não analisado pela IA]"); continue; }
@@ -1581,6 +1601,7 @@ export function contarMaterialNaoLido(timeline) {
   let imagens = 0, documentos = 0, audios = 0, arquivos = 0;
   for (const m of (Array.isArray(timeline) ? timeline : [])) {
     const t = String(m?.text || "");
+    // Figurinha não entra: ela não tem o que ler, então avisar que "a IA não leu" seria mentira.
     imagens += quantos(t, /imagem — conteúdo não analisado/gi);
     documentos += quantos(t, /documento\/PDF — conteúdo não analisado/gi);
     audios += quantos(t, /[áa]udio — conteúdo não analisado/gi)
@@ -6494,6 +6515,8 @@ const MAX_BYTES_PDF_LEITURA = 8 * 1024 * 1024;
 
 export function arquivoVisualLegivel(nome) {
   const n = String(nome || "");
+  // v1356 — figurinha nunca vai pra leitura: não tem texto comercial e ainda custa uma chamada paga.
+  if (ehFigurinha(n)) return false;
   return IMAGEM_LEGIVEL_EXT.test(n) || PDF_EXT.test(n);
 }
 

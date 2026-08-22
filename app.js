@@ -5323,9 +5323,15 @@ function cp704Css(){
     audio: "📎 Áudio enviado — não virou texto",
     "documento/pdf": "📎 PDF enviado — a IA não leu o conteúdo"
   };
+  // v1356 — figurinha tem linha própria: ela é reação do cliente ("ok, combinado"), não é arquivo
+  // pendente. Antes aparecia como "Foto enviada — a IA não leu o conteúdo", e a análise chegava a
+  // sugerir perguntar ao cliente o que ele quis dizer com a imagem.
+  const CP1356_FIGURINHA = /\[Figurinha enviada — é uma reação, não tem texto pra ler\]/g;
   function cp1348TextoNaTela(texto){
-    return String(texto || "").replace(CP1348_MARCADOR, (_todo, tipo) =>
-      CP1348_CURTO[String(tipo).trim().toLowerCase()] || "📎 Arquivo enviado — não veio no envio da conversa");
+    return String(texto || "")
+      .replace(CP1356_FIGURINHA, "👍 Figurinha (reação do cliente)")
+      .replace(CP1348_MARCADOR, (_todo, tipo) =>
+        CP1348_CURTO[String(tipo).trim().toLowerCase()] || "📎 Arquivo enviado — não veio no envio da conversa");
   }
 
   function cp1345UltimasMensagensHTML(lead){
