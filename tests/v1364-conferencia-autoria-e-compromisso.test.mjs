@@ -25,10 +25,11 @@ const TIMELINE = [
 const compromisso = compromissoDaConversa(TIMELINE, C, lead, AGORA);
 assert.ok(compromisso && compromisso.continuaValido && compromisso.pendencia, "o cenário tem compromisso pendente");
 const contexto = {
-  conversa: TIMELINE.map(x => x.text).join("\n"),
+  // Com o AUTOR na linha, igual o texto que o app monta de verdade — senão a conferência antiga
+  // de "cita nome que não aparece nesta conversa" acusa o próprio nome do cliente do cenário.
+  conversa: TIMELINE.map(x => `[${x.date}] ${x.author}: ${x.text}`).join("\n"),
   cerebro: "",
-  compromisso,
-  temPromessaPendente: false
+  compromisso
 };
 
 // ── 1. Autoria trocada: "como você pediu, deixamos para semana que vem" ──────────────────────
@@ -41,23 +42,43 @@ const contexto = {
     "atribuir ao cliente o adiamento do corretor precisa gerar aviso");
 }
 
-// ── 2. Compromisso pendente ignorado: mensagem que não conduz pra marcar nada ────────────────
+// ── 2. v1366 — A RÉGUA "NÃO CONDUZ PARA O COMPROMISSO PENDENTE" FOI APAGADA POR ORDEM DO DONO ─
+//
+// Print de 22/08/2026 (cliente Pâmela): as TRÊS sugestões saíram com tarja vermelha dizendo
+// "não conduz para o compromisso pendente (visita ainda sem dia e horário)" — sendo que as três
+// respondiam o que a cliente tinha acabado de perguntar (outro edifício, sem piscina). Atender o
+// pedido do cliente é a coisa certa; a régua reprovava mensagem boa. Ordem: "apagar".
+//
+// Este teste agora garante o CONTRÁRIO: com visita pendente de data, uma mensagem que trata de
+// outro assunto NÃO pode ganhar aviso nenhum por isso.
 {
   const avisos = avisosDeQualidadeDasMensagens(
     [{ qual: "b", texto: "Bom dia, Vande! Você pretende usar financiamento ou recursos próprios na compra?" }],
     contexto
   );
-  assert.ok(avisos.some(a => a.motivos.some(mo => mo.includes("não conduz para o compromisso pendente"))),
-    "com visita pendente de data, mensagem que não conduz pra marcar precisa de aviso");
+  assert.ok(!avisos.some(a => a.motivos.some(mo => /conduz para o compromisso/i.test(mo))),
+    "a régua apagada na v1366 não pode voltar: mensagem sobre outro assunto não é defeito");
 }
-// Mas quando existe promessa do corretor em aberto, entregar o prometido é caminho legítimo.
 {
   const avisos = avisosDeQualidadeDasMensagens(
     [{ qual: "b", texto: "Bom dia, Vande! Segue o material que fiquei de te enviar, dá uma olhada." }],
-    { ...contexto, temPromessaPendente: true }
+    contexto
   );
-  assert.ok(!avisos.some(a => a.motivos.some(mo => mo.includes("não conduz para o compromisso"))),
-    "com promessa pendente, entregar o prometido não é defeito");
+  assert.ok(!avisos.some(a => a.motivos.some(mo => /conduz para o compromisso/i.test(mo))),
+    "entregar o que foi prometido nunca foi defeito");
+}
+// E a régua não pode voltar disfarçada em outro texto. Este é o formato exato do print da
+// Pâmela — as três respondendo o que o cliente perguntou sobre OUTRO assunto, com a visita ainda
+// pendente de data. Nenhuma pode sair com tarja vermelha. (Nome do cliente do cenário, senão a
+// conferência de "cita nome de outra conversa" — que é legítima e antiga — dispara sozinha.)
+{
+  const avisos = avisosDeQualidadeDasMensagens([
+    { qual: "a", texto: "Bom dia, Vande! Sobre outro edifício, tem algo específico que você quer evitar?" },
+    { qual: "b", texto: "Bom dia, Vande! Você prefere um condomínio sem piscina ou com o mínimo possível de área comum?" },
+    { qual: "c", texto: "Bom dia, Vande! Eu vou separar somente opções de outros edifícios com estrutura comum mais simples." }
+  ], contexto);
+  assert.equal(avisos.length, 0,
+    `as três mensagens no formato do print da Pâmela respondem o que o cliente perguntou — nenhuma pode sair com tarja vermelha. Vieram: ${JSON.stringify(avisos)}`);
 }
 
 // ── 3. Desinteresse inventado em cima de agenda ──────────────────────────────────────────────
