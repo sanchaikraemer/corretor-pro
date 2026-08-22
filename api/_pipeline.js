@@ -2534,7 +2534,8 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
       blocos.push(`HÁ QUANTO TEMPO ESTA CONVERSA ESTÁ PARADA (contado pelo app):
 - Última mensagem: ${ultima.texto} — ${quanto}.
 - Este é o ÚNICO número de dias que pode ser dito ao cliente. O "prazo de retomada" que aparece no contexto técnico é uma regra do corretor pra decidir QUANDO falar — é tempo pra frente, não tempo parado. Nunca escreva esse prazo como se fossem dias que já passaram.
-- E não abra mensagem contando dia parado ("faz X dias que...", "há X dias sem falar"). Isso soa como cobrança e o app reprova a mensagem por isso. Comece pelo assunto.`);
+- E não abra mensagem contando dia parado ("faz X dias que...", "há X dias sem falar", "há 4 dias você comentou"). Isso soa como cobrança e o app reprova a mensagem por isso. Comece pelo assunto.
+- ATENÇÃO À ARMADILHA (print do dono, cliente Julsimar, 22/08/2026): o piso de forma manda a mensagem recomendada RECONHECER o intervalo. Reconhecer o intervalo NÃO é escrever quantos dias passaram. Reconhecer é RETOMAR O ASSUNTO de onde ele parou — "sobre as condições que te passei", "voltando no que conversamos do <produto>", "sobre o que ficou de você analisar". O número de dias nunca entra na mensagem; quem conta os dias é você, não o cliente.`);
     }
   }
 
@@ -2545,6 +2546,30 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
 - É UMA pessoa só. Em nenhuma mensagem o cliente falou de si no plural, e o corretor nunca escreveu "vocês".
 - Escreva no singular. Não use "vocês", "de vocês", "para vocês", "preferem" — plural inventado faz a mensagem parecer modelo mandado pra qualquer um, e o cliente percebe.
 - O tratamento desta conversa é "${trato.comoOCorretorChama}". Use NO MÁXIMO UMA VEZ por mensagem, e só se fizer falta. Escrever "o Sr" em toda frase soa formal demais e artificial — o normal é chamar a pessoa pelo NOME na abertura e depois falar direto, sem repetir pronome de tratamento nenhum.`);
+    }
+  }
+
+  // v1368 — PELO MENOS UMA DAS TRÊS TEM QUE ENTREGAR ALGO.
+  //
+  // Prints do dono de 22/08/2026 (Flavio, Ilario e Julsimar): nove sugestões, nove perguntas ao
+  // cliente, nenhuma entregando nada. O cliente chega perguntando e leva um interrogatório de
+  // volta. Este bloco só aparece quando o app SABE que havia o que entregar — valor já citado na
+  // conversa, pergunta do cliente esperando resposta, ou visita pendente de data.
+  {
+    const temValor = valores.length > 0;
+    const temPerguntaAberta = perguntasDoCliente.length > 0;
+    const temCompromissoPendente = !!(compromisso && compromisso.continuaValido && compromisso.pendencia);
+    if (temValor || temPerguntaAberta || temCompromissoPendente) {
+      const oQueDaPraEntregar = [];
+      if (temPerguntaAberta) oQueDaPraEntregar.push("a resposta da pergunta que o cliente fez (está no bloco acima)");
+      if (temValor) oQueDaPraEntregar.push("um número concreto a partir dos valores já citados nesta conversa");
+      if (temCompromissoPendente) oQueDaPraEntregar.push("um dia e um horário com nome, em vez de perguntar quando ele pode");
+      blocos.push(`PELO MENOS UMA DAS TRÊS MENSAGENS PRECISA ENTREGAR, NÃO PERGUNTAR:
+- Nesta conversa existe o que entregar: ${oQueDaPraEntregar.join("; ")}.
+- ENTREGAR é pôr na mão do cliente algo concreto — um número, uma condição montada, um dia com hora, a resposta que ele pediu. Dizer que você PODE preparar ("posso preparar duas formas de pagamento", "eu organizo as informações") não é entregar: é prometer trabalho e devolver a bola.
+- Três mensagens que terminam em pergunta são um interrogatório, não três caminhos. Se as três só perguntam, refaça a recomendada até ela ENTREGAR.
+- Regra prática: a recomendada entrega e, no fim, faz UMA pergunta só — a que fecha o próximo passo. As outras duas podem explorar caminhos diferentes.
+- Se faltar o dado pra entregar, monte a frase COM O ESPAÇO PRA O CORRETOR COMPLETAR (ex.: "a entrada fica em R$ ___ e o saldo em ___ vezes") em vez de transformar a falta em pergunta ao cliente. Nunca invente o número.`);
     }
   }
 
@@ -2566,6 +2591,20 @@ completar — nunca invente o dado, e nunca troque a resposta por um convite.
 Convite para visita, se couber, vem DEPOIS da resposta, na mesma mensagem ou nas outras duas.
 O app confere assunto, não intenção: se a resposta já foi dada com outras palavras, siga em frente.`);
   }
+
+  // v1368 — O QUE É DO CORRETOR NÃO VIRA PERGUNTA PRO CLIENTE.
+  //
+  // Print do dono (cliente Flavio, 22/08/2026): as três sugestões pediam ao cliente que
+  // identificasse o anúncio — "era sobre imóvel ou sobre contratação de empreiteiros?", "me diz o
+  // que chamou sua atenção", "me envie a imagem ou o link do anúncio". O anúncio é DO CORRETOR.
+  // É a mesma doença do caso Adairton (querer que ele confirmasse a cidade do próprio
+  // apartamento): quando o app não sabe alguma coisa, ele empurra a pergunta pro cliente.
+  // Só faz sentido havendo conversa: sem mensagem nenhuma, o fichário fica vazio (regra da v1317).
+  if ((Array.isArray(timeline) ? timeline : []).some(ehMensagemRealParaTempo)) blocos.push(`O QUE É DO CORRETOR NUNCA VIRA PERGUNTA PARA O CLIENTE:
+- Anúncio publicado, imóvel da carteira, material enviado, preço já dito, cidade, bairro, metragem: isso é do corretor. Ele sabe, ou descobre em dez segundos no sistema dele.
+- É PROIBIDO escrever mensagem pedindo ao cliente que identifique, reenvie ou explique o que saiu do próprio corretor ("me envia o link do anúncio", "qual anúncio você viu", "era sobre qual imóvel", "me diz o que chamou sua atenção"). Isso faz o corretor parecer que não conhece o que está vendendo — e foi exatamente o que o dono flagou na tela.
+- Se o app não trouxe esse dado, ele está com o CORRETOR, não com o cliente: escreva a frase com o espaço para ele completar antes de enviar.
+- Perguntar ao cliente só vale para o que SÓ ELE sabe: o que ele precisa, quanto pode pagar, quando pode, quem decide com ele, o que achou do que viu.`);
 
   // v1364 — O COMPROMISSO DA CONVERSA, fala a fala, com autor em cada linha (caso Vande: a análise
   // atribuiu ao cliente o adiamento que foi do corretor, tratou remarcação de agenda como perda de
@@ -3443,10 +3482,15 @@ function _perguntaFinal(texto) {
   for (let i = frases.length - 1; i >= 0; i--) if (frases[i].endsWith("?")) return frases[i];
   // Pedido sem ponto de interrogação ("me diz um teto de investimento e eu separo") é pedido do
   // mesmo jeito — e foi assim que duas sugestões iguais passaram batido no print do dono.
-  const PEDIDO = /\b(me (diz|diga|passa|manda|informa)|qual|quanto|at[ée] quanto|prefere|consegue|poderia)\b/i;
-  for (let i = frases.length - 1; i >= 0; i--) if (PEDIDO.test(frases[i])) return frases[i];
+  // v1368 — "Me envie uma imagem ou o link" É PEDIDO (print do dono, cliente Flavio, 22/08/2026).
+  // A lista antiga só tinha "me diz/passa/manda/informa"; faltavam justamente as formas mais
+  // comuns de pedir no WhatsApp — enviar, mandar no imperativo, confirmar, mostrar. Sem elas o
+  // app achava que a mensagem "não pergunta nada" e carimbava de vermelho um pedido perfeito.
+  for (let i = frases.length - 1; i >= 0; i--) if (_PEDIDO_SEM_INTERROGACAO.test(frases[i])) return frases[i];
   return "";
 }
+
+const _PEDIDO_SEM_INTERROGACAO = /\b(me (diz|diga|fala|fale|passa|passe|manda|mande|envia|envie|informa|informe|confirma|confirme|avisa|avise|mostra|mostre)|pode me (dizer|passar|mandar|enviar|confirmar|mostrar)|qual|quanto|at[ée] quanto|prefere|consegue|poderia)\b/i;
 
 // Nome próprio no meio da frase que NÃO existe na conversa nem no Cérebro: é nome que a IA trouxe
 // de fora (foi assim que um empreendimento de outro cliente apareceu numa cliente que nunca tinha
@@ -3515,6 +3559,48 @@ function _topicoGenericoDaPergunta(texto = "") {
   return "";
 }
 
+// v1368 — NOME DE CAMPO DO PROGRAMA NÃO APARECE NA TELA DO CORRETOR.
+//
+// Print do dono (cliente Flavio, 22/08/2026): a ordem de envio dizia "use a maisDireta para pedir
+// a imagem ou o link". "maisDireta" é o nome interno do campo no pedido feito à IA — na tela do
+// corretor as sugestões são 1, 2 e 3. Ele lê uma instrução que manda usar uma coisa que não existe
+// na tela dele. O texto vinha do modelo direto pro card, sem nada traduzindo.
+//
+// Aqui é só tradução de rótulo — nenhuma palavra comercial é reescrita.
+export function semNomeDeCampoNaTela(texto = "") {
+  return String(texto || "")
+    .replace(/\bmais\s*Direta\b/gi, "a mais direta (sugestão 3)")
+    .replace(/\bmais\s*Suave\b/gi, "a mais suave (sugestão 2)")
+    .replace(/\brecomendada\b(?!\s*\()/gi, "recomendada (sugestão 1)")
+    .replace(/\ba\s+a\s+mais/gi, "a mais")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+const _FALA_DE_SISTEMA_SOBRE_O_CLIENTE = /\b(?:seu |sua |do seu |da sua |o |a )?(?:perfil de (?:compra|busca|cliente|investidor)|jornada de (?:compra|cliente)|sua jornada|perfil de aquisi[çc][ãa]o)\b|\bseu perfil\b|\bna sua capta[çc][ãa]o\b/i;
+
+// v1368 — AS TRÊS SÓ PERGUNTAM E NENHUMA ENTREGA NADA.
+//
+// Prints do dono de 22/08/2026 (Flavio, Ilario e Julsimar): nove sugestões, nove perguntas ao
+// cliente. Nenhuma respondia, nenhuma trazia um número, uma data, um horário. O cliente chega
+// perguntando e leva um interrogatório de volta — e o app não reclamava de nada, porque cada
+// mensagem, sozinha, estava "correta".
+//
+// "Entregar" aqui é uma coisa só, verificável: a mensagem põe na mão do cliente algo CONCRETO —
+// um valor, uma porcentagem, um dia, um horário. Frase que só descreve o que o corretor PODERIA
+// preparar ("posso preparar duas formas de pagamento") não entrega nada.
+function _mensagemEntregaAlgoConcreto(texto = "") {
+  const t = String(texto || "");
+  if (valoresNaMensagem(t).length) return true;
+  if (/\b\d{1,3}\s*%/.test(t)) return true;
+  if (/\b\d{1,2}\s*(?:h\b|hs\b|horas?\b|:\d{2})/i.test(t)) return true;
+  if (/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(t)) return true;
+  if (/\b(?:segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)(?:-feira)?\b/i.test(t)) return true;
+  if (/\b\d{1,3}\s*(?:m²|m2|metros)\b/i.test(t)) return true;
+  if (/\b\d{1,3}\s*x\b/i.test(t)) return true;
+  return false;
+}
+
 export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido = null) {
   const lista = (Array.isArray(mensagens) ? mensagens : []).filter(m => m && String(m.texto || "").trim());
   const avisos = [];
@@ -3559,10 +3645,19 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
     // A abertura são as duas primeiras frases — é ali que a contagem de dias vira cobrança.
     const abertura = texto.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
     if (_ABERTURA_CONTANDO_DIAS.test(abertura)) motivos.push("abre contando os dias parados");
-    if (PROMESSA_VAZIA.test(texto) && !texto.includes("?")) motivos.push("promete enviar e não pergunta nada");
+    // v1368 — pedir sem "?" é pedir. Ver _PEDIDO_SEM_INTERROGACAO: a mensagem "Me envie uma
+    // imagem ou o link do anúncio. Eu confiro e te passo as informações certas." levava tarja
+    // vermelha de "não pergunta nada" — ela pede, e pede a coisa certa.
+    if (PROMESSA_VAZIA.test(texto) && !texto.includes("?") && !_PEDIDO_SEM_INTERROGACAO.test(texto)) {
+      motivos.push("promete enviar e não pergunta nada");
+    }
     const forasteiros = _nomesForaDaConversa(texto, contextoConhecido);
     if (forasteiros.inventados.length) motivos.push(`cita "${forasteiros.inventados.slice(0, 2).join('", "')}", que não aparece nesta conversa`);
     if (forasteiros.deOutraConversa.length) motivos.push(`cita "${forasteiros.deOutraConversa.slice(0, 2).join('", "')}" — é produto seu, mas não foi falado com este cliente`);
+    // v1368 — FALAR DO CLIENTE COMO FICHA DE CADASTRO. Print do dono (cliente Ilario): "entender
+    // melhor a parte do PERFIL DE COMPRA". O texto de orientação já proíbe esse jeito de escrever
+    // ("seu perfil de busca", "sua jornada"), mas nada conferia se tinha sobrado na mensagem.
+    if (_FALA_DE_SISTEMA_SOBRE_O_CLIENTE.test(texto)) motivos.push("fala do cliente como ficha de cadastro, não como pessoa");
     if (motivos.length) avisos.push({ qual: m.qual, motivos: [...new Set(motivos)] });
     perguntas.push({ qual: m.qual, pergunta: perguntaFinal });
   }
@@ -3584,11 +3679,35 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
       let iguais = 0;
       for (const palavra of a) if (b.has(palavra)) iguais += 1;
       const menor = Math.min(a.size, b.size);
-      if (iguais / menor < 0.5) continue;
+      // v1368 — UMA PALAVRA EM COMUM DE UMA SÓ NÃO É "A MESMA COISA" (print do dono, cliente
+      // Ilario, 22/08/2026). A sugestão 1 perguntava "para morar ou investir?" (finalidade) e a 3
+      // "morar logo ou sem pressa?" (prazo) — perguntas diferentes. Como a 3 tinha só a palavra
+      // "morar", a conta dava 1 de 1 = 100% e saía tarja vermelha. Com uma palavra de cada lado,
+      // "metade" não significa nada: aí só vale quando as duas pedem EXATAMENTE o mesmo conjunto.
+      if (menor < 2) {
+        const mesmoPedido = a.size === b.size && [...a].every(p => b.has(p));
+        if (!mesmoPedido) continue;
+      } else if (iguais / menor < 0.5) continue;
       const alvo = avisos.find(x => x.qual === perguntas[j].qual);
       const motivo = `pede a mesma coisa que a sugestão ${perguntas[i].qual.toUpperCase()}`;
       if (alvo) { if (!alvo.motivos.includes(motivo)) alvo.motivos.push(motivo); }
       else avisos.push({ qual: perguntas[j].qual, motivos: [motivo] });
+    }
+  }
+  // v1368 — as três só perguntam (ver _mensagemEntregaAlgoConcreto). Só acusa quando o app SABE
+  // que havia o que entregar: valor já citado na conversa, pergunta do cliente esperando resposta
+  // ou compromisso pendente de data. Em conversa que ainda é pura qualificação, perguntar é o
+  // certo — e aí este aviso não aparece.
+  if (lista.length >= 2 && contextoConhecido?.temOQueEntregar) {
+    const nenhumaEntrega = lista.every(m => !_mensagemEntregaAlgoConcreto(m.texto));
+    const todasPedem = lista.every(m => String(m.texto || "").includes("?") || _PEDIDO_SEM_INTERROGACAO.test(String(m.texto || "")));
+    if (nenhumaEntrega && todasPedem) {
+      for (const m of lista) {
+        const alvo = avisos.find(x => x.qual === m.qual);
+        const motivo = "as três só perguntam — nenhuma entrega um número, uma data ou uma resposta";
+        if (alvo) { if (!alvo.motivos.includes(motivo)) alvo.motivos.push(motivo); }
+        else avisos.push({ qual: m.qual, motivos: [motivo] });
+      }
     }
   }
   return avisos;
@@ -6535,7 +6654,12 @@ ${revisaoSoDasMensagens}`;
           // trocada e desinteresse inventado em cima de agenda.
           // v1366 — `temPromessaPendente` saiu junto com a régua apagada por ordem do dono: ela
           // era a única leitora, e dado que ninguém lê é dado que engana o próximo a mexer aqui.
-          compromisso: estadoComercial.compromisso
+          compromisso: estadoComercial.compromisso,
+          // v1368 — havia o que entregar? É o que separa "as três perguntam porque é hora de
+          // qualificar" de "as três perguntam quando já dava pra responder".
+          temOQueEntregar: (estadoComercial.valores || []).length > 0
+            || (estadoComercial.perguntasDoClienteAbertas || []).length > 0
+            || !!(estadoComercial.compromisso && estadoComercial.compromisso.continuaValido && estadoComercial.compromisso.pendencia)
         }
       );
     } catch (erroAviso) {
@@ -6634,7 +6758,7 @@ ${revisaoSoDasMensagens}`;
         aLabel: clean(mensagensRaw.aLabel, "Recomendada"),
         bLabel: clean(mensagensRaw.bLabel, "Alternativa"),
         cLabel: clean(mensagensRaw.cLabel, "Direta ao ponto"),
-        ordemDeEnvio: clean(mensagensRaw.ordemDeEnvio),
+        ordemDeEnvio: semNomeDeCampoNaTela(clean(mensagensRaw.ordemDeEnvio)),
         recomendada: "a"
       },
       tipoContato: null,
