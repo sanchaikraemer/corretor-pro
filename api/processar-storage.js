@@ -1,4 +1,4 @@
-import { resolveOrganizationId, _buscarProcessamentoExistenteV681 } from "./_persistence.js";
+import { resolveOrganizationId, _buscarProcessamentoExistenteV681, getSupabaseAdmin } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import {
@@ -199,7 +199,30 @@ async function criarUploadUrl(req, res, organizationId, body) {
     }
 
     if (body && body.probe) {
-      return json(res, 200, { ok: true, bucket, bucketState });
+      // v1361 — "não tem que reimportar tudo de novo, só as atualizações" (dono, 22/08/2026).
+      //
+      // O servidor já reaproveita a transcrição de áudio deste cliente desde a v1141 — mas só
+      // DEPOIS que o ZIP inteiro subiu. Ou seja: o corretor pagava, toda vez, o envio de todos os
+      // áudios que o servidor já tinha em texto. Numa conversa de meses são dezenas de MB subindo
+      // à toa, e é isso que faz a importação demorar.
+      //
+      // Aqui, ANTES do envio, o aparelho pergunta o que já está salvo pra esta conversa (o nome do
+      // arquivo do WhatsApp identifica o cliente, mesma chave usada ao salvar) e deixa esses
+      // áudios de fora do que sobe. O texto continua indo INTEIRO: é ele o histórico, é pequeno, e
+      // é sobre ele que a análise se debruça.
+      let audiosJaTranscritos = [];
+      if (fileName) {
+        try {
+          const supabaseDb = getSupabaseAdmin();
+          const match = await _buscarProcessamentoExistenteV681(supabaseDb, {
+            result: {}, fileName, path: "", organizationId
+          }).catch(() => null);
+          if (match?.row?.timeline_json) {
+            audiosJaTranscritos = Object.keys(transcricoesDoLeadAnterior(match.row.timeline_json));
+          }
+        } catch (_) { /* fail-open: sem a lista, sobe tudo como antes */ }
+      }
+      return json(res, 200, { ok: true, bucket, bucketState, audiosJaTranscritos });
     }
 
     // Caminho idempotente: retries da mesma importação usam o mesmo objeto, sem criar cópias.
