@@ -184,12 +184,26 @@ export function planejarConteudoDoZip({
   diasJanela = 90,
   bytesTexto = 0,
   limiteBytes = LIMITE_ENVIO_BYTES,
-  margemBytes = MARGEM_ENVIO_BYTES
+  margemBytes = MARGEM_ENVIO_BYTES,
+  // v1361 — o que o servidor JÁ tem em texto deste cliente não precisa subir de novo.
+  jaTranscritos = []
 } = {}) {
-  const lista = (audios || []).map(a => ({
+  // v1361 — "não tem que reimportar tudo de novo, só as atualizações" (dono, 22/08/2026).
+  //
+  // O áudio já transcrito deste cliente sai do envio ANTES de subir. O servidor reaproveita a
+  // transcrição desde a v1141, mas só depois que o arquivo inteiro chegava — o corretor pagava o
+  // envio de dezenas de MB todas as vezes, e é isso que fazia a importação demorar. O texto da
+  // conversa continua indo INTEIRO: é ele o histórico, é pequeno, e é sobre ele que a análise
+  // trabalha. Nenhuma mensagem é perdida: o que já estava salvo continua salvo, e a conversa que
+  // chega agora é comparada com ela.
+  const jaTemTexto = new Set((Array.isArray(jaTranscritos) ? jaTranscritos : [])
+    .map(n => nomeSimples(String(n || "")).toLowerCase()).filter(Boolean));
+  const todos = (audios || []).map(a => ({
     caminho: String(a?.caminho || ""),
     bytes: Number(a?.bytes) || 0
   })).filter(a => a.caminho);
+  const jaSalvos = todos.filter(a => jaTemTexto.has(nomeSimples(a.caminho).toLowerCase()));
+  const lista = todos.filter(a => !jaTemTexto.has(nomeSimples(a.caminho).toLowerCase()));
 
   const dias = normalizarDias(diasJanela);
   const mensagens = lerMensagensDoTxt(txt);
@@ -240,6 +254,8 @@ export function planejarConteudoDoZip({
     cortadosPorTamanho: cortadosPorTamanho.map(a => a.caminho),
     resumo: {
       totalAudios: lista.length,
+      jaSalvos: jaSalvos.length,
+      bytesPoupados: jaSalvos.reduce((soma, a) => soma + a.bytes, 0),
       mantidos: manterNaOrdemDoZip.length,
       foraDaJanela: fora.length,
       cortadosPorTamanho: cortadosPorTamanho.length,

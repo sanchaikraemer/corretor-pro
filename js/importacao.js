@@ -121,7 +121,9 @@ async function slimZipKeepingTextAndAudio(file, onProgress, opcoes = {}){
     txt,
     audios: audios.map(([path, entry]) => ({ caminho: path, bytes: tamanhoDaEntrada(entry) })),
     diasJanela: opcoes.diasJanela,
-    bytesTexto: textos.reduce((soma, [, entry]) => soma + tamanhoDaEntrada(entry), 0)
+    bytesTexto: textos.reduce((soma, [, entry]) => soma + tamanhoDaEntrada(entry), 0),
+    // v1361 — o áudio que o servidor já tem em texto não sobe de novo.
+    jaTranscritos: opcoes.jaTranscritos || []
   });
   const audiosQueVao = new Set(plano.manter);
   const selecionadas = uteis.filter(([path]) => /\.txt$/i.test(path) || audiosQueVao.has(path));
@@ -1499,16 +1501,30 @@ async function processFile(file, options = {}){
     let slimInfo = null;
     let working = file;
     state.ultimoCorteZip = null;
+    // v1361 — antes de montar o envio, pergunta ao servidor o que ele JÁ tem em texto deste
+    // cliente. Esses áudios não sobem de novo. Fail-open: se a pergunta falhar, sobe tudo como
+    // antes — nunca é motivo pra travar a importação.
+    let jaTranscritos = [];
+    try{
+      const r = await fetch("./api/criar-upload-url", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ probe: true, fileName: file.name })
+      });
+      const d = await r.json().catch(()=>({}));
+      if(Array.isArray(d?.audiosJaTranscritos)) jaTranscritos = d.audiosJaTranscritos;
+    }catch(_){ }
     try{
       renderEtapas(0, "preparando uma única cópia útil do ZIP");
       slimInfo = await slimZipKeepingTextAndAudio(file, ({processed,total,kept,dropped})=>{
         renderEtapas(0, "preparando ZIP: "+processed+"/"+total+" · mantidos "+kept+", descartados "+dropped);
-      }, { diasJanela: audioWindowDays });
+      }, { diasJanela: audioWindowDays, jaTranscritos });
       working = slimInfo.file;
       state.ultimoCorteZip = slimInfo.plano?.resumo || null;
       const oMb = (slimInfo.originalSize/1024/1024).toFixed(1);
       const sMb = (slimInfo.slimSize/1024/1024).toFixed(1);
-      renderEtapas(0, "ZIP preparado: "+oMb+" MB → "+sMb+" MB");
+      const jaSalvos = Number(slimInfo.plano?.resumo?.jaSalvos) || 0;
+      renderEtapas(0, "ZIP preparado: "+oMb+" MB → "+sMb+" MB"
+        + (jaSalvos ? ` · ${jaSalvos} ${jaSalvos === 1 ? "áudio já salvo não subiu de novo" : "áudios já salvos não subiram de novo"}` : ""));
     }catch(err){
       // v1309 — problema que o aparelho JÁ identificou no arquivo não vira "usando o ZIP
       // original": enviar de novo daria exatamente a mesma recusa, um minuto depois.
