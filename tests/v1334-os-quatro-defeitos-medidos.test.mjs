@@ -24,7 +24,7 @@ const HOJE = new Date("2026-08-21T10:00:00-03:00");
   assert.deepEqual(tiposDePedidoJaIgnorados([]), [], "sem tentativa sem resposta, não há tipo nenhum");
 }
 
-// ── 2. Dia e hora de verdade pra propor ("quando você puder" não marca nada) ─────────────────
+// ── 2. Dias úteis continuam calculáveis, mas v1370 só os entrega à IA quando já há compromisso ─
 {
   const dias = diasUteisParaPropor(HOJE, 3);
   assert.equal(dias.length, 3);
@@ -75,9 +75,10 @@ const HOJE = new Date("2026-08-21T10:00:00-03:00");
   const lead = guessLeadData(timeline, "Corretor", "Conversa do WhatsApp com Jamil.txt");
   const fichario = montarFicharioDaConversa(timeline, "Corretor", lead, HOJE);
 
-  assert.match(fichario, /DIAS ÚTEIS PARA PROPOR/, "a IA recebe dias de verdade pra marcar");
+  assert.match(fichario, /DIAS ÚTEIS PARA COMPLETAR O COMPROMISSO QUE JÁ EXISTE/,
+    "como a própria conversa já abriu uma visita, o calendário pode completar esse mesmo compromisso");
   assert.match(fichario, /segunda-feira 24\/08/);
-  assert.match(fichario, /não "quando você puder"/, "com a instrução colada no fato");
+  assert.match(fichario, /Não troque o tipo do compromisso/, "visita não pode virar ligação só para variar a mensagem");
   assert.match(fichario, /O CLIENTE DISSE QUE ESTÁ CARO E NUNCA DISSE QUANTO PODE PAGAR/);
   assert.match(fichario, /NÃO TEM O CAPITAL AGORA/);
   assert.match(fichario, /restrição de\s*\nCALENDÁRIO|restrição de CALENDÁRIO/, "e a leitura fácil ('não vai comprar') é desmontada ali mesmo");
