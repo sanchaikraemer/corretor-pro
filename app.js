@@ -4672,10 +4672,11 @@ function renderHistoricoContatos(lead){
       <span class="small" style="color:var(--muted);font-size:10px">${escapeHtml(formatarTempoRelativo(e.quando))}</span>
     </div>`;
   }).join("");
-  return `<div style="padding:11px 13px;background:var(--card);border:1px solid var(--line);border-radius:10px">
-    <div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:10px;margin-bottom:6px">Histórico de contatos</div>
-    ${itens}
-  </div>`;
+  // v1365 — recolhível por ordem do dono (22/08/2026): "Resumo e histórico deveriam poder
+  // recolher/expandir. Quem quer investigar abre; quem quer agir não precisa atravessar tudo."
+  return `<details class="cp704-details"><summary>Histórico de contatos</summary>
+    <div class="cp704-body">${itens}</div>
+  </details>`;
 }
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
@@ -4833,7 +4834,7 @@ function cp704Css(){
     if(document.getElementById('cp704LeadUxCSS')) return;
     const css=document.createElement('style'); css.id='cp704LeadUxCSS';
     css.textContent=`
-      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}.cp704-herorow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.85fr);gap:14px;align-items:stretch}.cp704-obscard{gap:6px}.cp704-obscard textarea{width:100%;box-sizing:border-box}.cp704-tools-open .cp704-card-title{margin-bottom:12px}.cp704-tools-row{display:flex;flex-wrap:wrap;gap:10px}.cp704-tools-row button{flex:1 1 160px;min-width:140px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:transform .06s ease,border-color .15s,box-shadow .15s,background .15s}.cp704-tools-row button:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-tools-row button:active{transform:translateY(0);box-shadow:0 3px 10px rgba(0,0,0,.2)}.cp704-tools-row button.good{border-color:var(--acao-line);background:linear-gradient(180deg,var(--acao-soft),var(--acao-soft));color:var(--acao)}.cp704-tools-row button.good:hover{border-color:var(--acao);box-shadow:0 8px 22px var(--acao-soft)}.cp704-tools-row button.cp704-danger{border-color:rgba(255,98,88,.42);background:linear-gradient(180deg,rgba(255,98,88,.12),rgba(255,98,88,.04));color:var(--risco)}.cp704-tools-row button.cp704-danger:hover{border-color:rgba(255,98,88,.7);box-shadow:0 8px 22px rgba(255,98,88,.16)}.cp704-hist-inline{flex:1 1 160px;min-width:140px;align-self:flex-start;padding:0;border:0;background:transparent}.cp704-hist-inline[open]{flex-basis:100%}.cp704-hist-inline>summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap;transition:transform .06s ease,border-color .15s,box-shadow .15s}.cp704-hist-inline>summary:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-hist-inline>summary::-webkit-details-marker{display:none}.cp704-hist-inline[open]>summary .cp704-hist-arrow{transform:rotate(180deg)}.cp704-hist-inline .cp704-body{margin-top:10px;max-height:340px;overflow:auto;width:100%}
+      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}.cp704-obscard{gap:6px}.cp704-obscard textarea{width:100%;box-sizing:border-box}.cp704-tools-open .cp704-card-title{margin-bottom:12px}.cp704-tools-row{display:flex;flex-wrap:wrap;gap:10px}.cp704-tools-row button{flex:1 1 160px;min-width:140px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:transform .06s ease,border-color .15s,box-shadow .15s,background .15s}.cp704-tools-row button:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-tools-row button:active{transform:translateY(0);box-shadow:0 3px 10px rgba(0,0,0,.2)}.cp704-tools-row button.good{border-color:var(--acao-line);background:linear-gradient(180deg,var(--acao-soft),var(--acao-soft));color:var(--acao)}.cp704-tools-row button.good:hover{border-color:var(--acao);box-shadow:0 8px 22px var(--acao-soft)}.cp704-tools-row button.cp704-danger{border-color:rgba(255,98,88,.42);background:linear-gradient(180deg,rgba(255,98,88,.12),rgba(255,98,88,.04));color:var(--risco)}.cp704-tools-row button.cp704-danger:hover{border-color:rgba(255,98,88,.7);box-shadow:0 8px 22px rgba(255,98,88,.16)}.cp704-hist-inline{flex:1 1 160px;min-width:140px;align-self:flex-start;padding:0;border:0;background:transparent}.cp704-hist-inline[open]{flex-basis:100%}.cp704-hist-inline>summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap;transition:transform .06s ease,border-color .15s,box-shadow .15s}.cp704-hist-inline>summary:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-hist-inline>summary::-webkit-details-marker{display:none}.cp704-hist-inline[open]>summary .cp704-hist-arrow{transform:rotate(180deg)}.cp704-hist-inline .cp704-body{margin-top:10px;max-height:340px;overflow:auto;width:100%}
       .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
       .cp704-reanalyse-destaque{background:var(--surface-soft)!important;border-color:var(--line2)!important;color:var(--text)!important;box-shadow:none}
       .cp704-reanalyse-destaque:hover{background:var(--surface-hover)!important;border-color:var(--line2)!important}
@@ -4845,8 +4846,19 @@ function cp704Css(){
       .cp704-attended{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
       .cp704-desmarcar{background:transparent;border:0;color:var(--muted);font-size:12px;font-weight:800;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:4px 8px;white-space:nowrap}
       .cp704-desmarcar:hover{color:var(--text)}
-      .cp704-toolbar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-      @media(min-width:1000px){.cp704-toolbar{grid-template-columns:repeat(8,minmax(0,1fr))}}
+      /* v1365 — 5 lugares na barra (Voltar, Mensagens, Agendar, Atendido, Mais). O resto mora no
+         menu "⋯" logo abaixo. */
+      .cp704-toolbar{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+      @media(min-width:1000px){.cp704-toolbar{display:flex;gap:8px}}
+      .cp704-more{position:relative;display:flex}
+      .cp704-more>.cp704-ico{width:100%}
+      .cp704-more-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:2px;min-width:200px;padding:8px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:0 18px 50px rgba(0,0,0,.45)}
+      /* O display:flex acima atropelaria o display:none do atributo hidden — sem esta linha o
+         menu nasceria ABERTO (foi pego na conferência visual da v1365, computado no Chromium). */
+      .cp704-more-menu[hidden]{display:none}
+      .cp704-more-menu .cp704-ico{flex-direction:row;justify-content:flex-start;gap:10px;width:100%;min-width:0;border:0;background:transparent;padding:11px 12px;font-size:13px;border-radius:10px}
+      .cp704-more-menu .cp704-ico:hover{background:var(--panel2);border:0}
+      .cp704-more-menu .cp704-ico svg{width:17px;height:17px;flex:0 0 auto}
       .cp704-ico{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font-weight:850;font-size:10.5px;line-height:1.1;white-space:nowrap;cursor:pointer;min-width:66px}
       .cp704-ico svg{width:19px;height:19px}
       .cp704-ico:hover{color:var(--text);border-color:var(--muted)}
@@ -4883,11 +4895,19 @@ function cp704Css(){
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:var(--acao-line);color:var(--acao)}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:var(--risco)}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:var(--risco)!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:var(--acao);border-color:var(--acao-line)}
       .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
+      /* v1365 — "Fazer agora" é o coração do produto e ganha o destaque da marca (ordem do dono:
+         o que ele paga pra ver não pode ficar escondido atrás de rolagem). */
+      .cp704-agora{border-color:var(--accent-line);box-shadow:0 12px 36px rgba(255,98,88,.10)}
+      .cp704-agora .cp704-card-title h2{color:var(--accent)}
+      /* v1365 — o "Resumo do contato" recolhível herda as metalinhas do topo; a primeira não
+         precisa da régua de cima que ela tinha no herói. */
+      .cp1365-resumo .cp704-metaline:first-child{margin-top:0;padding-top:0;border-top:0}
+      .cp1365-resumo .cp1345-ultimas:first-child{margin-top:0;padding-top:0;border-top:0}
       .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
-      @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-herorow{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
+      @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
       @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{justify-self:start;width:auto;padding:6px 4px}.cp704-toolbar{width:100%}.cp704-ico,.cp704-back{min-width:0;padding:9px 4px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
@@ -5529,6 +5549,28 @@ function cp704Css(){
     if(!s.hidden) s.scrollIntoView({behavior:'smooth',block:'start'});
   };
 
+  // v1365 — o menu "⋯" da barra do lead (Proposta, Arquivar, Editar, Reanalisar). Abre e fecha no
+  // botão; clicar fora fecha; ESCOLHER UMA OPÇÃO também fecha (achado da revisão tripla — sem
+  // isso o menu ficava aberto por cima do modal de edição e da barra de progresso da reanálise,
+  // e a remontagem o devolvia aberto por cima do resultado novo).
+  // Sem stopPropagation de propósito: o clique no "Mais" precisa continuar chegando aos outros
+  // fechadores da tela (bloco de notas, busca global) — o fechador daqui já ignora cliques
+  // dentro de .cp704-more sozinho.
+  window.cp704ToggleMais=function(){
+    const m=document.getElementById('cp704MoreMenu'); if(!m) return;
+    m.hidden=!m.hidden;
+  };
+  if(!window.__cp1365FechaMenuMais){
+    window.__cp1365FechaMenuMais=true;
+    document.addEventListener('click',function(e){
+      const m=document.getElementById('cp704MoreMenu');
+      if(!m||m.hidden) return;
+      const dentroDoMais=e.target&&e.target.closest&&e.target.closest('.cp704-more');
+      const escolheuItem=e.target&&e.target.closest&&e.target.closest('.cp704-more-menu button');
+      if(!dentroDoMais||escolheuItem) m.hidden=true;
+    });
+  }
+
 // Atualização #724-2: card "O que mudou" — antes → agora + por que importa.
 // Só aparece quando a análise traz mudanças reais; lead sem mudança não mostra o card.
 
@@ -5820,63 +5862,87 @@ function renderLeadFoco(lead){
     // e a restauração da rolagem volta a pousar exatamente onde ele estava.
     const cp7HistAntes = area.querySelector('#cp704HistCard');
     const cp7HistAberto = !!cp7HistAntes && !cp7HistAntes.hidden;
+    // v1365 — mesmo remédio da v1229 (painel Agendar) pro menu "⋯": a remontagem recriaria o
+    // menu fechado no meio do toque do corretor. Se estava aberto, volta aberto.
+    const cp7MenuMaisAntes = area.querySelector('#cp704MoreMenu');
+    const cp7MenuMaisAberto = !!cp7MenuMaisAntes && !cp7MenuMaisAntes.hidden;
+    // v1365 — e os recolhíveis (Detalhes comerciais, Resumo do contato, Histórico de contatos):
+    // agora que começam fechados, a remontagem fecharia o que o corretor tinha acabado de abrir
+    // (achado confirmado na revisão tripla antes de publicar). Guarda quais estavam abertos.
+    const cp7RecolhiveisAbertos = [...area.querySelectorAll('.cp704-details[open] > summary')]
+      .map(s => String(s.textContent || '').trim()).filter(Boolean);
     // Só vale restaurar a rolagem quando JÁ havia um detalhe montado aqui (remontagem).
     // Na primeira montagem (vindo do esqueleto) a página deve continuar se comportando como antes.
     const cp7JaTinhaDetalhe = !!area.querySelector('.cp704-lead');
     const cp7RolagemPagina = window.scrollY;
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button>${cp704BotaoEtapa(lead)}<button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" id="btnReanalisarLeadTop" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
-      <div class="cp704-herorow">
-        <section class="cp704-hero">
-          <h1>${escapeHtml(lead.name||'Contato')}</h1>
-          <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
-          ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
-          ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`${ultimaMsgRotulo} — ${ultimaMsgEm}`)}</div>`:''}
-          ${mostrarLinhaMensagem?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgConversaEm}`)}</div>`:''}
-          ${cp1345UltimasMensagensHTML(lead)}
-        </section>
-        <section class="cp704-card cp704-obscard">
-          <div class="cp704-card-title"><h2>Registrar observação</h2></div>
-          <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — aparece na linha do tempo, ensina o sistema em segundo plano e entra na próxima análise.</p>
-          <p style="margin:-4px 0 10px;color:var(--muted);font-size:12.5px">Cliente respondeu pouca coisa? <b style="color:var(--text)">Tire um print da resposta</b> e toque em "Ler print" — o texto entra aqui pra você conferir, sem precisar mandar a conversa inteira de novo.</p>
-          <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:120px;margin-bottom:16px"></textarea>
-          <!-- v1250 — LER O PRINT DA RESPOSTA. Pedido do dono: quando o cliente responde pouca
-               coisa, mandar a conversa inteira de novo e esperar a reanálise é trabalho demais pra
-               duas linhas. Ele tira um print da resposta, o texto cai aqui em cima, ele confere e
-               salva. No celular o seletor já abre na galeria/câmera; no computador dá pra colar a
-               imagem direto no campo de texto (Ctrl+V). -->
-          <input type="file" id="cp1250PrintInput" accept="image/png,image/jpeg,image/webp" hidden onchange="cp1250LerPrint(this)">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-            <button type="button" id="cp1250PrintBtn" onclick="document.getElementById('cp1250PrintInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler print da resposta</button>
-            <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
-            <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
-          </div>
-          <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
-        </section>
-      </div>
+      ${/* v1365 — a barra encolheu por ordem do dono (avaliação de 22/08/2026): "os 8 botões
+            ocupam uma área enorme antes do conteúdo que realmente importa". Ficam à vista as ações
+            do dia a dia — Voltar, Mensagens, Agendar, Atendido — e o resto (Proposta, Arquivar,
+            Editar, Reanalisar) mora no menu "⋯", com os MESMOS botões e as mesmas funções de
+            antes, só que guardados. */''}
+      <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}<div class="cp704-more"><button type="button" class="cp704-ico" onclick="cp704ToggleMais(event)" title="Mais ações" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span class="lb">Mais</span></button><div class="cp704-more-menu" id="cp704MoreMenu" hidden><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button>${cp704BotaoEtapa(lead)}<button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button><button type="button" id="btnReanalisarLeadTop" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button></div></div></div></div>
+      ${/* v1365 — HIERARQUIA NOVA, ordem do dono (avaliação de 22/08/2026): "quando o corretor
+            abrir um lead, em 3 segundos ele precisa responder: o que aconteceu? → o que faço
+            agora? → o que mando pra ele?". O topo ficou só NOME + SITUAÇÃO numa frase; datas e
+            últimas mensagens desceram pro bloco recolhível "Resumo do contato", e o card
+            "Registrar observação" desceu pra depois da inteligência. Nada foi removido — só
+            mudou de lugar. */''}
+      <section class="cp704-hero">
+        <h1>${escapeHtml(lead.name||'Contato')}</h1>
+        <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
+      </section>
       ${typeof cpCadenciaNoticeHTML==='function'?cpCadenciaNoticeHTML(lead):''}
       <div class="cp704-workspace">
         <main class="cp704-primary">
           ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
-          <section class="cp704-card">
+          <section class="cp704-card cp704-agora">
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
             ${cp1308FaixaModoHtml(a)}
             ${cp1225LinhaDeOndeVeio(a)}
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
-            ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis">${cp704Text(a.falhaAmigavel)?`<b style="color:var(--risco)">${escapeHtml(cp704Text(a.falhaAmigavel))}</b><span>Preferimos avisar a te entregar uma leitura pior sem você saber.</span>`:`<b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>`}${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
+            ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis">${cp704Text(a.falhaAmigavel)?`<b style="color:var(--risco)">${escapeHtml(cp704Text(a.falhaAmigavel))}</b><span>Preferimos avisar a te entregar uma leitura pior sem você saber.</span>`:`<b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Mais" no topo e escolha "Reanalisar" para criar a sugestão correta.'}</span>`}${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
             ${msgs.ordemDeEnvio?`<div style="border:1px solid rgba(86,199,242,.4);background:rgba(86,199,242,.08);border-radius:10px;padding:9px 11px;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--text)"><b>Ordem de envio:</b> ${escapeHtml(msgs.ordemDeEnvio)}</div>`:''}<div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}${cp1308ClasseSuja(a,'a')}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button>${cp1308AvisoSugestaoHtml(a,'a')}</div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}${cp1308ClasseSuja(a,'b')}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button>${cp1308AvisoSugestaoHtml(a,'b')}</div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}${cp1308ClasseSuja(a,'c')}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button>${cp1308AvisoSugestaoHtml(a,'c')}</div>`:''}</div>`}
           </section>
           ${cp717MudancasHtml(a)}
         </main>
         <aside class="cp704-secondary">
           ${cp704ConducaoHtml(lead)}
+          ${/* v1365 — "Resumo e histórico deveriam poder recolher/expandir. Quem quer investigar
+                abre; quem quer agir não precisa atravessar tudo" (ordem do dono, 22/08/2026).
+                Detalhes comerciais deixa de vir aberto; datas e últimas mensagens (que moravam no
+                topo) viram o bloco recolhível "Resumo do contato". */''}
           <div class="cp704-accordions">
-            <details class="cp704-details" open><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
+            <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
+            <details class="cp704-details"><summary>Resumo do contato</summary><div class="cp704-body cp1365-resumo">
+              ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
+              ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`${ultimaMsgRotulo} — ${ultimaMsgEm}`)}</div>`:''}
+              ${mostrarLinhaMensagem?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgConversaEm}`)}</div>`:''}
+              ${cp1345UltimasMensagensHTML(lead)}
+            </div></details>
           </div>
           ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
           ${typeof renderHistoricoContatos==='function'?renderHistoricoContatos(lead):''}
+          <section class="cp704-card cp704-obscard">
+            <div class="cp704-card-title"><h2>Registrar observação</h2></div>
+            <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — aparece na linha do tempo, ensina o sistema em segundo plano e entra na próxima análise.</p>
+            <p style="margin:-4px 0 10px;color:var(--muted);font-size:12.5px">Cliente respondeu pouca coisa? <b style="color:var(--text)">Tire um print da resposta</b> e toque em "Ler print" — o texto entra aqui pra você conferir, sem precisar mandar a conversa inteira de novo.</p>
+            <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:120px;margin-bottom:16px"></textarea>
+            <!-- v1250 — LER O PRINT DA RESPOSTA. Pedido do dono: quando o cliente responde pouca
+                 coisa, mandar a conversa inteira de novo e esperar a reanálise é trabalho demais pra
+                 duas linhas. Ele tira um print da resposta, o texto cai aqui em cima, ele confere e
+                 salva. No celular o seletor já abre na galeria/câmera; no computador dá pra colar a
+                 imagem direto no campo de texto (Ctrl+V). -->
+            <input type="file" id="cp1250PrintInput" accept="image/png,image/jpeg,image/webp" hidden onchange="cp1250LerPrint(this)">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+              <button type="button" id="cp1250PrintBtn" onclick="document.getElementById('cp1250PrintInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler print da resposta</button>
+              <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
+              <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
+            </div>
+            <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
+          </section>
         </aside>
       </div>
       <section class="cp704-card cp704-hist-card" id="cp704HistCard" hidden>
@@ -5917,6 +5983,15 @@ function renderLeadFoco(lead){
   // fechado, a página ficaria mais curta e o número de pixels restaurado abaixo pousaria noutro
   // lugar (era exatamente isso que jogava o dono pro "Histórico de contatos" ao apagar).
   if(cp7HistAberto){ const cp7HistDepois = area.querySelector('#cp704HistCard'); if(cp7HistDepois) cp7HistDepois.hidden = false; }
+  // v1365 — devolve o menu "⋯" aberto depois da remontagem (ver captura acima).
+  if(cp7MenuMaisAberto){ const cp7MenuMaisDepois = area.querySelector('#cp704MoreMenu'); if(cp7MenuMaisDepois) cp7MenuMaisDepois.hidden = false; }
+  // v1365 — devolve abertos os recolhíveis que o corretor tinha aberto (ver captura acima).
+  if(cp7RecolhiveisAbertos.length){
+    for(const cp7Det of area.querySelectorAll('.cp704-details')){
+      const cp7Rotulo = String(cp7Det.querySelector(':scope > summary')?.textContent || '').trim();
+      if(cp7Rotulo && cp7RecolhiveisAbertos.includes(cp7Rotulo)) cp7Det.open = true;
+    }
+  }
   // A remontagem troca a altura da área e o navegador reposiciona a página sozinho — é o
   // "a tela pulou pra baixo" relatado pelo dono. Volta pra onde ele estava.
   if(cp7JaTinhaDetalhe && Math.abs(window.scrollY - cp7RolagemPagina) > 2){
@@ -12617,7 +12692,7 @@ window.ui670Reanalisar=async function(btn){
       // Erro específico e comum: o lead não tem a CONVERSA salva (timeline vazia) — reanalisar
       // não tem o que reprocessar. Troca o texto técnico por uma orientação clara.
       if(/sem timeline/i.test(rawErr)){
-        throw new Error("Este lead não tem a conversa do WhatsApp salva, então não há o que reanalisar. Importe o ZIP da conversa deste cliente (ou registre uma observação acima) e tente de novo.");
+        throw new Error("Este lead não tem a conversa do WhatsApp salva, então não há o que reanalisar. Importe o ZIP da conversa deste cliente (ou registre uma observação no card \"Registrar observação\", mais abaixo nesta tela) e tente de novo.");
       }
       const erroServidor = data?.detail ? `${data.error || "Não foi possível atualizar a análise."} — ${data.detail}` : (data?.error||"Não foi possível atualizar a análise.");
       throw new Error(erroServidor);

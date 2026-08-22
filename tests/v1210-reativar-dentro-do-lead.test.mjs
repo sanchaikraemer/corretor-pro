@@ -34,7 +34,10 @@ assert.match(htmlArquivado, /<svg /, 'o botão precisa manter o ícone da barra'
 
 // --- A barra do lead usa o botão que troca de papel, sem "Arquivar" cravado -------------------
 const barraInicio = app.indexOf('<div class="cp704-top">');
-const barraFim = app.indexOf('<div class="cp704-herorow">', barraInicio);
+// v1365 — a âncora de fim era o cp704-herorow, que deixou de existir na reorganização da tela;
+// sem ela o recorte virava o arquivo inteiro e o teste conferia a "barra" no lugar errado.
+const barraFim = app.indexOf('<section class="cp704-hero">', barraInicio);
+assert.ok(barraFim > barraInicio, 'não achei o fim da barra (o hero logo depois dela)');
 const barra = app.slice(barraInicio, barraFim);
 assert.match(barra, /\$\{cp704BotaoEtapa\(lead\)\}/, 'a barra do lead precisa montar o botão pelo estado do lead');
 assert.ok(!barra.includes('onclick=\'arquivarLead('), 'a barra não pode mais cravar o Arquivar');

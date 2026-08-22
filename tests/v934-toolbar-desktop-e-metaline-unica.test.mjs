@@ -10,12 +10,13 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // 2) O cabeçalho do lead mostrava 4 linhas de data (Última análise / Última mensagem / Último
 //    atendimento / Última atualização) — ele quer só "Última análise", sem as outras 3.
 
-// 1. Em telas largas (desktop web), a toolbar vira 8 colunas — os 8 botões numa linha só.
-//    Em telas estreitas continua em 4 colunas (2 linhas), como já era.
-assert.match(app, /\.cp704-toolbar\{display:grid;grid-template-columns:repeat\(4,1fr\);gap:8px\}/,
-  'a base (mobile) continua em 4 colunas');
-assert.match(app, /@media\(min-width:1000px\)\{\.cp704-toolbar\{grid-template-columns:repeat\(8,minmax\(0,1fr\)\)\}\}/,
-  'no desktop (min-width:1000px) a toolbar precisa virar 8 colunas — os 8 botões numa linha só');
+// 1. v1365 (ordem do dono, 22/08/2026): a barra tem 5 lugares (Voltar, Mensagens, Agendar,
+//    Atendido/Marcar, "⋯") — uma linha só no celular (grid de 5) e fileira natural no desktop.
+//    O espírito da v934 continua: nunca duas linhas desiguais.
+assert.match(app, /\.cp704-toolbar\{display:grid;grid-template-columns:repeat\(5,1fr\);gap:8px\}/,
+  'a base (mobile) é um grid de 5 colunas — uma linha só');
+assert.match(app, /@media\(min-width:1000px\)\{\.cp704-toolbar\{display:flex;gap:8px\}\}/,
+  'no desktop (min-width:1000px) os 5 botões seguem numa linha, em fileira');
 
 // 2. Cabeçalho do lead: "Última análise" continua sendo renderizada (v937 trouxe "Última
 // mensagem" de volta, ver tests/v887-cabecalho-metalinhas.test.mjs — o dono sentiu falta dela.

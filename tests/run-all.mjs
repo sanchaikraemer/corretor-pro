@@ -90,6 +90,15 @@ if (!somenteSintaxe) {
     process.exit(1);
   }
   for (const arquivo of testes) {
+    // v1365 — arquivo que estava na lista mas sumiu ANTES da vez dele não é teste vermelho.
+    // Caso real de 22/08/2026: o teste do portão (v1338) cria tests/zzz-portao-de-mentira.test.mjs
+    // de propósito e o apaga no finally; se uma rodada paralela (ou uma sobra de rodada morta)
+    // deixou o arquivo existir na hora da listagem, ele já não existe quando a vez dele chega —
+    // e rodar um arquivo inexistente pintava a suíte inteira de vermelho sem defeito nenhum.
+    if (!existsSync(path.join(dirTestes, arquivo))) {
+      console.log(`• ${arquivo} — sumiu depois da listagem (arquivo temporário de outro teste); pulado.`);
+      continue;
+    }
     if (!rodar(process.execPath, [path.join("tests", arquivo)], arquivo)) process.exit(1);
     testesOk++;
   }
