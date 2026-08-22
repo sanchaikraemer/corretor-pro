@@ -7690,7 +7690,7 @@ const ETAPAS_PROCESSAMENTO = [
 const CPIO_PASSOS = [
   { rot:"Recebendo a conversa",       sub:"o arquivo do WhatsApp chegou" },
   { rot:"Enviando com segurança",     sub:"guardando sua conversa protegida" },
-  { rot:"Abrindo o arquivo",          sub:"separando textos, fotos e áudios" },
+  { rot:"Abrindo o arquivo",          sub:"separando o texto e os áudios" },
   { rot:"Ouvindo os áudios",          sub:"cada áudio vira texto pra nada se perder" },
   { rot:"Analisando pelo seu Cérebro",sub:"suas regras aplicadas a esta conversa" },
   { rot:"Salvando na carteira",       sub:"confirmando na sua base" },

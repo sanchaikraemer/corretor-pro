@@ -25,8 +25,14 @@ const storage = fs.readFileSync(new URL("../api/processar-storage.js", import.me
 
 // ── 1. Uma viagem só quando não há áudio pendente ──────────────────────────────────────────────
 {
-  assert.match(app, /action:"preparar", audioWindowDays:options\.audioWindowDays \|\| "90", analisarDireto: tentativa === 1/,
+  assert.match(app, /const pedeAnaliseJunto = tentativa === 1;/,
     "o app autoriza o servidor a já devolver a análise pronta — só na primeira tentativa, pra uma retentativa nunca pagar a análise duas vezes");
+  assert.match(app, /action:"preparar", audioWindowDays:options\.audioWindowDays \|\| "90", analisarDireto: pedeAnaliseJunto/);
+  // v1359 — e o prazo do app acompanha o do servidor quando a análise vem junto. Com 90s ele
+  // desistia de um trabalho quase pronto (e já pago) e refazia tudo numa segunda ida: foi isso que
+  // fez a importação do dono levar 3 minutos.
+  assert.match(app, /analisarDireto: pedeAnaliseJunto \}, pedeAnaliseJunto \? 240000 : 90000\)/,
+    "com análise junto o prazo é maior; sem ela, a preparação é curta e continua com 90s");
   assert.match(app, /if\(prep\?\.analiseIncluida\?\.ok && !audios\.length\) result = prep\.analiseIncluida;/,
     "quando a análise vem pronta, o app NÃO pede de novo (pedir de novo seria pagar duas vezes)");
   // A chamada separada continua existindo como caminho normal (ZIP grande, áudio novo, falha).

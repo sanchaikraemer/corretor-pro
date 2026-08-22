@@ -586,8 +586,38 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     // Na SEGUNDA tentativa nunca pede a análise junto: se a primeira morreu no teto de tempo do
     // servidor, a análise pode ter sido feita (e paga) sem a resposta chegar. Repetir só a
     // preparação — que é idempotente — e depois analisar separado nunca paga duas vezes à toa.
-    try{ prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90", analisarDireto: tentativa === 1 }, 90000); }
+    // v1359 — A BARRA ESTAVA MENTINDO NESTA ETAPA.
+    //
+    // "mesmo com conversa curta e sem áudio fica travando aí e demora muito" (dono, 22/08/2026,
+    // print parado em "Abrindo o arquivo · 68%"). Não estava travado: numa conversa pequena e sem
+    // áudio o servidor faz a ANÁLISE INTEIRA dentro desta mesma chamada (analisarDireto, v1143) —
+    // uma viagem em vez de duas, que é mais rápido no total. Só que a tela continuava escrita
+    // "Abrindo o arquivo", parada, enquanto a IA lia a conversa. Quem olha vê travamento.
+    // Agora a etapa diz o que está acontecendo de verdade, e conta os segundos pra não parecer
+    // congelada. O relógio para sozinho quando a resposta chega.
+    const pedeAnaliseJunto = tentativa === 1;
+    const inicioEtapa = Date.now();
+    let relogio = null;
+    if(pedeAnaliseJunto){
+      const contar = () => {
+        const seg = Math.round((Date.now() - inicioEtapa) / 1000);
+        renderEtapas(2, `abrindo e já analisando pelo seu Cérebro, tudo numa viagem só · ${seg}s`);
+      };
+      contar();
+      relogio = setInterval(contar, 1000);
+    }
+    // v1359 — O PRAZO DE 90s ERA O QUE FAZIA A IMPORTAÇÃO LEVAR 3 MINUTOS.
+    //
+    // Print do dono: 81s nesta etapa e 3 minutos no total, numa conversa curta e sem áudio. A conta
+    // fecha: quando a análise vem junto (analisarDireto), esta chamada faz preparação + análise
+    // inteira. O servidor tem 300s pra isso (vercel.json), mas o APP desistia aos 90s — jogava
+    // fora um trabalho que estava quase pronto (e já pago), refazia a preparação e depois pedia a
+    // análise de novo, numa segunda ida. Dois caminhos completos em vez de um.
+    // Com análise junto o prazo acompanha o do servidor; sem ela, a preparação é curta e continua
+    // com os 90s de sempre.
+    try{ prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90", analisarDireto: pedeAnaliseJunto }, pedeAnaliseJunto ? 240000 : 90000); }
     catch(error){ erroPrep=error; if(error?.limiteAtingido) break; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
+    finally{ if(relogio) clearInterval(relogio); }
   }
   if(!prep) throw erroPrep || new Error("Falha recuperável ao preparar a importação.");
   // v1174 — o servidor já tentou analisar aqui dentro e o teto do dia recusou. Não adianta seguir

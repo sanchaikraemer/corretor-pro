@@ -333,6 +333,10 @@ async function salvarTranscricaoCache(storage, hash, item, organizationId) {
 // v1143 — teto de mensagens pra a análise sair na MESMA chamada do preparar (ver ação "preparar").
 // A extração de uma conversa desse tamanho leva menos de 1s, então ela cabe junto da análise
 // dentro dos 60s da função. Acima disso, as duas etapas continuam separadas como sempre foram.
+// v1359 — teto de tempo pra decidir se a análise ainda cabe nesta mesma chamada. A rota tem 300s
+// (vercel.json); se a preparação sozinha já passou disto, a análise entraria com pouca folga e o
+// risco é o app desistir no meio — que foi o que fez a importação do dono levar 3 minutos.
+const ANALISE_JUNTA_PRAZO_MAX_MS = 45000;
 const ANALISE_JUNTA_MAX_MENSAGENS = Number(process.env.CORRETOR_PRO_ANALISE_JUNTA_MAX_MENSAGENS) > 0
   ? Number(process.env.CORRETOR_PRO_ANALISE_JUNTA_MAX_MENSAGENS)
   : 400;
@@ -646,6 +650,7 @@ export default async function handler(req, res) {
   try {
     if (action === "preparar") {
       if (!importId) return json(res, 400, { ok: false, error: "Identificador de importação ausente ou inválido." });
+      const inicioDoPreparar = Date.now(); // v1359 — mede o que a preparação consumiu do orçamento
       // Identifica um possível cliente já existente só pelo NOME DO ARQUIVO do zip (ainda não
       // temos a análise nesta etapa, só o arquivo) — mesma lógica já usada e confiável na hora
       // de salvar (_buscarProcessamentoExistenteV681). Serve só pra reaproveitar transcrição de
@@ -703,7 +708,11 @@ export default async function handler(req, res) {
       // agora: sem isso ele seguia pra etapa "analisar", esperava a recusa de novo e só então
       // mostrava o aviso — tempo de tela parada à toa, pelo mesmo motivo já conhecido.
       let limiteAtingido = null;
-      if (body?.analisarDireto === true && !audiosPendentes.length && zipPequeno) {
+      // v1359 — a preparação já pode ter consumido tempo demais (banco lento, ZIP grande, links).
+      // Se sobrou pouco do orçamento, a análise junto vira aposta: melhor devolver a preparação
+      // agora e deixar o app pedir a análise numa chamada com o orçamento inteiro dela.
+      const sobrouTempoPraAnalise = (Date.now() - inicioDoPreparar) < ANALISE_JUNTA_PRAZO_MAX_MS;
+      if (body?.analisarDireto === true && !audiosPendentes.length && zipPequeno && sobrouTempoPraAnalise) {
         try {
           const timelineAnterior = Array.isArray(matchAnterior?.row?.timeline_json) ? matchAnterior.row.timeline_json : [];
           const analiseAnterior = matchAnterior?.row?.resultado_analise && typeof matchAnterior.row.resultado_analise === "object"
