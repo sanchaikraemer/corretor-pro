@@ -99,7 +99,10 @@ const CONVERSA = [
   assert.match(app, /Sugestões da análise anterior/, "mas continua avisando, com o botão de reanalisar");
   assert.ok(!/exporte a conversa no WhatsApp com <b>“Incluir mídia”<\/b> e importe de novo/.test(app),
     "a frase que mandava reexportar sumiu: a mídia vinha, o app é que não lia");
-  assert.match(app, /o app lê alguns arquivos por importação/, "no lugar dela, o motivo verdadeiro");
+  // v1360 — o aviso inteiro foi apagado por ordem do dono: foto e PDF não são enviados na
+  // importação (v1358), então avisar que a IA não os leu era avisar de algo impossível.
+  assert.ok(!/o app lê alguns arquivos por importação/.test(app),
+    "e o aviso todo saiu junto — ver o teste v1360");
 }
 
 // ── 7. A checagem antiga continua inteira (não foi alterada, só voltou a ser usada) ──────────

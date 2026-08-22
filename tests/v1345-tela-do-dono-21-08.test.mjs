@@ -57,9 +57,9 @@ const fonte = [
 ].join("\n");
 // v1348 — o bloco passou a encurtar o marcador de arquivo na hora de mostrar (cp1348TextoNaTela);
 // aqui ele entra igual ao do app, pra o teste rodar o código de verdade e não uma versão de araque.
+// v1360 — a linha da figurinha saiu (ordem do dono): sobrou só o encurtador do marcador.
 const cp1348 = app.match(/function cp1348TextoNaTela\(texto\)\{[\s\S]*?\n  \}/)[0];
-const cp1348Consts = app.match(/const CP1348_MARCADOR = [\s\S]*?\n  \};/)[0]
-  + "\n" + app.match(/const CP1356_FIGURINHA = [\s\S]*?;/)[0];
+const cp1348Consts = app.match(/const CP1348_MARCADOR = [\s\S]*?\n  \};/)[0];
 const { cp1345UltimasMensagens, cp1345UltimasMensagensHTML } = new Function(
   "escapeHtml", "cpMensagemEhDoCliente",
   `${cp1348Consts}\n${cp1348}\n${fonte}\nreturn { cp1345UltimasMensagens, cp1345UltimasMensagensHTML };`

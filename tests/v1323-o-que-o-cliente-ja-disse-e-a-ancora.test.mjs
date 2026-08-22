@@ -101,21 +101,21 @@ const lead = guessLeadData(timeline, "Miguel Kirinus", "Conversa do WhatsApp com
   }
 }
 
-// ── 4. O material que a IA não leu vira número — e vídeo fica de fora da conta ────────────────
+// ── 4. (v1360) A CONTA VIROU SÓ DE ÁUDIO, POR ORDEM DO DONO ─────────────────────────────────
+// "como assim a IA não leu um PDF se não importa PDF?" — desde a v1358 foto e PDF não são enviados
+// na importação, então contar o que a IA "não leu" deles era avisar de algo impossível. Sobra o
+// áudio, que continua sendo enviado e transcrito: se não virou texto, há motivo de verdade.
 {
   const conta = contarMaterialNaoLido(timeline);
-  assert.equal(conta.imagens, 3, "as 3 fotos não lidas precisam ser contadas");
-  assert.equal(conta.documentos, 1, "e o PDF");
-  assert.equal(conta.audios, 4, "e os 4 áudios que não viraram texto");
-  assert.equal(conta.total, 8);
+  assert.equal(conta.audios, 4, "os 4 áudios que não viraram texto continuam contados");
+  assert.equal(conta.total, 4);
+  assert.ok(!Object.keys(conta).includes("imagens"), "foto saiu da conta: ela nem é enviada");
+  assert.ok(!Object.keys(conta).includes("documentos"), "PDF também");
+  assert.ok(!Object.keys(conta).includes("videos"), "e vídeo nunca esteve");
 
-  // Vídeo nunca é lido, por decisão do dono: contá-lo seria avisar de algo que não tem conserto.
-  assert.ok(!Object.keys(conta).includes("videos"), "vídeo não entra na conta do que ficou por ler");
-
-  // Conversa em que tudo foi lido não gera aviso nenhum.
   const lida = parseWhatsappTxt(`[19/08/2026 10:00] Construtora Senger: Bom dia, segue o material
 [19/08/2026 10:01] Noemi Barcarol Evoluti: Recebi, obrigada`);
-  assert.equal(contarMaterialNaoLido(lida).total, 0, "sem material pendente, nada é contado");
+  assert.equal(contarMaterialNaoLido(lida).total, 0, "sem áudio pendente, nada é contado");
 }
 
 // ── 5. As pontas ligadas: análise, salvamento e as duas telas ────────────────────────────────
@@ -128,14 +128,10 @@ const lead = guessLeadData(timeline, "Miguel Kirinus", "Conversa do WhatsApp com
   assert.match(persistencia, /"materialNaoLido"/,
     "a contagem precisa viajar com a lista, senão o aviso some ao reabrir o lead");
 
+  // v1360 — os avisos de tela saíram (ver o teste v1360). A contagem continua viajando com a
+  // análise porque é ela que alimenta a decisão; o que mudou é que ninguém mais mostra foto/PDF.
   const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
-  assert.match(app, /function cp1323MaterialNaoLido/, "a tela do lead precisa do aviso");
-  assert.match(app, /\$\{cp1323MaterialNaoLido\(a\)\}/, "e ele precisa estar dentro da linha de prova");
-  assert.match(app, /Incluir mídia/, "o aviso precisa dizer o que fazer: reexportar com mídia");
-
-  const importacao = fs.readFileSync(new URL("../js/importacao.js", import.meta.url), "utf8");
-  assert.match(importacao, /materialNaoLidoHtml/, "a tela da importação também avisa na hora");
-  assert.match(importacao, /analysis\.materialNaoLido/, "usando a contagem que veio do servidor");
+  assert.ok(!/a IA ainda não leu/.test(app), "o aviso de material não lido não pode voltar à tela do lead");
 }
 
 console.log("v1323-o-que-o-cliente-ja-disse-e-a-ancora: ok");

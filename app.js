@@ -4880,7 +4880,7 @@ function cp704Css(){
       /* Duas linhas no máximo: a ficha não pode virar o histórico. */
       .cp1345-msg span{font-size:13px;line-height:1.45;color:rgba(237,246,248,.92);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
       .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-msg-item.cp704-msg-copiada{border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.12)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:#fff}.cp704-msg-alerta{grid-column:1/-1;border:1px solid var(--risco-line,rgba(255,98,88,.45));background:var(--risco-soft,rgba(255,98,88,.10));border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.45;color:var(--risco)}.cp704-msg-alerta b{font-weight:950}.cp704-msg-item.cp704-msg-suja{border-color:var(--risco-line,rgba(255,98,88,.45))}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
-      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp1350-faltou{display:block;width:100%;text-align:left;margin:3px 0 4px;padding:9px 11px;border:1px dashed rgba(255,98,88,.45);border-radius:11px;background:rgba(255,98,88,.08);color:var(--lime);font-size:12.5px;font-weight:900;line-height:1.35;cursor:pointer}.cp1350-faltou:hover{background:rgba(255,98,88,.16);border-color:rgba(255,98,88,.7)}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
+      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:var(--acao-line);color:var(--acao)}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:var(--risco)}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:var(--risco)!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:var(--acao);border-color:var(--acao-line)}
       .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
       .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
@@ -5093,15 +5093,8 @@ function cp704Css(){
           ? `<button type="button" class="cp704-tmsg-undo" title="Apagar esta observação" aria-label="Apagar esta observação" onclick='event.stopPropagation();cp704ApagarObservacao(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>✕</button>`
           : `<button type="button" class="cp704-tmsg-undo" title="Não enviei essa mensagem — desfazer" aria-label="Desfazer esta mensagem" onclick='event.stopPropagation();cp704DesfazerMensagemEnviada(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>✕</button>`)
         : '';
-      // v1350 — A LINHA DO ARQUIVO QUE NÃO VEIO VIRA O PRÓPRIO CONSERTO.
-      // O dono fotografou este card três vezes seguidas. Explicar em texto onde ficava o botão não
-      // resolveu; então o botão passa a ser a própria linha: toca, escolhe o arquivo, o app lê (e
-      // transcreve, se for áudio). Só a linha do "não veio" é clicável — as outras não mudam.
       const textoNaTela = cp1348TextoNaTela(cp704Text(m.text));
-      const arquivoFaltando = /não veio no envio da conversa/.test(textoNaTela);
-      const corpo = arquivoFaltando
-        ? `<button type="button" class="cp1350-faltou" onclick='event.stopPropagation();cp1350EnviarArquivoQueFaltou(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>📎 Toque para mandar este arquivo — o app lê e transcreve</button>`
-        : `<p>${escapeHtml(textoNaTela)}</p>`;
+      const corpo = `<p>${escapeHtml(textoNaTela)}</p>`;
       return `<div class="cp704-tmsg${wrapCls}${podeDesfazer?' cp704-tmsg-comundo':''}"${propAttr}><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b>${corpo}<small>${escapeHtml(cp704DataHora(m))}</small>${propHint}</div>${btnDesfazer}</div>`;
     }).join('') + btn;
   }
@@ -5325,15 +5318,9 @@ function cp704Css(){
     audio: "📎 Áudio enviado — não virou texto",
     "documento/pdf": "📎 PDF enviado — a IA não leu o conteúdo"
   };
-  // v1356 — figurinha tem linha própria: ela é reação do cliente ("ok, combinado"), não é arquivo
-  // pendente. Antes aparecia como "Foto enviada — a IA não leu o conteúdo", e a análise chegava a
-  // sugerir perguntar ao cliente o que ele quis dizer com a imagem.
-  const CP1356_FIGURINHA = /\[Figurinha enviada — é uma reação, não tem texto pra ler\]/g;
   function cp1348TextoNaTela(texto){
-    return String(texto || "")
-      .replace(CP1356_FIGURINHA, "👍 Figurinha (reação do cliente)")
-      .replace(CP1348_MARCADOR, (_todo, tipo) =>
-        CP1348_CURTO[String(tipo).trim().toLowerCase()] || "📎 Arquivo enviado — não veio no envio da conversa");
+    return String(texto || "").replace(CP1348_MARCADOR, (_todo, tipo) =>
+      CP1348_CURTO[String(tipo).trim().toLowerCase()] || "📎 Arquivo enviado — não veio no envio da conversa");
   }
 
   function cp1345UltimasMensagensHTML(lead){
@@ -5713,35 +5700,13 @@ function cp1308FaixaModoHtml(a){
 // atendimento continuavam marcados como "conteúdo não analisado". A análise estava certa no que
 // dava pra ver — só que ninguém avisava que faltava ver o resto. Agora a linha de prova diz, e diz
 // o que fazer: reexportar a conversa COM os arquivos e importar de novo.
-function cp1323MaterialNaoLido(a){
-  const m = (a && typeof a.materialNaoLido === "object" && a.materialNaoLido) ? a.materialNaoLido : null;
-  if(!m) return "";
-  const fotos = Number(m.imagens) || 0, docs = Number(m.documentos) || 0, audios = Number(m.audios) || 0;
-  // v1348 — os arquivos que NÃO VIERAM no envio (o "<Mídia oculta>" da exportação sem mídia). São
-  // um caso diferente dos de cima e precisam de outra frase: aqui não adianta reimportar a mesma
-  // conversa, porque o arquivo não está dentro dela. O conserto é reexportar COM mídia.
-  const semVir = Number(m.arquivos) || 0;
-  if(fotos + docs + audios + semVir <= 0) return "";
-  const partes = [];
-  if(fotos) partes.push(`${fotos} ${pl(fotos, "foto", "fotos")}`);
-  if(docs) partes.push(`${docs} ${pl(docs, "PDF", "PDFs")}`);
-  if(audios) partes.push(`${audios} ${pl(audios, "áudio", "áudios")}`);
-  const lista = partes.length === 1 ? partes[0] : partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1];
-  // v1332 — A FRASE ANTIGA MENTIA. Ela mandava reexportar "com Incluir mídia" mesmo quando a mídia
-  // TINHA vindo: o dono sempre exporta com mídia. O que acontece de verdade é outra coisa — o app
-  // lê no máximo alguns arquivos por importação (os mais recentes), e o que passou disso, ou o que
-  // entrou antes de o app aprender a ler imagem e PDF (v1306), fica sem leitura. Mandar o corretor
-  // refazer a exportação era empurrar pra ele um trabalho que não resolve nada.
-  const naoLidos = partes.length
-    ? ` · <b style="color:var(--risco)">a IA ainda não leu ${lista} desta conversa</b> (o app lê alguns arquivos por importação, os mais recentes — reimporte a conversa pra ele seguir lendo o que ficou)`
-    : "";
-  // v1349 — a frase parou de mandar reexportar a conversa inteira. O conserto agora é de dois
-  // toques, nesta mesma tela: "Ler fotos e PDFs", escolhe os arquivos no aparelho, salva.
-  const naoVieram = semVir
-    ? ` · <b style="color:var(--risco)">${semVir} ${pl(semVir, "arquivo não veio", "arquivos não vieram")} nesta conversa</b> (ela foi enviada sem os arquivos. Toque em <b>"Ler fotos, PDFs e áudios"</b>, aqui embaixo, escolha ${semVir === 1 ? "o arquivo" : "os arquivos"} no seu aparelho e o app lê ${semVir === 1 ? "ele" : "eles"} agora)`
-    : "";
-  return naoLidos + naoVieram;
-}
+// v1360 — O AVISO DE "MATERIAL NÃO LIDO" FOI APAGADO (ordem do dono, 22/08/2026).
+//
+// "como assim a IA não leu um PDF se não importa PDF?" — ele está certo. Foto e PDF não são
+// enviados na importação desde a v1358, por ordem dele. O aviso, criado por mim na v1323/v1348,
+// passou a alertar sobre algo que não pode mais acontecer, e ainda mandava reimportar (o que não
+// resolveria nada). Áudio que não vira texto já tem aviso próprio na tela da importação (v1178).
+function cp1323MaterialNaoLido(){ return ""; }
 
 // v1304 — a porcentagem colorida da linha de prova: verde quando fechou 100%, vermelho quando
 // faltou pedaço. Uma cor só decide, sem meio-termo — foi o pedido do dono.
@@ -5881,16 +5846,8 @@ function renderLeadFoco(lead){
                salva. No celular o seletor já abre na galeria/câmera; no computador dá pra colar a
                imagem direto no campo de texto (Ctrl+V). -->
           <input type="file" id="cp1250PrintInput" accept="image/png,image/jpeg,image/webp" hidden onchange="cp1250LerPrint(this)">
-          <!-- v1349 — OS ARQUIVOS QUE NÃO VIERAM NA CONVERSA, LIDOS AQUI MESMO.
-               Quando a conversa é exportada sem os arquivos, foto e PDF viram "<Mídia oculta>" e o
-               conteúdo não existe dentro do que chegou. Reexportar a conversa inteira por causa de
-               dois ou três arquivos é trabalho demais: ele escolhe os arquivos aqui, o app lê e o
-               texto cai no campo acima pra ele conferir e salvar. Aceita vários de uma vez, e
-               aceita PDF — a leitura de print (v1250) é uma imagem só, e só de conversa. -->
-          <input type="file" id="cp1349ArquivosInput" accept="image/*,application/pdf,audio/*,.opus,.ogg,.m4a,.mp3,.pdf" multiple hidden onchange="cp1349LerArquivos(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
             <button type="button" id="cp1250PrintBtn" onclick="document.getElementById('cp1250PrintInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler print da resposta</button>
-            <button type="button" id="cp1349ArquivosBtn" onclick="cp1352LimparAlvo();document.getElementById('cp1349ArquivosInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler fotos, PDFs e áudios</button>
             <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
             <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
           </div>
@@ -12471,150 +12428,9 @@ function cp1250LerPrint(input){
 }
 window.cp1250LerPrint = cp1250LerPrint;
 
-// v1349 — LER AS FOTOS E OS PDFs QUE FICARAM DE FORA DA CONVERSA.
-//
-// Print do dono, 21/08/2026: as três últimas mensagens de um atendimento eram "arquivo enviado —
-// conteúdo não analisado", bem na hora em que ele perguntou sobre entrada e permuta. A conversa
-// tinha sido exportada sem os arquivos, então não havia o que ler. Mandar reexportar a conversa
-// toda por causa de três arquivos é empurrar trabalho: aqui ele escolhe os arquivos direto do
-// aparelho e o app lê, com o MESMO leitor da importação.
-async function cp1349LerArquivos(input){
-  const arquivosEscolhidos = Array.from(input?.files || []);
-  // Cancelou o seletor: o alvo não pode ficar guardado pro próximo clique, que pode ser outro.
-  if(!arquivosEscolhidos.length) cp1352Alvo = null;
-  if(input) input.value = "";
-  if(!arquivosEscolhidos.length) return;
-  const status = qs("#cp7ObsStatus");
-  const ta = qs("#cp7ObsTexto");
-  const btn = qs("#cp1349ArquivosBtn");
-  const rotulo = btn ? btn.textContent : "";
-  const aviso = (cor, html) => { if(status) status.innerHTML = `<span style="color:var(${cor})">${html}</span>`; };
-  // 10 por vez: é o teto da rota. Mais que isso não cabe no tempo da função.
-  const arquivos = arquivosEscolhidos.slice(0, 10);
-  const sobraram = arquivosEscolhidos.length - arquivos.length;
-  if(btn){ btn.disabled = true; btn.textContent = arquivos.length === 1 ? "Lendo o arquivo…" : `Lendo ${arquivos.length} arquivos…`; }
-  aviso("--morno", arquivos.length === 1 ? "Lendo o arquivo…" : `Lendo ${arquivos.length} arquivos…`);
-  try{
-    const prontos = [];
-    // O envio inteiro precisa caber no limite de corpo da hospedagem (~4,5 MB). Foto encolhida dá
-    // uns 200 KB; PDF é o que pode estourar. Em vez de deixar a hospedagem recusar o envio todo
-    // (erro seco, sem explicação), o que não couber fica de fora e ele é avisado.
-    const TETO_ENVIO = 3.6 * 1024 * 1024;
-    let usado = 0, naoCouberam = 0;
-    for(const f of arquivos){
-      const nome = f.name || "";
-      const ehPdf = /pdf/i.test(f.type || "") || /\.pdf$/i.test(nome);
-      const ehAudio = /^audio\//i.test(f.type || "") || /\.(opus|ogg|mp3|m4a|wav|aac)$/i.test(nome);
-      // Foto passa pelo mesmo encolhimento da leitura de print (v1250) — senão a foto de 8 MP do
-      // celular estoura o envio. PDF e áudio vão inteiros: encolher não faz sentido.
-      const base64 = (ehPdf || ehAudio) ? await cp1349ArquivoBase64(f) : (await cp1250ReduzirImagem(f)).base64;
-      if(!base64) continue;
-      if(usado + base64.length > TETO_ENVIO){ naoCouberam++; continue; }
-      usado += base64.length;
-      prontos.push({ nome, mime: ehPdf ? "application/pdf" : (ehAudio ? (f.type || "audio/ogg") : "image/jpeg"), base64 });
-    }
-    if(!prontos.length){
-      aviso("--risco", naoCouberam
-        ? "Esses arquivos são grandes demais pra mandar de uma vez. Tente um por vez."
-        : "Não consegui abrir esses arquivos. Mande foto (JPG/PNG), PDF ou áudio.");
-      return;
-    }
-    const res = await fetchComTimeout("./api/cerebro-config", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action:"ler-arquivos", arquivos: prontos })
-    }, 60000);
-    const data = await res.json().catch(()=>({ ok:false }));
-    if(data?.ok && data.texto){
-      // v1352 — veio da linha do histórico: o texto entra NA MENSAGEM, como sempre foi.
-      if(cp1352Alvo){
-        const alvo = cp1352Alvo; cp1352Alvo = null;
-        const primeiro = prontos[0] || {};
-        const tipo = /^audio\//i.test(primeiro.mime || "") ? "audio"
-          : (/pdf/i.test(primeiro.mime || "") ? "documento" : "imagem");
-        // Com um arquivo só, o nome do arquivo na frente do texto é ruído — a mensagem já é dele.
-        const texto = prontos.length === 1 ? String(data.texto).replace(/^[^:\n]{1,120}:\s*/, "") : data.texto;
-        const r2 = await fetchComTimeout("./api/reanalisar-lead", {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify(payloadComCerebro({ id: alvo.leadId, action:"preencher-arquivo", iso: alvo.iso, texto, tipo, nome: primeiro.nome || "" }))
-        }, 30000);
-        const d2 = await r2.json().catch(()=>({ ok:false }));
-        if(d2?.ok){
-          // v1354 — TROCA A LINHA NA CÓPIA QUE ESTÁ NA TELA, ANTES DE RECARREGAR.
-          //
-          // Sem isto, dava certo e não aparecia. recarregarLeadFoco tem uma proteção antiga: se a
-          // cópia local tem MAIS mensagens que a que voltou do servidor, ela FICA com a local (a
-          // lista traz só um recorte, e sem isso a barra de interesse despencava de 108 pra 4).
-          // Com o histórico completo aberto — 16 mensagens contra 4 — a proteção vencia sempre e
-          // o texto novo era jogado fora na hora de desenhar. O corretor mandava o arquivo, o
-          // servidor gravava certo, e a tela continuava com a mesma linha vermelha.
-          cp1352TrocaNaTimelineLocal(alvo.leadId, alvo.iso, d2.mensagem);
-          try{ invalidarLeadsCache(); }catch(_){}
-          try{ invalidarLeadDetail(alvo.leadId); }catch(_){}
-          aviso("--acao", tipo === "audio" ? "Áudio transcrito e colocado no histórico." : "Arquivo lido e colocado no histórico.");
-          try{ await recarregarLeadFoco(alvo.leadId); }catch(_){}
-          return;
-        }
-        aviso("--risco", escapeHtml(d2?.error || "Li o arquivo, mas não consegui colocar na mensagem."));
-        // Cai no caminho antigo pra ele não perder o que foi lido.
-      }
-      if(ta){
-        ta.value = (ta.value.trim() ? ta.value.trim()+"\n" : "") + data.texto;
-        ta.focus();
-      }
-      const lidos = Number(data.lidos) || prontos.length;
-      const naoLidos = prontos.length - lidos;
-      aviso("--acao", `Li ${lidos} ${lidos === 1 ? "arquivo" : "arquivos"}.`
-        + (naoLidos > 0 ? ` ${naoLidos} não ${naoLidos === 1 ? "tinha" : "tinham"} texto pra ler.` : "")
-        + (sobraram > 0 ? ` ${sobraram} ${sobraram === 1 ? "ficou" : "ficaram"} de fora (10 por vez).` : "")
-        + (naoCouberam > 0 ? ` ${naoCouberam} não ${naoCouberam === 1 ? "coube" : "couberam"} no envio — mande ${naoCouberam === 1 ? "ele" : "eles"} separado.` : "")
-        + " <b>Confira o texto acima</b> e toque em Salvar observação.");
-    } else {
-      aviso("--risco", escapeHtml(data?.error || "Não consegui ler esses arquivos."));
-    }
-  }catch(err){
-    aviso("--risco", "Não consegui ler os arquivos: " + escapeHtml(String(err?.message||err)));
-  }finally{
-    if(btn){ btn.disabled = false; btn.textContent = rotulo || "Ler fotos, PDFs e áudios"; }
-  }
-}
-function cp1349ArquivoBase64(file){
-  return new Promise((resolve) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result || "").replace(/^data:[^;]+;base64,/, ""));
-    fr.onerror = () => resolve("");
-    fr.readAsDataURL(file);
-  });
-}
-window.cp1349LerArquivos = cp1349LerArquivos;
-
-// v1350 — abre o seletor de arquivos a partir da linha do histórico. Rola até o campo de
-// observação antes, senão o texto lido cai numa parte da tela que ele não está vendo.
-// v1352 — guarda QUAL mensagem está esperando o arquivo. Com isso o texto lido volta pra dentro
-// dela, no minuto certo do histórico, em vez de virar observação em outro lugar da linha do tempo.
-let cp1352Alvo = null;
-function cp1350EnviarArquivoQueFaltou(leadId, iso){
-  const input = qs("#cp1349ArquivosInput");
-  if(!input){ toast("Abra o cliente pra mandar o arquivo."); return; }
-  cp1352Alvo = (leadId && iso) ? { leadId: String(leadId), iso: String(iso) } : null;
-  input.click();
-}
-window.cp1350EnviarArquivoQueFaltou = cp1350EnviarArquivoQueFaltou;
-// O botão do campo de observação manda pra observação, como antes — então limpa qualquer alvo
-// que um toque anterior na linha do histórico tenha deixado guardado.
-function cp1352LimparAlvo(){ cp1352Alvo = null; }
-// Espelha o que o servidor acabou de gravar dentro da cópia que está desenhada na tela. Mesma
-// ideia do cp7TiraDaTimelineLocal (v1238), que existe pelo mesmo motivo — só que trocando em vez
-// de apagar.
-function cp1352TrocaNaTimelineLocal(leadId, iso, mensagem){
-  if(!mensagem || !state.lead || String(state.lead.id) !== String(leadId)) return;
-  const msgs = Array.isArray(state.lead.recentMessages) ? state.lead.recentMessages : [];
-  const i = msgs.findIndex(m => String(m?.iso || "") === String(iso));
-  if(i < 0) return;
-  msgs[i] = { ...msgs[i], ...mensagem };
-  state.lead.recentMessages = msgs.slice();
-  try{ renderLeadFoco(state.lead); }catch(_){ }
-}
-window.cp1352LimparAlvo = cp1352LimparAlvo;
+// v1360 — o botão "Ler fotos, PDFs e áudios" (v1349), a linha clicável do histórico (v1350) e
+// tudo que os servia foram apagados por ordem do dono: eu os criei sem que ele pedisse, pra
+// contornar as fotos e PDFs que não chegavam — e desde a v1358 eles nem são mais enviados.
 
 // Colar a imagem direto no campo (Ctrl+V no computador — é como o corretor recorta a tela e cola).
 // Um listener só, no documento, ligado uma vez: o campo de observação é redesenhado a cada
