@@ -271,6 +271,9 @@ export function planejarConteudoDoZip({
 // dois limites — a quantidade que o servidor lê por importação e o espaço que sobrar do envio.
 // Vídeo continua fora: o app não lê vídeo, por decisão do dono.
 export const VISUAL_KEEP_RE = /\.(jpe?g|png|webp|heic|bmp|tiff|gif|pdf)$/i;
+// v1356 — figurinha (STK-…) não viaja: ela é reação, não tem texto pra ler, e ocuparia o espaço
+// apertado das fotos que TÊM conteúdo (preço, planta, condição).
+export const STICKER_RE = /(^|[/\\_-])stk[-_]?\d|(^|[/\\])stk[-_]/i;
 // O servidor lê alguns arquivos por importação (maxVisuaisPorImportacao, api/_pipeline.js).
 // Mandar muito mais que isso é gastar internet do corretor com arquivo que não vai ser lido.
 export const MAX_VISUAIS_NO_ENVIO = 12;
@@ -299,7 +302,7 @@ export function escolherVisuaisDoZip({
   const lista = (visuais || []).map(v => ({
     caminho: String(v?.caminho || ""),
     bytes: Number(v?.bytes) || 0
-  })).filter(v => v.caminho && VISUAL_KEEP_RE.test(v.caminho));
+  })).filter(v => v.caminho && VISUAL_KEEP_RE.test(v.caminho) && !STICKER_RE.test(nomeSimples(v.caminho)));
   if (!lista.length) return { manter: [], fora: [], resumo: { total: 0, mantidos: 0, cortados: 0 } };
 
   // "Mais recente" = citado mais pra frente no texto da conversa. É a ordem que o corretor
