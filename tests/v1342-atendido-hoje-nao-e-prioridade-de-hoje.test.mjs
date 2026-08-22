@@ -48,7 +48,6 @@ const fontes = [
 const emJanelaDeEspera = new Function('obterCerebroConfigParaAnalise',
   `${fontes}\nreturn emJanelaDeEspera;`)(() => ({ diasDescansoPosAtendimento: 5 }));
 
-const horasAtras = (h) => new Date(Date.now() - h * 3600000).toISOString();
 const diasAtras = (n) => new Date(Date.now() - n * 86400000).toISOString();
 // "hoje de manhã" sem risco de virar ontem quando o teste roda de madrugada.
 const hojeCedo = () => {
@@ -57,6 +56,17 @@ const hojeCedo = () => {
   const mesmoDia = (a, b) => new Intl.DateTimeFormat('en-CA', { timeZone: globalThis.cpFuso() }).format(new Date(a))
     === new Intl.DateTimeFormat('en-CA', { timeZone: globalThis.cpFuso() }).format(new Date(b));
   return new Date(mesmoDia(agora, duasHoras) ? duasHoras : agora).toISOString();
+};
+// v1355 — "hoje um pouco DEPOIS de hojeCedo", garantido no mesmo dia de calendário. A conferência
+// da régua-por-dia usava "6 horas atrás" e "1 hora atrás": rodando de madrugada (o teste rodou às
+// 01h37), seis horas atrás é ONTEM, os dois caíam em dias diferentes e o teste acusava um defeito
+// que não existia. Mesma família das bombas-relógio de data achadas na v1338.
+const hojeUmPoucoDepois = () => {
+  const base = Date.parse(hojeCedo());
+  const mesmoDiaQue = (a, b) => new Intl.DateTimeFormat('en-CA', { timeZone: globalThis.cpFuso() }).format(new Date(a))
+    === new Intl.DateTimeFormat('en-CA', { timeZone: globalThis.cpFuso() }).format(new Date(b));
+  const depois = base + 30 * 60000;
+  return new Date(mesmoDiaQue(base, depois) ? depois : base).toISOString();
 };
 
 // ── 1. As quatro formas de "atendi hoje" ────────────────────────────────────────────────────
@@ -89,7 +99,7 @@ assert.equal(
 );
 assert.equal(
   emJanelaDeEspera({
-    lastAttendanceAt: horasAtras(1),
+    lastAttendanceAt: hojeCedo(),
     analysis: { geradoEm: diasAtras(3), confirmedAppointments: [{ oQue: 'visita', quando: 'hoje' }] }
   }),
   true,
@@ -112,7 +122,7 @@ assert.equal(emJanelaDeEspera({ analysis: {} }), false,
 // exatamente essa devolução no mesmo dia que o dono chamou de ridícula. Já um lembrete de um dia
 // POSTERIOR ao atendimento continua furando o descanso, que é pra isso que a regra existe.
 assert.equal(
-  emJanelaDeEspera({ lastAttendanceAt: horasAtras(6), analysis: { lembrete: { quando: horasAtras(1) } } }),
+  emJanelaDeEspera({ lastAttendanceAt: hojeCedo(), analysis: { lembrete: { quando: hojeUmPoucoDepois() } } }),
   true,
   'atendido hoje de manhã, lembrete pra hoje à tarde: continua fora da fila DE HOJE (a régua é por dia)'
 );

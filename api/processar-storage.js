@@ -46,7 +46,11 @@ function importIdSeguro(value = "") {
 // chamando exatamente a mesma URL (/api/criar-upload-url) — vercel.json redireciona pra este
 // arquivo. Distingue pela AUSÊNCIA do campo "action" (as ações desta rota sempre mandam
 // "action"; a criação de URL de upload nunca mandou esse campo) — ver dispatch no handler().
-const DEFAULT_MAX_ZIP_BYTES = 150 * 1024 * 1024;
+// v1355 — 45 MB, não 150. O armazenamento recusa o arquivo bem antes dos 150 MB que estavam aqui
+// (print do dono: 56,5 MB recusado), então esse número só servia pra o aparelho montar e subir um
+// arquivo que ia ser rejeitado no fim. Continua ajustável por SUPABASE_ZIP_MAX_BYTES pra quem tiver
+// um armazenamento com teto maior. O aparelho espelha este valor (js/enxugar-zip.js).
+const DEFAULT_MAX_ZIP_BYTES = 45 * 1024 * 1024;
 const CONFIGURED_MAX_ZIP_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES);
 const BUCKET_MAX_BYTES = Number.isFinite(CONFIGURED_MAX_ZIP_BYTES) && CONFIGURED_MAX_ZIP_BYTES > 0
   ? Math.min(CONFIGURED_MAX_ZIP_BYTES, 300 * 1024 * 1024)
