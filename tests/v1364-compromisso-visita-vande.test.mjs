@@ -94,9 +94,21 @@ assert.ok(fichario.includes("QUEM É ESTE CONTATO"),
 assert.ok(/Não classifique este contato como corretor\/parceiro/.test(fichario));
 assert.ok(fichario.includes("SINAIS COMERCIAIS FORTES"), "o bloco de sinais fortes entra");
 assert.ok(/não trate como retomada fria/.test(fichario));
-// E a ordem: o compromisso vem ANTES dos "próximos passos que o corretor já propôs", pra fala do
-// cliente não pesar menos que o convite do corretor.
-assert.ok(fichario.indexOf("O COMPROMISSO DESTA CONVERSA") < fichario.indexOf("PRÓXIMOS PASSOS"),
-  "o compromisso (com a fala do cliente) vem antes do bloco de convites do corretor");
+// v1367 — o "PRÓXIMOS PASSOS QUE O CORRETOR JÁ PROPÔS" sumiu desta conversa, e sumiu CERTO: o
+// único item era a frase automática do anúncio ("Anúncio do Instagram ... Quer agendar uma
+// visita?"), que o robô dispara e o corretor não escreveu. Robô não propõe nada.
+assert.ok(!fichario.includes("PRÓXIMOS PASSOS"),
+  "a frase automática do anúncio não pode contar como passo proposto pelo corretor (v1367)");
+// A ordem continua valendo quando o bloco existe de verdade: a fala do cliente (compromisso) não
+// pode pesar menos que o convite do corretor.
+{
+  const comConvite = montarFicharioDaConversa(
+    [...TIMELINE, { author: C, date: "21/08/2026", text: "Posso te levar para conhecer o apartamento na quinta?" }],
+    C, lead, AGORA
+  );
+  assert.ok(comConvite.includes("PRÓXIMOS PASSOS"), "convite escrito pelo corretor continua entrando");
+  assert.ok(comConvite.indexOf("O COMPROMISSO DESTA CONVERSA") < comConvite.indexOf("PRÓXIMOS PASSOS"),
+    "o compromisso (com a fala do cliente) vem antes do bloco de convites do corretor");
+}
 
 console.log("v1364-compromisso-visita-vande: ok (visita viva, autoria certa, agenda ≠ objeção, manhã preservada)");
