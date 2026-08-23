@@ -30,11 +30,11 @@ const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url)
 // ---------------------------------------------------------------------------
 assert.match(
   pipeline,
-  /Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes/,
-  "a regra de convergência é do Cérebro do corretor e não pode ser removida (ver v1206)"
+  /Se houver um único próximo passo adequado, as três DEVEM convergir para ele/,
+  "a regra de convergência não pode ser removida (ver v1206)"
 );
-assert.match(pipeline, /CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA/, "mas convergir não pode virar repetir a pergunta");
-assert.match(pipeline, /Trocar palavra não é trocar caminho/);
+assert.match(pipeline, /CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA/, "mas convergir não pode virar três cópias");
+assert.match(pipeline, /MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM/);
 
 // ---------------------------------------------------------------------------
 // 2) Cumprimento e reconhecimento do intervalo deixaram de ser delegados.
@@ -87,7 +87,7 @@ const resultado = await analyzeWithBrain({
 
 const pedido = chamadas.at(-1).messages.find(m => m.role === "user")?.content || "";
 assert.match(pedido, /PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE/, "a exigência precisa chegar no pedido vivo");
-assert.match(pedido, /CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA/, "idem para a proibição de repetir a pergunta");
+assert.match(pedido, /CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA/, "idem para a proibição de repetir a pergunta");
 assert.match(pedido, /RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE/, "idem para o aguardar");
 // A saudação certa do horário continua sendo entregue pronta, e agora existe regra que a usa.
 assert.match(pedido, /Saudação correspondente ao horário neste instante: (Bom dia|Boa tarde|Boa noite)/);

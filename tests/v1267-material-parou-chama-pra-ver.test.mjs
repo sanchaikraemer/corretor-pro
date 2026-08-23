@@ -13,8 +13,10 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
 
 assert.match(src, /Não despeje catálogo quando os critérios já permitem curadoria\./,
   'mandar mais material por mandar continua proibido');
-assert.match(src, /MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade\./,
-  'e o encontro não pode ser forçado antes da hora');
+assert.match(src, /NÃO INVENTE COMPROMISSO/,
+  'e o encontro não pode nascer sem base no histórico');
+assert.match(src, /Alguma mensagem força visita\/encontro\/proposta sem maturidade\?/,
+  'a revisão final continua protegendo contra avanço antes da hora');
 assert.match(src, /Se material\/arquivo foi enviado, considere o envio como fato, mas não invente o conteúdo que não está visível\./,
   'o material já enviado continua contando como enviado');
 assert.match(src, /Escolha o menor próximo passo útil para ESTE lead/,

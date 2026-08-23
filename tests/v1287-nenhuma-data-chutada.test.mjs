@@ -32,6 +32,8 @@ for (const padrao of CHUTES_PROIBIDOS) {
 }
 
 // E o que entra no lugar continua sendo proporcional: nada de forçar encontro antes da hora.
-assert.match(pedido, /MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade\./,
-  'sem data chutada, o encontro continua tendo que respeitar a maturidade da conversa');
+assert.match(pedido, /NÃO INVENTE COMPROMISSO/,
+  'sem data chutada, ligação, visita e reunião continuam proibidas sem base real');
+assert.match(pedido, /Não crie "posso te ligar terça às 10h"/,
+  'a própria regra das mensagens precisa exemplificar que agenda inventada continua proibida');
 console.log('v1287-nenhuma-data-chutada: ok');

@@ -62,7 +62,10 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
   let pedidoEnviado = '';
   const openaiMock = {
     chat: { completions: { create: async (args) => {
-      pedidoEnviado = args.messages.map(m => m.content).join('\n\n');
+      // v1370+ pode haver uma chamada posterior de reparo só das mensagens. Este teste protege
+      // o pedido ORIGINAL da análise, então guarda a primeira chamada e não deixa o reparo
+      // sobrescrever a evidência que queremos conferir.
+      if (!pedidoEnviado) pedidoEnviado = args.messages.map(m => m.content).join('\n\n');
       return {
         model: 'mock-gpt',
         choices: [{ message: { content: JSON.stringify({
@@ -111,7 +114,10 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
   let pedidoEnviado = '';
   const openaiMock = {
     chat: { completions: { create: async (args) => {
-      pedidoEnviado = args.messages.map(m => m.content).join('\n\n');
+      // v1370+ pode haver uma chamada posterior de reparo só das mensagens. Este teste protege
+      // o pedido ORIGINAL da análise, então guarda a primeira chamada e não deixa o reparo
+      // sobrescrever a evidência que queremos conferir.
+      if (!pedidoEnviado) pedidoEnviado = args.messages.map(m => m.content).join('\n\n');
       return { model: 'mock-gpt', choices: [{ message: { content: JSON.stringify({
         summary: 'Resumo',
         diagnostico: {},

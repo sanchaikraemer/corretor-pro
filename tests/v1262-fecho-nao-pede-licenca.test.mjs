@@ -9,8 +9,10 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
 // v1291 — ATENÇÃO, ISTO MUDOU DE FORMA. O bloco saiu na reescrita entregue pelo dono. O que ficou
 // é o papel da mensagem mais direta e a régua do menor próximo passo útil.
 
-assert.match(src, /MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade\./,
-  'a direta continua sendo objetiva sem forçar a barra');
+assert.match(src, /MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa/,
+  'a direta continua sendo objetiva sem pular etapa');
+assert.match(src, /NÃO INVENTE COMPROMISSO/,
+  'a direta também não pode forçar ligação, visita ou reunião sem base');
 assert.match(src, /Escolha o menor próximo passo útil para ESTE lead/,
   'o fecho continua tendo que ser um passo concreto e proporcional');
 // v1297 — a descrição do campo ganhou a régua "quando já dá pra entregar, entregue em vez de

@@ -96,11 +96,16 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
     'a regra precisa estar no prompt de sistema, valendo inclusive em modo prévia'
   );
 
-  // E o código continua NÃO reescrevendo mensagem: a correção é pela regra, não por filtro local.
-  // (v1274: a única coisa que o código acrescenta é a saudação que faltou numa retomada — nada
-  // do conteúdo comercial escrito pela IA é apagado, trocado ou reescrito.)
-  assert.match(pipeline, /Nenhuma sugestão de mensagem é reinterpretada nem tem conteúdo comercial reescrito pelo\n\s*\/\/ código/,
-    'a decisão de não mexer no conteúdo das sugestões continua valendo');
+  // v1370+ — o código continua sem "consertar frase" localmente. O que mudou é que, quando a
+  // conferência determinística pega uma violação bloqueante, existe UMA nova chamada de IA para
+  // reescrever somente A/B/C. O diagnóstico não é reinterpretado e não existe filtro textual
+  // silencioso trocando palavras depois da IA.
+  assert.match(pipeline, /AVISO BLOQUEANTE VIRA REPARO/,
+    'erro bloqueante das sugestões precisa acionar reparo explícito');
+  assert.match(pipeline, /Não refaça o diagnóstico\. Reescreva SOMENTE as três mensagens/,
+    'o reparo não pode reinterpretar a análise inteira');
+  assert.doesNotMatch(pipeline, /limparFrasesProibidas|melhorLimpa/,
+    'não pode voltar correção textual local e silenciosa');
 }
 
 console.log('v1219-esperando-resposta-e-nada-de-novidade-inventada: ok');

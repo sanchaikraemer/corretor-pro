@@ -33,7 +33,7 @@ assert.match(lacuna?.rotulo || "", /faixa total de investimento/i);
 
 const fichario = montarFicharioDaConversa(timeline, "Construtora Senger", lead, agora, estado);
 assert.match(fichario, /LACUNA COMERCIAL PRIORITÁRIA/);
-assert.match(fichario, /TRÊS mensagens devem tentar resolver ESTA MESMA lacuna/i,
+assert.match(fichario, /TRÊS mensagens devem ser três REDAÇÕES da MESMA jogada comercial/i,
   "o prompt factual precisa obrigar as três sugestões a obedecer ao mesmo objetivo");
 assert.doesNotMatch(fichario, /DIAS ÚTEIS PARA COMPLETAR O COMPROMISSO/,
   "Julsimar não tem ligação/visita combinada; não deve receber calendário para inventar compromisso");
@@ -52,9 +52,9 @@ const contexto = {
 // As três podem perguntar FAIXA, desde que sejam abordagens diferentes — não devem ganhar o antigo
 // aviso "pede a mesma coisa" só porque convergem no dado certo.
 const boas = avisosDeQualidadeDasMensagens([
-  { qual: "a", texto: "Bom dia, Julsimar! Sobre o Premium Office, para eu filtrar só as opções que realmente cabem, em que faixa total pretende investir?" },
-  { qual: "b", texto: "Bom dia, Julsimar! Quero organizar uma condição objetiva e evitar te mandar opção fora da conta. Qual faixa de investimento você quer considerar?" },
-  { qual: "c", texto: "Bom dia, Julsimar! Indo direto ao ponto: quanto pretende investir no total para eu separar as unidades compatíveis?" }
+  { qual: "a", texto: "Bom dia, Julsimar! Sobre o Premium Office, para eu filtrar só as opções que realmente cabem, em que faixa total pretende investir? A partir disso consigo separar as unidades compatíveis e montar a condição." },
+  { qual: "b", texto: "Bom dia, Julsimar! Quero organizar uma condição objetiva e evitar te mandar opção fora da conta. Qual faixa de investimento você quer considerar? Com essa faixa eu separo poucas opções e monto a condição em cima delas." },
+  { qual: "c", texto: "Bom dia, Julsimar! Indo direto ao ponto: quanto pretende investir no total? Com esse número eu consigo selecionar as unidades compatíveis e te passar uma condição objetiva." }
 ], contexto);
 assert.ok(!boas.some(a => a.motivos.some(m => /pede a mesma coisa/i.test(m))),
   "mesma lacuna prioritária não pode ser confundida com duplicidade");

@@ -59,11 +59,11 @@ assert.doesNotMatch(
   "o pedido não pode mais exigir três próximos passos diferentes em qualquer situação"
 );
 
-// v1291 — o dono reescreveu o pedido inteiro; a exceção deixou de ser um bloco em caixa alta e
-// virou uma linha da lista de regras das três mensagens. A garantia é a mesma: quando só existe
-// um próximo passo adequado, as três podem convergir por abordagens diferentes.
-assert.match(pedido, /Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes/i,
-  "o pedido precisa prever a exceção de convergência");
+// v1372 — a convergência ficou mais forte quando existe uma lacuna prioritária: não são três
+// caminhos; são três redações da mesma jogada. Sem lacuna única, o Cérebro ainda pode escolher
+// alternativas diferentes. O que este teste guarda é que o pedido nunca força um terceiro passo pior.
+assert.match(pedido, /Se houver um único próximo passo adequado, as três DEVEM convergir para ele/i,
+  "o pedido precisa prever a convergência quando só existe um passo adequado");
 
 // E precisa continuar proibindo o efeito colateral que a regra antiga provocava: diferenciar as
 // mensagens inventando diferença que não existe.
@@ -75,11 +75,11 @@ assert.match(
 
 // A convergência não pode virar permissão pra repetir a mesma mensagem três vezes: cada uma
 // continua tendo o seu papel escrito.
-assert.match(pedido, /MAIS SUAVE explora\/resolve o ponto mais importante com menor pressão/i);
-assert.match(pedido, /MAIS DIRETA é objetiva/i);
+assert.match(pedido, /MAIS SUAVE reduz a pressão pela forma de escrever; não muda a pergunta central/i);
+assert.match(pedido, /MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa/i);
 
-// "maisDireta" continua sem poder forçar avanço em conversa que ainda não amadureceu
-// (regra 20 do Cérebro Comercial V3).
-assert.match(pedido, /nunca força visita, proposta ou decisão antes da maturidade/i);
+// A direta continua sem poder inventar avanço ou compromisso fora da maturidade real.
+assert.match(pedido, /NÃO INVENTE COMPROMISSO/i);
+assert.match(pedido, /Alguma mensagem força visita\/encontro\/proposta sem maturidade\?/i);
 
 console.log("v1206-tres-mensagens-podem-convergir: ok");
