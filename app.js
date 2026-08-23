@@ -5342,7 +5342,7 @@ function cp704Css(){
   };
   function cp1348TextoNaTela(texto){
     return String(texto || "").replace(CP1348_MARCADOR, (_todo, tipo) =>
-      CP1348_CURTO[String(tipo).trim().toLowerCase()] || "📎 Arquivo enviado — não veio no envio da conversa");
+      CP1348_CURTO[String(tipo).trim().toLowerCase()] || "📎 Arquivo enviado — conteúdo não processado");
   }
 
   function cp1345UltimasMensagensHTML(lead){
@@ -5795,7 +5795,8 @@ function renderLeadFoco(lead){
     // v1370 — se a orientação é esperar, o card não pode gritar "Fazer agora". O estado visual
     // passa a obedecer a própria análise: AGUARDAR agora, mensagem preparada para a retomada.
     const tituloAcao=aguardarContato?'Aguardar':'Fazer agora';
-    const subtituloMensagens=aguardarContato?'Mensagem preparada para a retomada · escolha a melhor quando chegar a hora':'Sugestões de mensagem · copie a melhor opção';
+    const perguntaPendente=aguardarContato && a?.recomendacaoContato?.perguntaPendente===true;
+    const subtituloMensagens=perguntaPendente?'Nenhuma mensagem para enviar agora':(aguardarContato?'Mensagem preparada para a retomada · escolha a melhor quando chegar a hora':'Sugestões de mensagem · copie a melhor opção');
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     // v937 — "Última mensagem" puxa a hora da PRÓPRIA última mensagem real (mesma fonte do
@@ -5908,9 +5909,13 @@ function renderLeadFoco(lead){
             <div class="cp704-msg-sub">${escapeHtml(subtituloMensagens)}</div>
             ${cp1308FaixaModoHtml(a)}
             ${cp1225LinhaDeOndeVeio(a)}
+            ${perguntaPendente
+              ? `<div class="cp704-empty-analysis"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`
+              : `
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis">${cp704Text(a.falhaAmigavel)?`<b style="color:var(--risco)">${escapeHtml(cp704Text(a.falhaAmigavel))}</b><span>Preferimos avisar a te entregar uma leitura pior sem você saber.</span>`:`<b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Mais" no topo e escolha "Reanalisar" para criar a sugestão correta.'}</span>`}${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
             ${msgs.ordemDeEnvio?`<div style="border:1px solid rgba(86,199,242,.4);background:rgba(86,199,242,.08);border-radius:10px;padding:9px 11px;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--text)"><b>Ordem de envio:</b> ${escapeHtml(msgs.ordemDeEnvio)}</div>`:''}<div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}${cp1308ClasseSuja(a,'a')}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button>${cp1308AvisoSugestaoHtml(a,'a')}</div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}${cp1308ClasseSuja(a,'b')}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button>${cp1308AvisoSugestaoHtml(a,'b')}</div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}${cp1308ClasseSuja(a,'c')}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button>${cp1308AvisoSugestaoHtml(a,'c')}</div>`:''}</div>`}
+              `}
           </section>
           ${cp717MudancasHtml(a)}
         </main>
