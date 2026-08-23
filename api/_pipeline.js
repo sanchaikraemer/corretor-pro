@@ -1433,8 +1433,18 @@ export function perguntasDoClienteSemResposta(timeline, corretorNome = "", lead 
       if (!assunto.size) continue; // sem palavra de conteúdo não dá pra conferir resposta: não acusa
 
       let respondida = false;
-      for (const palavra of assunto) {
-        if (ditoPeloCorretor.has(palavra)) { respondida = true; break; }
+      // v1374 — resposta por SENTIDO antes do cruzamento literal. O caso Augusta mostrou o
+      // buraco: "Onde fica este imóvel?" continuava aberta mesmo depois de "Fica no Quality
+      // Residence, na Rua Carlos Barbosa, 375, bem no Centro" porque as palavras úteis da
+      // pergunta ("onde", "imóvel") naturalmente não precisam se repetir na resposta. Isso
+      // contaminava o fichário inteiro e fazia a IA "responder" localização de novo.
+      const topicoInformativo = _topicoInformativoDaPerguntaDoCliente(nucleo);
+      if (topicoInformativo && depois.some(resp => _respostaDoCorretorSustentaTopico(topicoInformativo, resp))) {
+        respondida = true;
+      } else {
+        for (const palavra of assunto) {
+          if (ditoPeloCorretor.has(palavra)) { respondida = true; break; }
+        }
       }
       const chave = _semAcentoMinuscula(nucleo).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
       if (!chave) continue;
@@ -1940,7 +1950,11 @@ export function topicosComerciaisConfirmadosDoCliente(timeline, corretorNome = "
     // Faixa de valor só é "respondida" quando a própria fala do cliente liga o número ao que pode
     // pagar/investir. Preço que ELE apenas repete ou pergunta não vira orçamento.
     const valores = valoresNaMensagem(declarativo);
-    if (_CLIENTE_DIZ_FAIXA.test(declarativo) || (valores.length && /\b(posso|consigo|pretendo|quero|investir|pagar|teto|or[çc]amento|limite|faixa|parcela)\b/i.test(declarativo))) {
+    // v1374 — "Quero saber mais sobre o apartamento de R$ 430 mil" é interesse numa OFERTA,
+    // não orçamento declarado. O verbo "quero" sozinho não liga o número à capacidade de compra.
+    // Só fecha faixa quando a fala traz capacidade/intenção financeira ou uma construção explícita
+    // de faixa/teto.
+    if (_CLIENTE_DIZ_FAIXA.test(declarativo) || (valores.length && /\b(posso|consigo|pretendo|investir|pagar|teto|or[çc]amento|limite|faixa|parcela)\b/i.test(declarativo))) {
       encontrados.push({ id: "faixa_valor", nome: "faixa de valor/orçamento" });
     }
 
@@ -2288,6 +2302,243 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
     semCapitalHoje: clienteSemCapitalHojeComPrazo(timeline, corretorNome, lead, agora),
     permuta: permutaOferecidaPeloCliente(timeline, corretorNome, lead, agora)
   };
+}
+
+
+// ─── v1374 — ANÁLISE DE FUNDAMENTO: ESTRUTURAR A HISTÓRIA ANTES DE PEDIR CONDUÇÃO ───────────
+//
+// Caso real que revelou o buraco (Augusta, 23/08/2026): com o MESMO histórico, uma leitura manual
+// separou o sorteio de 2025 da negociação iniciada pelo anúncio em 22/08/2026, consolidou o que já
+// estava definido (moradia, produto, valor, localização), viu o que o corretor já tinha explicado e
+// os materiais que acabara de mandar. A análise do app, embora recebesse a conversa inteira, saltou
+// direto para "criar três mensagens" e reciclou exatamente esses assuntos.
+//
+// O conserto não é mais uma frase no prompt. Antes da IA, o código monta um FUNDAMENTO factual da
+// própria conversa: onde começa o episódio comercial atual depois de um silêncio grande, o que o
+// cliente já definiu, o que ele perguntou e já foi respondido, o que o corretor já informou, quais
+// materiais/links já foram enviados e quais pendências continuam realmente abertas. O histórico
+// integral continua indo junto — o fundamento NÃO substitui a conversa e não inventa semântica.
+//
+// A distância de 60 dias não declara que a negociação anterior "morreu". Ela só cria um marco de
+// contexto para impedir que um contato promocional antigo comande, por inércia, uma negociação nova.
+// Se o trecho atual retomar explicitamente um assunto antigo, a IA continua vendo o histórico inteiro
+// e pode reconectá-lo.
+const _CORTE_CONTEXTO_FORTE_DIAS = 60;
+
+export function segmentarHistoricoComercial(timeline, corretorNome = "", lead = {}, corteDias = _CORTE_CONTEXTO_FORTE_DIAS) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  if (!arr.length) return {
+    houveCorteForte: false, gapDias: null, inicioAtual: null, fimAnterior: null,
+    atual: [], anterior: [], total: 0
+  };
+
+  let corte = 0;
+  let gapEscolhido = null;
+  for (let i = 1; i < arr.length; i++) {
+    const a = dataCivilDeMensagem(arr[i - 1]);
+    const b = dataCivilDeMensagem(arr[i]);
+    if (a?.dia == null || b?.dia == null) continue;
+    const gap = b.dia - a.dia;
+    if (gap >= Math.max(1, Number(corteDias) || _CORTE_CONTEXTO_FORTE_DIAS)) {
+      // Usa o corte forte MAIS RECENTE. O que vem depois é o episódio que precisa mandar agora.
+      corte = i;
+      gapEscolhido = gap;
+    }
+  }
+
+  const atual = arr.slice(corte);
+  const anterior = corte > 0 ? arr.slice(0, corte) : [];
+  const primeiroAtual = atual[0] || null;
+  const ultimoAnterior = anterior.length ? anterior[anterior.length - 1] : null;
+  return {
+    houveCorteForte: corte > 0,
+    gapDias: corte > 0 ? gapEscolhido : null,
+    inicioAtual: primeiroAtual ? {
+      data: String(primeiroAtual?.date || ""), hora: String(primeiroAtual?.time || ""),
+      autor: String(primeiroAtual?.author || ""), texto: _trechoCurto(primeiroAtual?.text || "", 180)
+    } : null,
+    fimAnterior: ultimoAnterior ? {
+      data: String(ultimoAnterior?.date || ""), hora: String(ultimoAnterior?.time || ""),
+      autor: String(ultimoAnterior?.author || ""), texto: _trechoCurto(ultimoAnterior?.text || "", 160)
+    } : null,
+    atual,
+    anterior,
+    total: arr.length
+  };
+}
+
+function _topicoInformativoDaPerguntaDoCliente(texto = "") {
+  const t = _semAcentoMinuscula(texto).replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  if (/\b(onde|localizacao|endereco|em qual cidade|qual cidade|qual bairro|que bairro)\b/.test(t)) return "localizacao";
+  if (/\b(qual o valor|qual valor|quanto custa|quanto fica|preco|valor do)\b/.test(t)) return "valor";
+  if (/\b(financi|forma de pagamento|condicoes de pagamento|qual entrada|parcel|reforco|saldo)\b/.test(t)) return "pagamento";
+  if (/\b(quantos?|quantas?)\b.{0,24}\b(dormitorio|quarto|suite|vaga|box)\b/.test(t)) return "caracteristicas";
+  if (/\b(quando|prazo|entrega|fica pronto|fica pronta|previsao)\b/.test(t)) return "prazo";
+  if (/\b(tem|possui|conta com)\b.{0,28}\b(piscina|academia|salao|lavanderia|elevador|churrasqueira)\b/.test(t)) return "estrutura";
+  return "";
+}
+
+function _respostaDoCorretorSustentaTopico(topico = "", texto = "") {
+  const t = _semAcentoMinuscula(texto).replace(/\s+/g, " ");
+  if (!t) return false;
+  if (topico === "localizacao") return /\b(rua|avenida|bairro|centro|cidade|localizacao|endereco|fica no|fica na)\b/.test(t) || /maps\.(?:app|google)|google\.com\/maps/.test(t);
+  if (topico === "valor") return /r\$\s*\d|\b\d{2,3}(?:[ .]\d{3})+\b|\bvalor\b.{0,24}\b(?:fica|e|de)\b/.test(t);
+  if (topico === "pagamento") return /\b(entrada|parcela|parcelado|financiamento|financiar|saldo|reforco|condicoes|forma de pagamento)\b|\b\d{1,3}%\b/.test(t);
+  if (topico === "caracteristicas") return /\b(dormitorio|quarto|suite|vaga|box)\b/.test(t);
+  if (topico === "prazo") return /\b(entrega|previsao|pronto|pronta|obra|planta|20\d{2})\b/.test(t);
+  if (topico === "estrutura") return /\b(piscina|academia|salao|lavanderia|elevador|churrasqueira)\b/.test(t);
+  return false;
+}
+
+export function perguntasInformativasRespondidasDoCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const lados = arr.map(m => _ladoDaMensagem(m, corretorNome, lead));
+  const hojeDia = _hojeDiaCivil(agora);
+  const respondidas = [];
+
+  for (let i = 0; i < arr.length; i++) {
+    if (lados[i] !== "cliente") continue;
+    const texto = String(arr[i]?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    for (const parte of texto.split(/(?<=[.!?])\s+|\n+/)) {
+      const pergunta = String(parte || "").trim();
+      if (!pergunta || !(pergunta.includes("?") || _COMECO_DE_PERGUNTA.test(pergunta))) continue;
+      const topico = _topicoInformativoDaPerguntaDoCliente(pergunta);
+      if (!topico) continue;
+
+      const respostas = [];
+      for (let j = i + 1; j < arr.length; j++) {
+        // A próxima fala do cliente encerra a janela da resposta daquela pergunta.
+        if (lados[j] === "cliente") break;
+        if (lados[j] !== "corretor") continue;
+        const resp = String(arr[j]?.text || "").replace(/\s+/g, " ").trim();
+        if (!resp) continue;
+        respostas.push(resp);
+      }
+      const respostaQueFecha = respostas.find(r => _respostaDoCorretorSustentaTopico(topico, r));
+      if (!respostaQueFecha) continue;
+      const p = dataCivilDeMensagem(arr[i]);
+      respondidas.push({
+        topico,
+        pergunta: _trechoCurto(pergunta, 150),
+        resposta: _trechoCurto(respostaQueFecha, 210),
+        data: p?.texto || "data não identificada",
+        diasAtras: _diasDesde(p?.dia ?? null, hojeDia)
+      });
+    }
+  }
+
+  // Fica com a resposta mais recente de cada tópico: é ela que representa o estado atual.
+  const porTopico = new Map();
+  for (const x of respondidas) porTopico.set(x.topico, x);
+  return [...porTopico.values()].slice(-MAX_FICHARIO);
+}
+
+export function materiaisJaEnviadosPeloCorretor(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  const hojeDia = _hojeDiaCivil(agora);
+  const out = [];
+  for (const m of arr) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    const ehMaterial = /\[(?:Arquivo enviado|Imagem lida|Documento lido|Link lido|Áudio transcrito)/i.test(texto)
+      || /https?:\/\//i.test(texto)
+      || /\b(?:pdf|folder|catalogo|catálogo|video|vídeo|fotos?|imagens?|mapa|maps)\b/i.test(texto);
+    if (!ehMaterial) continue;
+    const p = dataCivilDeMensagem(m);
+    out.push({
+      data: p?.texto || "data não identificada",
+      diasAtras: _diasDesde(p?.dia ?? null, hojeDia),
+      trecho: _trechoCurto(texto, 210)
+    });
+  }
+  return out.slice(-MAX_FICHARIO);
+}
+
+export function fundamentosDeterministicosDaConversa(timeline, corretorNome = "", lead = {}, agora = new Date(), estadoCompleto = null) {
+  const episodio = segmentarHistoricoComercial(timeline, corretorNome, lead);
+  const atual = episodio.atual.length ? episodio.atual : (Array.isArray(timeline) ? timeline : []);
+  const estadoAtual = episodio.houveCorteForte
+    ? montarEstadoComercialDeterministico(atual, corretorNome, lead, agora)
+    : (estadoCompleto || montarEstadoComercialDeterministico(atual, corretorNome, lead, agora));
+
+  const informacoesDoCorretor = atual
+    .filter(m => ehMensagemRealParaTempo(m) && _ladoDaMensagem(m, corretorNome, lead) === "corretor")
+    .map(m => ({ data: String(m?.date || "data não identificada"), trecho: _trechoCurto(m?.text || "", 220) }))
+    .filter(x => x.trecho && !mensagemEhSoCortesia(x.trecho))
+    .slice(-10);
+
+  const respondidas = perguntasInformativasRespondidasDoCliente(atual, corretorNome, lead, agora);
+  const materiais = materiaisJaEnviadosPeloCorretor(atual, corretorNome, lead, agora);
+  const definidos = (estadoAtual.topicosConfirmados || []).map(t => ({
+    id: t.id, nome: t.nome, fala: t.fala, data: t.data
+  }));
+  const abertos = [];
+  const respondidasNormalizadas = new Set(respondidas.map(x => _semAcentoMinuscula(x.pergunta).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim()));
+  for (const q of (estadoAtual.perguntasDoClienteAbertas || [])) {
+    const nq = _semAcentoMinuscula(q?.texto || "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    // A lista antiga de perguntas abertas é conservadora por palavras compartilhadas e pode
+    // deixar "Onde fica?" aberta mesmo depois de uma resposta literal com rua/centro. O detector
+    // informativo acima é mais específico; se ele provou resposta, não contradiga o fundamento.
+    if (nq && respondidasNormalizadas.has(nq)) continue;
+    abertos.push(`Pergunta do cliente ainda aberta: "${q.texto}"`);
+  }
+  for (const p of (estadoAtual.promessasNaoCumpridas || [])) abertos.push(`Promessa do corretor ainda aberta: "${p.texto || p.trecho || "promessa registrada"}"`);
+  if (estadoAtual.compromisso?.continuaValido && estadoAtual.compromisso?.pendencia) abertos.push(`Compromisso ainda aberto: ${estadoAtual.compromisso.pendencia}`);
+
+  return {
+    episodio: {
+      houveCorteForte: episodio.houveCorteForte,
+      gapDias: episodio.gapDias,
+      inicioAtual: episodio.inicioAtual,
+      fimAnterior: episodio.fimAnterior,
+      mensagensNoEpisodioAtual: episodio.atual.length,
+      mensagensAnteriores: episodio.anterior.length
+    },
+    definidosPeloCliente: definidos,
+    perguntasDoClienteJaRespondidas: respondidas,
+    informacoesJaDadasPeloCorretor: informacoesDoCorretor,
+    materiaisJaEnviados: materiais,
+    pendenciasFatuaisAbertas: abertos
+  };
+}
+
+export function montarBlocoAnaliseDeFundamento(fundamentos = {}) {
+  const ep = fundamentos?.episodio || {};
+  const linhas = [
+    "ANÁLISE DE FUNDAMENTO — LEIA ISTO ANTES DE PENSAR EM PRÓXIMA MENSAGEM",
+    "Este bloco foi calculado da própria conversa. Ele NÃO substitui o histórico completo; serve para impedir que a redação pule a compreensão."
+  ];
+  if (ep.houveCorteForte) {
+    linhas.push(`- CORTE DE CONTEXTO FORTE: houve ${ep.gapDias} dias entre o fim do trecho anterior (${ep.fimAnterior?.data || "data não identificada"}) e o início do episódio atual (${ep.inicioAtual?.data || "data não identificada"}).`);
+    linhas.push(`- Trate o trecho anterior como CONTEXTO HISTÓRICO. Ele só volta a comandar a negociação atual se o episódio recente fizer ligação explícita com ele.`);
+    linhas.push(`- EPISÓDIO ATUAL começa em: [${ep.inicioAtual?.data || ""} ${ep.inicioAtual?.hora || ""}] ${ep.inicioAtual?.autor || ""}: ${ep.inicioAtual?.texto || ""}`);
+  } else {
+    linhas.push("- Não houve corte temporal forte; trate a conversa como um único episódio, respeitando mudanças internas de necessidade/critério.");
+  }
+
+  const definidos = fundamentos?.definidosPeloCliente || [];
+  linhas.push(`- JÁ DEFINIDO PELO CLIENTE NO EPISÓDIO ATUAL: ${definidos.length ? definidos.map(x => `${x.nome}: \"${x.fala}\"`).join(" | ") : "nenhum tópico estruturado identificado"}.`);
+
+  const respondidas = fundamentos?.perguntasDoClienteJaRespondidas || [];
+  linhas.push(`- PERGUNTAS DO CLIENTE JÁ RESPONDIDAS PELO CORRETOR: ${respondidas.length ? respondidas.map(x => `${x.topico}: \"${x.pergunta}\" → \"${x.resposta}\"`).join(" | ") : "nenhuma identificada"}.`);
+
+  const informadas = fundamentos?.informacoesJaDadasPeloCorretor || [];
+  linhas.push("- O QUE O CORRETOR JÁ INFORMOU/CONDUZIU NO EPISÓDIO ATUAL (não apresente de novo como se fosse novidade):");
+  if (informadas.length) for (const x of informadas) linhas.push(`  • [${x.data}] ${x.trecho}`);
+  else linhas.push("  • nenhuma informação substantiva identificada");
+
+  const materiais = fundamentos?.materiaisJaEnviados || [];
+  linhas.push("- MATERIAIS/LINKS JÁ ENVIADOS NO EPISÓDIO ATUAL:");
+  if (materiais.length) for (const x of materiais) linhas.push(`  • [${x.data}] ${x.trecho}`);
+  else linhas.push("  • nenhum material/link identificado");
+
+  const abertas = fundamentos?.pendenciasFatuaisAbertas || [];
+  linhas.push(`- PENDÊNCIAS FATUAIS AINDA ABERTAS: ${abertas.length ? abertas.join(" | ") : "nenhuma pendência factual explícita identificada"}.`);
+  linhas.push("- O próximo passo só pode ser escolhido DEPOIS de confrontar este fundamento com as últimas mensagens e com o histórico completo. Não reabra assunto já resolvido apenas para preencher uma das três sugestões.");
+  return linhas.join("\n");
 }
 
 export function temEntregaConcretaPendente(estado = {}) {
@@ -6473,11 +6724,23 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // texto delas. Sem esse fato no pedido, a IA não tinha como saber que a oferta que ela ia
   // escrever era a mesma que o cliente já ignorou duas vezes (print do dono de 14/08/2026).
   // v1337 — calcula UMA vez o estado factual e reaproveita na leitura, na redação e na conferência.
-  const estadoComercial = montarEstadoComercialDeterministico(timelineArr, corretorNome, lead || {}, _agoraDt);
+  // v1374 — quando existe um hiato forte, o estado que MANDA na condução nasce do episódio atual.
+  // A conversa inteira continua indo para a IA logo abaixo; nada é apagado. Isso evita que uma
+  // pergunta promocional de meses atrás reapareça no fichário como se ainda fosse a pauta de hoje.
+  const episodioComercial = segmentarHistoricoComercial(timelineArr, corretorNome, lead || {});
+  const timelineDoEpisodioAtual = episodioComercial.houveCorteForte ? episodioComercial.atual : timelineArr;
+  const estadoComercial = montarEstadoComercialDeterministico(timelineDoEpisodioAtual, corretorNome, lead || {}, _agoraDt);
+  // v1374 — antes da leitura da IA, monta o fundamento factual do MESMO histórico. É a diferença
+  // entre "ter a conversa no prompt" e realmente chegar à redação sabendo o que pertence ao
+  // episódio atual, o que já foi definido/respondido e o que o corretor acabou de enviar.
+  const fundamentosDeterministicos = fundamentosDeterministicosDaConversa(
+    timelineArr, corretorNome, lead || {}, _agoraDt, estadoComercial
+  );
+  const blocoAnaliseDeFundamento = montarBlocoAnaliseDeFundamento(fundamentosDeterministicos);
   const esperaPerguntaComercial = deveAguardarPerguntaComercial({
-    timeline: timelineArr, corretorNome, lead: lead || {}, agora: _agoraDt, diasParaRetomada
+    timeline: timelineDoEpisodioAtual, corretorNome, lead: lead || {}, agora: _agoraDt, diasParaRetomada
   });
-  const lacunaPrioritaria = lacunaComercialPrioritaria(timelineArr, corretorNome, lead || {}, estadoComercial);
+  const lacunaPrioritaria = lacunaComercialPrioritaria(timelineDoEpisodioAtual, corretorNome, lead || {}, estadoComercial);
   const semResposta = estadoComercial.tentativasSemResposta;
   const blocoTentativasSemResposta = semResposta.tentativas > 0
     ? `TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA: ${semResposta.tentativas}.
@@ -6489,7 +6752,7 @@ ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
   // corretor já fez, próximos passos que ele já propôs, e a entrada em permuta oferecida pelo
   // cliente com a faixa de compra que ela abre. Tudo calculado sobre o texto desta conversa —
   // ver montarFicharioDaConversa. String vazia quando a conversa não tem nada disso.
-  const ficharioDaConversa = montarFicharioDaConversa(timelineArr, corretorNome, lead || {}, _agoraDt, estadoComercial);
+  const ficharioDaConversa = montarFicharioDaConversa(timelineDoEpisodioAtual, corretorNome, lead || {}, _agoraDt, estadoComercial);
 
   // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
@@ -6760,8 +7023,10 @@ Antes de devolver o JSON, confirme:
 8. Alguma mensagem inventa novidade, urgência, ligação, visita, dia, hora ou compromisso sem base no histórico?
 9. Se existe LACUNA COMERCIAL PRIORITÁRIA, as três mensagens resolvem essa mesma lacuna sem pular para outra?
 10. A análise considerou o começo, o meio e o fim do histórico fornecido?
-11. A resposta está fiel ao Cérebro Comercial atual?
-12. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+11. O objeto fundamentos separa corretamente episódio atual de contexto antigo e registra o que já foi respondido/informado/enviado?
+12. Alguma das três mensagens reabre assunto que o próprio fundamento marcou como resolvido ou apresenta de novo como novidade algo já informado? Se sim, reescreva.
+13. A resposta está fiel ao Cérebro Comercial atual?
+14. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
     alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   const revisaoSoDaLeitura = `REVISÃO FINAL SILENCIOSA
@@ -6772,7 +7037,8 @@ Antes de devolver o JSON, confirme:
 4. Você repetiu pergunta ou material já resolvido?
 5. O nextAction é realmente o menor passo útil agora?
 6. A análise considerou o começo, o meio e o fim do histórico fornecido?
-7. A leitura está fiel ao Cérebro Comercial atual?`;
+7. O objeto fundamentos separa corretamente episódio atual de contexto anterior e registra o que já foi resolvido/informado/enviado?
+8. A leitura está fiel ao Cérebro Comercial atual?`;
 
   const revisaoSoDasMensagens = `REVISÃO FINAL SILENCIOSA
 Antes de devolver o JSON, confirme:
@@ -6780,10 +7046,11 @@ Antes de devolver o JSON, confirme:
 2. Alguma mensagem força visita/encontro/proposta sem maturidade?
 3. Alguma mensagem inventa novidade, urgência, ligação, visita, dia, hora ou compromisso sem base no histórico?
 4. Se existe LACUNA COMERCIAL PRIORITÁRIA, as três buscam resolver essa mesma lacuna?
-5. Alguma mensagem repete pergunta que a leitura marcou como já respondida, ou pede o que o
-   cliente já informou?
-6. As três estão fiéis ao Cérebro Comercial atual?
-7. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+5. Alguma mensagem repete pergunta que a leitura/fundamento marcou como já respondida, pede o que o
+   cliente já informou ou reapresenta como novidade algo que o corretor já entregou?
+6. As três respeitam o episódio atual e não puxam de volta uma pauta antiga sem ligação explícita?
+7. As três estão fiéis ao Cérebro Comercial atual?
+8. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   const prompt = `Execute a análise usando o Cérebro Comercial e TODO o contexto fornecido abaixo.
@@ -6798,7 +7065,9 @@ Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
 ${ficharioDaConversa ? `
 ${ficharioDaConversa}
-` : ""}Corretor: ${corretorNome}
+` : ""}${blocoAnaliseDeFundamento}
+
+Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
 A saudação, o reconhecimento ou não do intervalo e o tipo de próximo passo devem seguir o Cérebro.
@@ -6812,6 +7081,18 @@ ${cortadaPorLimiteTecnico
   : entradaIncremental
   ? "Esta execução recebeu resumo anterior + mensagens novas por configuração incremental. Diferencie claramente resumo e mensagens reais e não transforme conclusão antiga em fato se a novidade a contradisser."
   : "Leia a conversa inteira do começo ao fim antes de concluir qualquer coisa. Não analise apenas as últimas mensagens."}
+
+ETAPA OBRIGATÓRIA 1 — FUNDAMENTO ANTES DA CONDUÇÃO
+Antes de escolher nextAction ou escrever qualquer sugestão, reconstrua mentalmente a história em ordem e
+preencha primeiro o objeto "fundamentos" do JSON. Ele precisa responder, com base no histórico inteiro:
+- qual é o episódio comercial que está ativo HOJE e o que é apenas contexto anterior;
+- o que o cliente já definiu e continua válido;
+- o que o corretor já respondeu/informou e portanto NÃO pode voltar como descoberta ou novidade;
+- quais materiais, links, vídeos, imagens ou propostas já foram enviados;
+- quais assuntos estão realmente resolvidos e quais continuam abertos;
+- como as últimas mensagens mudam o sentido do que veio antes.
+Só DEPOIS disso escolha condução, nextAction e mensagens. Se uma sugestão contradiz o fundamento ou reabre
+assunto já resolvido, a sugestão está errada — mude a sugestão, não o fundamento.
 
 Reconstrua a situação comercial atual sem seguir checklist. O objetivo é entender ESTE cliente:
 - o que ele realmente quer hoje;
@@ -6840,6 +7121,16 @@ do próprio cliente.
 Formato JSON obrigatório:
 {
   "quemEhOCliente":"rótulo exato do autor que é o cliente, ou Não identificado",
+  "fundamentos":{
+    "negociacaoAtual":"qual episódio/pauta está ativo agora e onde ele começou; não confunda contato antigo com a negociação atual",
+    "contextoAnterior":"o que existia antes e se isso ainda influencia ou não a negociação atual",
+    "fatosJaDefinidos":["fatos/critério que o cliente já definiu e continuam válidos"],
+    "oCorretorJaInformou":["informações/condições/localização/características que o corretor já entregou — não trate como novidade"],
+    "materiaisJaEnviados":["materiais, links, fotos, vídeos, PDFs, mapas ou propostas já enviados"],
+    "assuntosJaResolvidos":["perguntas ou pontos que já tiveram resposta suficiente neste episódio"],
+    "oQueSegueAberto":["somente questões que continuam de fato abertas e podem mudar a condução"],
+    "leituraCronologica":"3 a 6 frases curtas reconstruindo causa e efeito do episódio atual, do início até a última mensagem"
+  },
   "summary":"resumo comercial curto do estado atual, sem inventar causa",
   "leituraDaConversa":{
     "comoConduzir":"orientação comercial objetiva: melhor condução agora, por quê e o que evitar neste momento",
@@ -6972,6 +7263,7 @@ ${duasEtapas ? revisaoSoDaLeitura : revisaoCompleta}`;
       const caudaChars = Number(process.env.DIRECIONA_CAUDA_MENSAGENS_CHARS || 14000);
       const caudaDaConversa = timelineText.length > caudaChars ? timelineText.slice(-caudaChars) : timelineText;
       const leituraParaEscrever = JSON.stringify({
+        fundamentos: parsedRaw.fundamentos,
         summary: parsedRaw.summary,
         leituraDaConversa: parsedRaw.leituraDaConversa,
         diagnostico: parsedRaw.diagnostico,
@@ -6996,7 +7288,9 @@ Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
 ${ficharioDaConversa ? `
 ${ficharioDaConversa}
-` : ""}Corretor: ${corretorNome}
+` : ""}${blocoAnaliseDeFundamento}
+
+Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
 A LEITURA QUE VOCÊ JÁ FEZ DESTA CONVERSA (é a sua, está fechada; as três mensagens executam ELA):
@@ -7055,6 +7349,7 @@ ${revisaoSoDasMensagens}`;
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
     const leituraRaw = (raw.leituraDaConversa && typeof raw.leituraDaConversa === "object") ? raw.leituraDaConversa : {};
+    const fundamentosRaw = (raw.fundamentos && typeof raw.fundamentos === "object") ? raw.fundamentos : {};
     const msgARaw = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
     const msgBRaw = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
     const msgCRaw = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
@@ -7135,6 +7430,7 @@ ${revisaoSoDasMensagens}`;
       const sobraReparoMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 3000;
       if (sobraReparoMs >= 12000) {
         const leituraFechadaParaReparo = JSON.stringify({
+          fundamentos: raw.fundamentos,
           summary: raw.summary,
           leituraDaConversa: raw.leituraDaConversa,
           diagnostico: raw.diagnostico,
@@ -7337,6 +7633,16 @@ Devolva JSON válido exatamente neste formato:
       inteligenciaObservada: null,
       materiais: [],
       lembreteSugerido: null,
+      fundamentosDaAnalise: {
+        negociacaoAtual: clean(fundamentosRaw.negociacaoAtual),
+        contextoAnterior: clean(fundamentosRaw.contextoAnterior),
+        fatosJaDefinidos: arr(fundamentosRaw.fatosJaDefinidos),
+        oCorretorJaInformou: arr(fundamentosRaw.oCorretorJaInformou),
+        materiaisJaEnviados: arr(fundamentosRaw.materiaisJaEnviados),
+        assuntosJaResolvidos: arr(fundamentosRaw.assuntosJaResolvidos),
+        oQueSegueAberto: arr(fundamentosRaw.oQueSegueAberto),
+        leituraCronologica: clean(fundamentosRaw.leituraCronologica)
+      },
       leituraDaConversa: {
         comoConduzir: clean(leituraRaw.comoConduzir),
         // v1320 — as seções da leitura completa (formato aprovado pelo dono em 20/08/2026).
