@@ -141,11 +141,16 @@ assert.match(app, /Mensagem preparada para a retomada/);
 assert.match(app, /cp704-agora\$\{aguardarContato\?' cp704-aguardar':''\}/,
   "o card precisa mudar visualmente quando a análise manda esperar");
 
-// Prompt: não pode sobreviver a regra antiga que mandava variar o DADO ou inventar dia/hora.
+// Governança do prompt + proteção final: o miolo medido da v1327 NÃO é reescrito sem bateria.
+// A regra antiga de diversidade ainda pode existir dentro daquele bloco histórico/medido; o que
+// garante a saída atual é a conferência determinística + o reparo pós-medição, que não altera o
+// diagnóstico e não mente para o porteiro dizendo que a bateria foi rodada.
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
-assert.doesNotMatch(pipeline, /Pelo menos\s+\n?\s*duas das três precisam pedir coisas diferentes/i);
-assert.doesNotMatch(pipeline, /Quando a jogada for encontro, visita, avaliação, simulação ou ligação, PROPONHA DIA E HORA/i);
-assert.match(pipeline, /NÃO INVENTE COMPROMISSO/);
+assert.match(pipeline, /systemPromptReparoMensagens/,
+  "o reparo precisa ter um system prompt próprio, sem herdar instruções antigas conflitantes");
+assert.match(pipeline, /MODO DE CONVERGÊNCIA DO REPARO/);
+assert.match(pipeline, /A, B e C devem pedir exatamente essa lacuna/i);
+assert.match(pipeline, /Não crie ligação, visita, reunião, avaliação, dia, horário ou compromisso/i);
 assert.match(pipeline, /analise-mensagens-reparo/,
   "violações bloqueantes precisam disparar reparo automático antes da resposta");
 assert.match(pipeline, /AVISO BLOQUEANTE VIRA REPARO/,

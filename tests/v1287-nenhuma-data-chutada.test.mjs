@@ -31,9 +31,15 @@ for (const padrao of CHUTES_PROIBIDOS) {
     `o pedido voltou a mandar a IA cravar dia/hora (${padrao}) — é exatamente o que o dono mandou acabar na v1287`);
 }
 
-// E o que entra no lugar continua sendo proporcional: nada de forçar encontro antes da hora.
-assert.match(pedido, /NÃO INVENTE COMPROMISSO/,
-  'sem data chutada, ligação, visita e reunião continuam proibidas sem base real');
-assert.match(pedido, /Não crie "posso te ligar terça às 10h"/,
-  'a própria regra das mensagens precisa exemplificar que agenda inventada continua proibida');
+// E a proteção ficou mais forte na v1370/v1372: além de a chamada principal não receber ordens
+// para chutar agenda, o código confere deterministicamente compromisso e tempo novo na saída;
+// se reprovar, o revisor pós-medição recebe a proibição explícita.
+assert.match(src, /function _tipoCompromissoDaMensagem\(/,
+  'o sistema precisa detectar ligação, visita, reunião e outros compromissos na mensagem gerada');
+assert.match(src, /function _temTempoNovoSemBase\(/,
+  'dia ou horário novo sem base no histórico precisa ser detectado pelo código');
+assert.match(src, /NÃO INVENTE COMPROMISSO/,
+  'o reparo precisa proibir explicitamente compromisso inventado');
+assert.match(src, /Não crie "posso te ligar terça às 10h"/,
+  'o revisor precisa receber o exemplo explícito de agenda inventada');
 console.log('v1287-nenhuma-data-chutada: ok');

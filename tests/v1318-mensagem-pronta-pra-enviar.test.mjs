@@ -5,65 +5,36 @@ import { CONVERSA } from "./conversa-fixa-permuta.mjs";
 
 // v1318 — AS TRÊS MENSAGENS SAEM PRONTAS PRA ENVIAR.
 //
-// Print do dono (20/08/2026, 07h32, versão 1317): a leitura da conversa ficou boa — pegou a
-// permuta, os 3 terrenos, os R$ 360 mil, a faixa de R$ 800 mil, o "evite insistir em visita".
-// As TRÊS MENSAGENS, não: sem bom dia, sem cumprimento nenhum, sem reconhecer o intervalo, e as
-// três terminando na MESMA pergunta ("a faixa de R$ 800 mil serve pra vocês?").
-//
-// A causa não era o Cérebro dele — eram três linhas do próprio pedido:
-//   1. "Se houver um único próximo passo adequado, as três podem convergir para ele" — essa regra
-//      é do CÉREBRO do próprio corretor (documento V3) e continua valendo; o que faltava era dizer
-//      que convergir no PASSO não autoriza repetir a mesma PERGUNTA três vezes;
-//   2. "A saudação (...) deve seguir o Cérebro": o Cérebro DELE tem a regra das faixas de horário
-//      escrita, e ela chegava na IA (não há corte — o teto por caixa é de 20 mil caracteres). Só
-//      que o pedido fixo delegava e nunca EXIGIA que houvesse cumprimento, então a regra dele se
-//      perdia no meio do resto. A autoridade continua sendo do Cérebro; o que entrou foi o piso;
-//   3. quando a IA recomendava aguardar, continuava obrigada a preencher as três — e devolvia
-//      rascunho.
+// v1372/governança: o prompt principal voltou ao estado medido pelo porteiro v1327. As garantias
+// novas de convergência e de mensagem pronta ficam fora do coração medido: piso de forma,
+// conferência determinística e reparo curto quando necessário. Este teste protege essa divisão.
 
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
 
-// ---------------------------------------------------------------------------
-// 1) Convergir no PASSO continua permitido (é regra do Cérebro do corretor, documento V3, e foi
-//    conciliada com o pedido fixo na v1206). O que passa a ser proibido é a mesma PERGUNTA
-//    escrita três vezes — que é o que o print mostrou.
-// ---------------------------------------------------------------------------
-assert.match(
-  pipeline,
-  /Se houver um único próximo passo adequado, as três DEVEM convergir para ele/,
-  "a regra de convergência não pode ser removida (ver v1206)"
-);
-assert.match(pipeline, /CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA/, "mas convergir não pode virar três cópias");
+// 1) Convergência forte existe na camada de reparo sem transformar A/B/C em cópias.
+assert.match(pipeline, /const systemPromptReparoMensagens = `Você é o revisor final das mensagens comerciais do Corretor Pro/);
+assert.match(pipeline, /Se houver um único próximo passo adequado, as três DEVEM convergir para ele/);
+assert.match(pipeline, /CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA/);
 assert.match(pipeline, /MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM/);
 
-// ---------------------------------------------------------------------------
-// 2) Cumprimento e reconhecimento do intervalo deixaram de ser delegados.
-// ---------------------------------------------------------------------------
-// A frase de delegação é do dono (v1225) e continua de pé: quem decide QUAL saudação, se reconhece
-// o intervalo e qual o próximo passo é o Cérebro dele.
+// 2) Cumprimento e forma mínima continuam sendo piso do produto, sem atropelar o Cérebro.
 assert.match(
   pipeline,
   /A saudação, o reconhecimento ou não do intervalo e o tipo de próximo passo devem seguir o Cérebro\./,
-  "a autoridade do Cérebro sobre saudação e retomada não pode ser removida (ver v1225)"
+  "a autoridade do Cérebro sobre saudação e retomada precisa continuar"
 );
-// O que faltava era o PISO: ninguém exigia que a mensagem chegasse inteira.
 assert.match(pipeline, /PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE/);
 assert.match(pipeline, /toda mensagem abre cumprimentando a pessoa, pelo primeiro nome dela/);
 assert.match(pipeline, /Mensagem que começa direto no assunto, sem cumprimento, é rascunho/);
-// E o piso não pode atropelar as faixas de horário que o corretor escreveu no Cérebro dele.
 assert.match(pipeline, /se ele definir faixas próprias, são as dele que valem/);
 
-// ---------------------------------------------------------------------------
-// 3) "Aguardar" não pode mais virar mensagem pela metade.
-// ---------------------------------------------------------------------------
+// 3) "Aguardar" não autoriza rascunho; a mensagem continua preparada para quando o prazo vencer.
 assert.match(pipeline, /RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE/);
-// A instrução tem que estar nas REGRAS, não dentro do modelo de JSON — dentro do modelo, a IA
-// pode devolvê-la de volta como se fosse um campo da resposta.
 assert.doesNotMatch(pipeline, /"_atencao_aguardar"/, "instrução não pode morar dentro do formato de resposta");
 
-// ---------------------------------------------------------------------------
-// 4) FIM A FIM: as três regras chegam ao pedido enviado à IA, junto com a saudação certa.
-// ---------------------------------------------------------------------------
+// 4) FIM A FIM NORMAL: o prompt medido continua recebendo o piso de forma e a saudação calculada.
+// A convergência reforçada não precisa aparecer na primeira chamada; ela só entra se a conferência
+// reprovar as mensagens, o que evita alterar o diagnóstico medido sem nova bateria comercial.
 const timeline = parseWhatsappTxt(CONVERSA);
 const lead = guessLeadData(timeline, "Miguel Kirinus", "Conversa do WhatsApp com Noemi Barcarol Evoluti.txt");
 const chamadas = [];
@@ -85,14 +56,15 @@ const resultado = await analyzeWithBrain({
   cerebroConfig: { metodo: "método do corretor", diasDescansoPosAtendimento: 6 }
 });
 
-const pedido = chamadas.at(-1).messages.find(m => m.role === "user")?.content || "";
-assert.match(pedido, /PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE/, "a exigência precisa chegar no pedido vivo");
-assert.match(pedido, /CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA/, "idem para a proibição de repetir a pergunta");
-assert.match(pedido, /RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE/, "idem para o aguardar");
-// A saudação certa do horário continua sendo entregue pronta, e agora existe regra que a usa.
-assert.match(pedido, /Saudação correspondente ao horário neste instante: (Bom dia|Boa tarde|Boa noite)/);
-// Recomendar aguardar continua funcionando (a tela mostra o aviso) — só não zera as mensagens.
+const pedidoPrincipal = chamadas[0].messages.find(m => m.role === "user")?.content || "";
+assert.match(pedidoPrincipal, /PISO DE FORMA — VALE PARA AS TRÊS MENSAGENS, SEMPRE/, "o piso precisa chegar ao pedido vivo");
+assert.match(pedidoPrincipal, /Saudação correspondente ao horário neste instante: (Bom dia|Boa tarde|Boa noite)/);
 assert.equal(resultado.recomendacaoContato.aguardar, true, "a recomendação de aguardar continua existindo");
-assert.equal(resultado.messages.a, "Bom dia, Fulana? Um.", "e as três mensagens continuam vindo inteiras");
+assert.equal(resultado.messages.a, "Bom dia, Fulana? Um.", "mensagem válida continua inteira");
+
+// O teste específico v1372-julsimar-reparo-e2e cobre o segundo caminho: resposta ruim -> reparo
+// -> três mensagens convergentes e sem compromisso inventado.
+assert.match(pipeline, /systemPrompt: systemPromptReparoMensagens/,
+  "quando houver bloqueio, a segunda chamada precisa usar o revisor dedicado e não refazer o diagnóstico");
 
 console.log("v1318-mensagem-pronta-pra-enviar: ok");

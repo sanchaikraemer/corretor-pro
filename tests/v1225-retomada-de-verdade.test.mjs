@@ -41,7 +41,9 @@ const inicioTrio = pipeline.indexOf('const blocoRegrasDasMensagens = `');
 const trio = pipeline.slice(inicioTrio, pipeline.indexOf('`;', inicioTrio));
 assert.ok(trio.length > 200, 'a regra das três mensagens precisa existir');
 assert.match(trio, /RECOMENDADA é a que você enviaria se só pudesse enviar uma/, 'a recomendada continua sendo a melhor de todas');
-assert.match(trio, /MAIS DIRETA encurta o caminho até a pergunta central/, 'a direta continua sendo a objetiva');
+assert.match(trio, /MAIS DIRETA é objetiva/, 'o papel medido da direta continua existindo no prompt principal');
+assert.match(pipeline, /MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa/,
+  'quando houver reparo por lacuna prioritária, a direta não pode pular para outra etapa');
 assert.match(trio, /As três nascem da mesma verdade factual e da mesma leitura comercial/,
   'e as três continuam saindo da mesma leitura, não de três diagnósticos diferentes');
 
