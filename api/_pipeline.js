@@ -1305,6 +1305,73 @@ export function perguntasSemRespostaDoCliente(timeline, corretorNome = "", lead 
     .slice(0, MAX_PERGUNTAS_SEM_RESPOSTA);
 }
 
+// v1373 — PERGUNTA COMERCIAL QUE JÁ ESTÁ COM O CLIENTE.
+//
+// `perguntasSemRespostaDoCliente` acima trata um caso diferente: o cliente voltou a falar depois,
+// mas não respondeu aquele assunto. Aqui é o silêncio puro do fim da conversa — exatamente o caso
+// Arnildo: o corretor perguntou "morar ou investir?" e, três horas depois, a análise sugeria fazer
+// outra pergunta e até repetia a mesma. Enquanto a última bola comercial estiver com o cliente,
+// ela vem ANTES de qualquer nova lacuna de qualificação.
+export function perguntaComercialPendenteDoCorretor(timeline, corretorNome = "", lead = {}, agora = new Date()) {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(ehMensagemRealParaTempo);
+  if (!arr.length) return null;
+  const hojeDia = _hojeDiaCivil(agora);
+
+  // Só percorre a cauda de mensagens do corretor. Ao encontrar a última fala do cliente, para:
+  // qualquer pergunta anterior a ela já teve oportunidade de ser respondida e pertence ao outro
+  // detector.
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const lado = _ladoDaMensagem(arr[i], corretorNome, lead);
+    if (lado === "cliente") break;
+    if (lado !== "corretor") continue;
+    const texto = String(arr[i]?.text || "").trim();
+    if (!texto.includes("?")) continue;
+
+    const perguntas = [];
+    for (const bruta of texto.split(/(?<=[.!?])\s+|\n+/)) {
+      const pergunta = String(bruta || "").trim();
+      if (!pergunta.endsWith("?")) continue;
+      const limpa = pergunta.replace(/^[^A-Za-zÀ-ÿ0-9]+/, "").trim();
+      if (limpa.length < 10) continue;
+      const nucleo = limpa
+        .replace(/^(bom dia|boa tarde|boa noite|ol[áa]|oi|opa|e a[íi])\b[\s,!.]*/i, "")
+        .replace(/^\p{Lu}[\p{L}'-]*[\s,]+/u, "")
+        .trim();
+      if (!nucleo || PERGUNTA_DE_CORTESIA.test(nucleo)) continue;
+      if (CONVITE_DO_CORRETOR.test(limpa)) continue;
+      const peso = _pesoDeDecisao(limpa);
+      if (peso <= 0) continue;
+      perguntas.push({ texto: _trechoCurto(limpa, 180), peso, topico: _topicoGenericoDaPergunta(limpa) || null });
+    }
+    if (!perguntas.length) continue;
+    perguntas.sort((a, b) => b.peso - a.peso);
+    const p = dataCivilDeMensagem(arr[i]);
+    return {
+      ...perguntas[0],
+      data: p?.texto || "data não identificada",
+      dia: p?.dia ?? null,
+      diasAtras: _diasDesde(p?.dia ?? null, hojeDia),
+      mensagemInteira: _trechoCurto(texto, 260)
+    };
+  }
+  return null;
+}
+
+export function deveAguardarPerguntaComercial({ timeline, corretorNome = "", lead = {}, agora = new Date(), diasParaRetomada = 5 } = {}) {
+  const pendente = perguntaComercialPendenteDoCorretor(timeline, corretorNome, lead, agora);
+  if (!pendente) return { aguardar: false, pendente: null };
+  const prazo = Math.max(1, Number(diasParaRetomada) || 5);
+  const dias = Number.isFinite(Number(pendente.diasAtras)) ? Number(pendente.diasAtras) : 0;
+  // No dia em que COMPLETA o prazo, a retomada volta a ser elegível. Antes disso, não empilha
+  // pergunta em cima de pergunta.
+  return {
+    aguardar: dias < prazo,
+    pendente,
+    prazo,
+    diasRestantes: Math.max(0, prazo - dias)
+  };
+}
+
 // ─── 2-B. v1367 — O QUE O CLIENTE PERGUNTOU E NINGUÉM RESPONDEU ──────────────────────────────
 //
 // Print do dono, cliente Adairton (22/08/2026). A última coisa que o cliente escreveu foi
@@ -2188,6 +2255,7 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
   const perguntasJaFeitas = perguntasJaFeitasPeloCorretor(timeline, corretorNome, lead, agora);
   const falasCliente = falasJaDitasPeloCliente(timeline, corretorNome, lead, agora);
   const perguntasSemResposta = perguntasSemRespostaDoCliente(timeline, corretorNome, lead, agora);
+  const perguntaComercialPendente = perguntaComercialPendenteDoCorretor(timeline, corretorNome, lead, agora);
   // v1367 — a lista contrária: o que o CLIENTE perguntou e ninguém respondeu (caso Adairton).
   const perguntasDoClienteAbertas = perguntasDoClienteSemResposta(timeline, corretorNome, lead, agora);
   const proximosPassos = proximosPassosJaPropostos(timeline, corretorNome, lead, agora);
@@ -2208,6 +2276,7 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
     perguntasJaFeitas,
     falasCliente,
     perguntasSemResposta,
+    perguntaComercialPendente,
     perguntasDoClienteAbertas,
     proximosPassos,
     recusas,
@@ -2219,6 +2288,12 @@ export function montarEstadoComercialDeterministico(timeline, corretorNome = "",
     semCapitalHoje: clienteSemCapitalHojeComPrazo(timeline, corretorNome, lead, agora),
     permuta: permutaOferecidaPeloCliente(timeline, corretorNome, lead, agora)
   };
+}
+
+export function temEntregaConcretaPendente(estado = {}) {
+  return (Array.isArray(estado?.perguntasDoClienteAbertas) && estado.perguntasDoClienteAbertas.length > 0)
+    || (Array.isArray(estado?.promessasNaoCumpridas) && estado.promessasNaoCumpridas.length > 0)
+    || !!(estado?.compromisso && estado.compromisso.continuaValido && estado.compromisso.pendencia);
 }
 
 // ─── v1335 — O CATÁLOGO QUE O APP APRENDE SOZINHO, SEM TABELA NENHUMA ────────────────────────
@@ -2583,6 +2658,7 @@ export function lacunaComercialPrioritaria(timeline, corretorNome = "", lead = {
   const estado = estadoPronto || montarEstadoComercialDeterministico(timeline, corretorNome, lead, new Date());
 
   // Antes de qualificar, cumpra o que já está aberto com o cliente.
+  if (estado?.perguntaComercialPendente) return null; // a bola já está com o cliente; não empilhe outra lacuna
   if ((estado?.perguntasDoClienteAbertas || []).length) return null;
   if ((estado?.promessasNaoCumpridas || []).length) return null;
   const comp = estado?.compromisso;
@@ -2619,6 +2695,7 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     perguntasJaFeitas: perguntas,
     falasCliente,
     perguntasSemResposta: perguntasAbertas,
+    perguntaComercialPendente,
     perguntasDoClienteAbertas: perguntasDoCliente,
     proximosPassos: passos,
     recusas,
@@ -2657,6 +2734,14 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
       linhas.push(`- Condução preferida: faça UMA pergunta objetiva de faixa (ex.: quanto pretende investir / em que faixa quer ficar), explique em uma frase para que ela serve e, com a resposta, selecione poucas opções concretas. Só troque essa prioridade se outro critério já visível na conversa mudar a seleção mais do que o dinheiro.`);
       blocos.push(`INTERESSE POSITIVO, MAS AINDA SEM QUALIFICAÇÃO FINANCEIRA (lido da conversa pelo app):\n${linhas.join("\n")}\nIsto é diagnóstico de estágio, não roteiro fixo: preserve qualquer critério específico que o cliente já tenha dado e nunca peça de novo o que já está respondido.`);
     }
+  }
+
+  if (perguntaComercialPendente) {
+    blocos.push(`PERGUNTA COMERCIAL JÁ ESTÁ COM O CLIENTE (lido da conversa pelo app):
+- O corretor já perguntou: "${perguntaComercialPendente.texto}" (${perguntaComercialPendente.data}, ${_haQuantoTempo(perguntaComercialPendente.diasAtras)}).
+- Depois dessa pergunta, o cliente ainda NÃO respondeu. Não trate isso como uma lacuna nova a perguntar de outro jeito.
+- Enquanto o motor de timing mandar aguardar, NÃO faça outra pergunta, NÃO repita esta pergunta e NÃO abra uma qualificação secundária.
+- Quando chegar a hora de retomar, considere o silêncio como tentativa já feita e escolha a abordagem pelo Cérebro/histórico — sem fingir que essa pergunta nunca foi enviada.`);
   }
 
   // v1370 — uma análise pode ter várias lacunas abertas, mas só UMA delas manda na próxima
@@ -2717,6 +2802,13 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
     }
   }
 
+  // v1373 — "já apareceu um valor" NÃO significa "há algo concreto para entregar agora".
+  // Um preço antigo no histórico pode servir como fato, mas não autoriza a conferência a exigir
+  // que toda retomada devolva número. Entrega pendente é obrigação real: pergunta do cliente,
+  // promessa do corretor ou compromisso válido que ainda precisa ser completado.
+  // A função é exportada para o teste reproduzir exatamente essa distinção.
+  // (declaração de função é içada e pode ser usada abaixo e no pipeline principal.)
+
   // v1368 — PELO MENOS UMA DAS TRÊS TEM QUE ENTREGAR ALGO.
   //
   // Prints do dono de 22/08/2026 (Flavio, Ilario e Julsimar): nove sugestões, nove perguntas ao
@@ -2724,20 +2816,19 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
   // volta. Este bloco só aparece quando o app SABE que havia o que entregar — valor já citado na
   // conversa, pergunta do cliente esperando resposta, ou visita pendente de data.
   {
-    const temValor = valores.length > 0;
     const temPerguntaAberta = perguntasDoCliente.length > 0;
+    const temPromessaPendente = promessas.length > 0;
     const temCompromissoPendente = !!(compromisso && compromisso.continuaValido && compromisso.pendencia);
-    if (temValor || temPerguntaAberta || temCompromissoPendente) {
+    if (temPerguntaAberta || temPromessaPendente || temCompromissoPendente) {
       const oQueDaPraEntregar = [];
       if (temPerguntaAberta) oQueDaPraEntregar.push("a resposta da pergunta que o cliente fez (está no bloco acima)");
-      if (temValor) oQueDaPraEntregar.push("um número concreto a partir dos valores já citados nesta conversa");
-      if (temCompromissoPendente) oQueDaPraEntregar.push("um dia e um horário com nome, em vez de perguntar quando ele pode");
+      if (temPromessaPendente) oQueDaPraEntregar.push("o que o corretor prometeu entregar e ainda não cumpriu");
+      if (temCompromissoPendente) oQueDaPraEntregar.push("o próximo passo do compromisso real que já está aberto");
       blocos.push(`PELO MENOS UMA DAS TRÊS MENSAGENS PRECISA ENTREGAR, NÃO PERGUNTAR:
-- Nesta conversa existe o que entregar: ${oQueDaPraEntregar.join("; ")}.
-- ENTREGAR é pôr na mão do cliente algo concreto — um número, uma condição montada, um dia com hora, a resposta que ele pediu. Dizer que você PODE preparar ("posso preparar duas formas de pagamento", "eu organizo as informações") não é entregar: é prometer trabalho e devolver a bola.
-- Três mensagens que terminam em pergunta são um interrogatório, não três caminhos. Se as três só perguntam, refaça a recomendada até ela ENTREGAR.
-- Regra prática: a recomendada entrega e, no fim, faz UMA pergunta só — a que fecha o próximo passo. As outras duas podem explorar caminhos diferentes.
-- Se faltar o dado pra entregar, monte a frase COM O ESPAÇO PRA O CORRETOR COMPLETAR (ex.: "a entrada fica em R$ ___ e o saldo em ___ vezes") em vez de transformar a falta em pergunta ao cliente. Nunca invente o número.`);
+- Nesta conversa existe uma ENTREGA PENDENTE DE VERDADE: ${oQueDaPraEntregar.join("; ")}.
+- ENTREGAR é cumprir essa pendência concreta. Dizer que você PODE preparar ou verificar não é entregar: é prometer trabalho e devolver a bola.
+- Três mensagens que ignoram a pendência e só fazem perguntas novas são um interrogatório. A recomendada cumpre primeiro o que já está do lado do corretor.
+- Nunca invente número, condição, dia ou horário para fabricar uma entrega.`);
     }
   }
 
@@ -6383,6 +6474,9 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // escrever era a mesma que o cliente já ignorou duas vezes (print do dono de 14/08/2026).
   // v1337 — calcula UMA vez o estado factual e reaproveita na leitura, na redação e na conferência.
   const estadoComercial = montarEstadoComercialDeterministico(timelineArr, corretorNome, lead || {}, _agoraDt);
+  const esperaPerguntaComercial = deveAguardarPerguntaComercial({
+    timeline: timelineArr, corretorNome, lead: lead || {}, agora: _agoraDt, diasParaRetomada
+  });
   const lacunaPrioritaria = lacunaComercialPrioritaria(timelineArr, corretorNome, lead || {}, estadoComercial);
   const semResposta = estadoComercial.tentativasSemResposta;
   const blocoTentativasSemResposta = semResposta.tentativas > 0
@@ -6537,14 +6631,41 @@ do produto, porque o corretor COPIA E COLA no WhatsApp e não fica consertando r
 Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não devolva rascunho.`;
 
   const blocoEsquemaMensagens = `  "mensagens":{
-    "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Reposiciona a faixa)",
-    "bLabel":"nome curto da jogada da maisSuave (ex.: Puxa a avaliação)",
-    "cLabel":"nome curto da jogada da maisDireta (ex.: Reabre pelo ponto da objeção)",
+    "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Define a faixa)",
+    "bLabel":"nome curto da segunda redação do MESMO passo (ex.: Filtra as opções)",
+    "cLabel":"nome curto da terceira redação do MESMO passo (ex.: Vai ao ponto)",
     "ordemDeEnvio":"instrução prática de envio em 1 ou 2 frases: qual mandar primeiro, se sozinha, e o que esperar antes das outras",
-    "recomendada":"melhor mensagem para este momento — a JOGADA PRINCIPAL: quando existe aVirada, é ela que a recomendada entrega ao cliente",
-    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico, que ABRE OUTRA PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu. Nunca a recomendada com palavras mais macias",
-    "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite, propondo um PASSO CONCRETO (o que você vai fazer e o que precisa dele para fazer). Nunca a recomendada encurtada"
+    "recomendada":"melhor mensagem para este momento — completa, natural e pronta para copiar; executa o único próximo passo eleito",
+    "maisSuave":"outra REDAÇÃO do mesmo próximo passo, preservando exatamente o dado pedido e o que será feito depois da resposta",
+    "maisDireta":"outra REDAÇÃO do mesmo próximo passo, mais objetiva, preservando exatamente o dado pedido e o que será feito depois da resposta"
   },`;
+
+  // v1372 — quando o app elege uma lacuna, as três sugestões NÃO são três caminhos de
+  // qualificação. São três redações da MESMA jogada comercial. O caso Julsimar mostrou que a
+  // instrução anterior ainda dava liberdade demais: A perguntava faixa, B pulava para entrada e C
+  // para parcelas/reforços. Aqui a arquitetura fica explícita antes de o modelo escrever.
+  const blocoConvergenciaLacuna = lacunaPrioritaria ? `MODO DE CONVERGÊNCIA — REGRA ESTRUTURAL DO PRODUTO
+A leitura determinística do app elegeu UMA única lacuna prioritária: ${lacunaPrioritaria.rotulo} (ID ${lacunaPrioritaria.id}).
+
+ANTES de escrever A/B/C, componha mentalmente UMA mensagem comercial canônica com esta arquitetura:
+1. cumprimento + nome;
+2. retomada natural do assunto real da conversa;
+3. uma frase curta dizendo POR QUE vale esclarecer ${lacunaPrioritaria.rotulo} agora;
+4. UMA pergunta clara que busque exatamente ${lacunaPrioritaria.rotulo};
+5. uma frase curta dizendo O QUE o corretor fará com a resposta (filtrar poucas opções, montar a condição ou executar o próximo passo sustentado pela conversa).
+
+Depois:
+- A é a melhor versão dessa mensagem canônica.
+- B é uma reescrita mais leve da MESMA mensagem.
+- C é uma reescrita mais direta da MESMA mensagem.
+- A/B/C NÃO são etapas em sequência e NÃO são oportunidades para descobrir dados diferentes.
+- É PROIBIDO B ou C trocar ${lacunaPrioritaria.rotulo} por entrada, parcelas, reforços, financiamento, visita, ligação ou qualquer outra lacuna secundária.
+- Preserve nas três o MESMO pedido central e a MESMA consequência prática da resposta. Varie apenas linguagem, ritmo e grau de objetividade.
+- Não escreva metalinguagem de sistema como "as condições já entraram na conversa", "na análise do empreendimento", "seu perfil de compra" ou "para avançarmos na qualificação". Fale como corretor de WhatsApp.
+
+EXEMPLO DE ARQUITETURA (somente forma; NÃO copie fatos nem valores):
+"Retomando nossa conversa sobre [assunto]: como você está analisando [situação real], queria entender uma coisa para eu conseguir montar algo mais objetivo. [Pergunta da lacuna]. A partir disso consigo [próximo passo concreto sustentado]."
+` : "";
 
   const blocoRegrasDasMensagens = `REGRAS PARA AS TRÊS MENSAGENS
 - As três nascem da mesma verdade factual e da mesma leitura comercial.
@@ -6552,31 +6673,37 @@ Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não de
   aVirada, a recomendada É a virada contada ao cliente: o fato, o que ele abre pra ele, e UMA
   pergunta que destrava a seleção. Não gaste a recomendada pedindo confirmação burocrática se
   existe uma virada pra entregar.
-- MAIS SUAVE explora/resolve o ponto mais importante com menor pressão — e o faz ABRINDO OUTRA
-  PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu.
-  Não é a recomendada com as palavras mais macias.
-- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Ela
-  propõe um PASSO CONCRETO — o que você vai fazer, e o que precisa dele para fazer. Não é a
-  recomendada encurtada.
-- Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
-- CONFIRA ANTES DE DEVOLVER: leia a ÚLTIMA FRASE das três. Se as três terminam pedindo a MESMA
-  coisa ao cliente, você devolveu uma mensagem escrita três vezes — refaça duas delas. Pelo menos
-  duas das três precisam pedir coisas diferentes: uma pode confirmar a faixa, outra trazer o que
-  ele não sabe, outra propor o passo concreto.
-- CADA MENSAGEM TEM NOME DE JOGADA (aLabel/bLabel/cLabel): 2 a 4 palavras dizendo O QUE ELA FAZ
-  (ex.: "Reposiciona a faixa", "Puxa a avaliação", "Reabre pelo prazo"). Se você não consegue dar
-  nomes diferentes às três, elas são a mesma jogada — volte e refaça.
+- MAIS SUAVE e MAIS DIRETA só abrem caminhos comerciais diferentes quando NÃO existe lacuna
+  prioritária. Quando existe, elas são reescritas da mesma jogada: preservam o MESMO dado pedido,
+  a MESMA razão para pedir e o MESMO próximo passo depois da resposta.
+- MAIS SUAVE reduz a pressão pela forma de escrever; não muda a pergunta central.
+- MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa.
+- Se houver um único próximo passo adequado, as três DEVEM convergir para ele.
+- Se o fichário trouxer "LACUNA COMERCIAL PRIORITÁRIA", ela manda nas três mensagens. Enquanto essa
+  lacuna estiver aberta, as três precisam buscar resolver o MESMO dado/decisão. Não use a sugestão 2
+  para perguntar uma lacuna secundária e não use a 3 para trocar qualificação por ligação/visita.
+- MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM. As três preservam a MESMA arquitetura comercial
+  completa (retomada → motivo → pergunta → consequência prática), mas mudam a forma: uma é a melhor
+  versão, outra é mais leve e outra é mais direta. Não omita o que será feito com a resposta e não
+  transforme a variação de redação em outro caminho comercial.
+- CONFIRA ANTES DE DEVOLVER: as três podem terminar pedindo o mesmo DADO quando ele é a lacuna
+  prioritária. O erro é copiar a mesma construção/frase três vezes ou mudar para um dado menos
+  importante só para parecer diferente.
+- CADA MENSAGEM TEM NOME DE JOGADA (aLabel/bLabel/cLabel): 2 a 4 palavras dizendo COMO ela conduz
+  para o mesmo objetivo (ex.: "Define a faixa", "Filtra opções", "Vai ao número").
 - ORDEM DE ENVIO (ordemDeEnvio): diga qual mandar primeiro e por quê. Três mensagens juntas viram
   bloco, e cliente que já sumiu duas vezes some de novo — em regra, a principal vai sozinha e as
   outras esperam a resposta.
-- CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA. Mesmo indo todas para o mesmo próximo passo, as três
-  são três CAMINHOS até ele — uma responde o que o cliente pediu, outra traz o que ele ainda não
-  sabe, outra trata a objeção que ficou de pé, outra busca o dado que destrava. Se as três terminam
-  na mesma pergunta, com as mesmas palavras, você não escreveu três caminhos: escreveu uma mensagem
-  três vezes. Trocar palavra não é trocar caminho.
+- CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA. Quando existe lacuna prioritária, todas podem pedir
+  o mesmo dado, mas precisam chegar nele por três abordagens úteis. Sem lacuna prioritária, preserve
+  a diversidade normal e siga o pedido/pendência que a leitura apontou.
 - Não repita pergunta já respondida nem transforme falta de dado em interrogatório.
 - Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil.
 - Não invente ação já realizada, novidade, disponibilidade, prazo, condição, urgência ou escassez.
+- NÃO INVENTE COMPROMISSO: ligação, visita, reunião, avaliação, dia ou horário só podem aparecer como
+  próximo passo quando esse MESMO tipo de compromisso já nasceu do histórico e continua válido.
+  Não crie "posso te ligar terça às 10h" para variar uma qualificação. Se a conversa abriu uma
+  visita, complete a visita; se abriu uma ligação, complete a ligação; se não abriu nenhum, não crie.
 - Não prometa fazer no passado algo que ainda será feito. Diferencie "vou verificar" de "verifiquei".
 - Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
 - Não despeje catálogo quando os critérios já permitem curadoria.
@@ -6630,10 +6757,11 @@ Antes de devolver o JSON, confirme:
 5. O nextAction é realmente o menor passo útil agora?
 6. As três mensagens executam essa leitura, em vez de seguir um roteiro automático?
 7. Alguma mensagem força visita/encontro/proposta sem maturidade?
-8. Alguma mensagem inventa novidade, urgência ou ação do corretor?
-9. A análise considerou o começo, o meio e o fim do histórico fornecido?
-10. A resposta está fiel ao Cérebro Comercial atual?
-11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+8. Alguma mensagem inventa novidade, urgência, ligação, visita, dia, hora ou compromisso sem base no histórico?
+9. Se existe LACUNA COMERCIAL PRIORITÁRIA, as três mensagens resolvem essa mesma lacuna sem pular para outra?
+10. A análise considerou o começo, o meio e o fim do histórico fornecido?
+11. A resposta está fiel ao Cérebro Comercial atual?
+12. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
     alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   const revisaoSoDaLeitura = `REVISÃO FINAL SILENCIOSA
@@ -6650,11 +6778,12 @@ Antes de devolver o JSON, confirme:
 Antes de devolver o JSON, confirme:
 1. As três mensagens executam a leitura acima, em vez de seguir um roteiro automático?
 2. Alguma mensagem força visita/encontro/proposta sem maturidade?
-3. Alguma mensagem inventa novidade, urgência ou ação do corretor?
-4. Alguma mensagem repete pergunta que a leitura marcou como já respondida, ou pede o que o
+3. Alguma mensagem inventa novidade, urgência, ligação, visita, dia, hora ou compromisso sem base no histórico?
+4. Se existe LACUNA COMERCIAL PRIORITÁRIA, as três buscam resolver essa mesma lacuna?
+5. Alguma mensagem repete pergunta que a leitura marcou como já respondida, ou pede o que o
    cliente já informou?
-5. As três estão fiéis ao Cérebro Comercial atual?
-6. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+6. As três estão fiéis ao Cérebro Comercial atual?
+7. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   const prompt = `Execute a análise usando o Cérebro Comercial e TODO o contexto fornecido abaixo.
@@ -6747,43 +6876,13 @@ ${duasEtapas ? "" : blocoEsquemaMensagens}  "recomendacaoContato":{
   "nextAction":"menor próximo passo útil coerente com a leitura"
 }
 
-${duasEtapas ? "" : `${blocoRegrasDasMensagens}
+${duasEtapas ? "" : `${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
 `}
 CONVERSA ${entradaIncremental ? "— RESUMO ANTERIOR + NOVIDADE" : cortadaPorLimiteTecnico ? "— TRECHO DISPONÍVEL APÓS LIMITE TÉCNICO" : "COMPLETA"}:
 ${timelineText}
 
 ${duasEtapas ? revisaoSoDaLeitura : revisaoCompleta}`;
   // ===== FIM DO MIOLO DO PROMPT =====
-
-  // v1372 — O PORTEIRO DA v1327 PROTEGE O MIOLO MEDIDO DA ANÁLISE. As correções de Julsimar
-  // ficam DEPOIS dele, como validação/reparo da saída, sem fingir que a bateria comercial foi
-  // rodada novamente. O diagnóstico continua saindo do prompt medido; só uma mensagem reprovada
-  // pela conferência determinística entra nesta segunda chamada curta.
-  const systemPromptReparoMensagens = `Você é o revisor final das mensagens comerciais do Corretor Pro.
-A leitura comercial recebida já está fechada: NÃO refaça diagnóstico, NÃO invente fatos e NÃO mude timing, produto, objeção ou próximo passo.
-Sua única tarefa é reescrever A, B e C para obedecer às regras determinísticas informadas pelo app e ao Cérebro Comercial fornecido.
-Quando houver uma LACUNA COMERCIAL PRIORITÁRIA, as três mensagens devem resolver ESSA MESMA lacuna; variam apenas linguagem, ritmo e grau de objetividade.
-NÃO INVENTE COMPROMISSO: não crie ligação, visita, reunião, avaliação, dia, horário ou compromisso que não exista no histórico. Não crie "posso te ligar terça às 10h" só para variar a abordagem.
-Se houver um único próximo passo adequado, as três DEVEM convergir para ele. CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA; MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM.
-MAIS SUAVE reduz a pressão pela forma de escrever; não muda a pergunta central. MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa.
-RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE: mesmo preparada para uma retomada futura, cada alternativa precisa estar pronta para enviar quando chegar o momento.
-Cada mensagem precisa soar como WhatsApp de corretor: retome o assunto real, explique naturalmente por que a informação ajuda, faça uma pergunta central e diga o que o corretor fará com a resposta.
-${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" é referência auxiliar de escrita e condução. Nunca supera o Cérebro nem cria fatos.` : ""}
-Devolva somente JSON válido no formato pedido.`;
-
-  const blocoReparoConvergencia = lacunaPrioritaria ? `
-MODO DE CONVERGÊNCIA DO REPARO
-Lacuna comercial prioritária: ${lacunaPrioritaria.rotulo} (ID ${lacunaPrioritaria.id}).
-- A, B e C devem pedir exatamente essa lacuna — nenhuma pode trocar por entrada, parcelas, reforços, financiamento, visita, ligação ou outra qualificação.
-- Cada uma usa UMA pergunta comercial central. Saudação social (ex.: "Tudo bem?") não conta como segunda qualificação.
-- Estrutura obrigatória: retomada do assunto real → motivo natural → pergunta da lacuna → consequência prática da resposta.
-- Depois da resposta, diga concretamente o que o corretor fará: filtrar poucas opções, selecionar unidades, montar/ajustar condição, comparar ou outro próximo passo sustentado pela leitura.
-- As três são alternativas, não sequência. Varie a redação, não o objetivo comercial.
-` : `
-MODO DE REPARO SEM LACUNA ÚNICA
-- Preserve exatamente o próximo passo já definido pela leitura comercial.
-- Corrija apenas o motivo bloqueante apontado pelo app; não abra nova etapa de qualificação.
-`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
@@ -6911,7 +7010,7 @@ do próprio cliente.
 
 ${blocoPisoDeForma}
 
-${blocoRegrasDasMensagens}
+${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
 
 ÚLTIMAS MENSAGENS DA CONVERSA (para pegar o fio e o tom; o histórico completo já está na leitura acima):
 ${caudaDaConversa}
@@ -6973,10 +7072,16 @@ ${revisaoSoDasMensagens}`;
     // O Cérebro Comercial é a autoridade sobre saudação, retomada e abertura. O código não acrescenta
     // nem reescreve texto comercial depois da IA, para não contrariar regras manuais como abertura
     // só pelo nome perto da virada de horário ou continuidade sem nova saudação.
-    let msgA = msgARaw;
-    let msgB = msgBRaw;
-    let msgC = msgCRaw;
-    let validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
+    let msgA = esperaPerguntaComercial.aguardar ? "" : msgARaw;
+    let msgB = esperaPerguntaComercial.aguardar ? "" : msgBRaw;
+    let msgC = esperaPerguntaComercial.aguardar ? "" : msgCRaw;
+    // v1373 — se a última pergunta comercial já está com o cliente e o prazo de retomada ainda
+    // não venceu, NÃO existe mensagem para enviar agora. Não vale validar, reparar ou armazenar
+    // três novas qualificações que a tela vai esconder: além de gastar IA à toa, isso deixa uma
+    // sugestão repetida/secondary pronta para reaparecer em outro fluxo.
+    let validacaoMensagens = esperaPerguntaComercial.aguardar
+      ? { ok: true, motivos: [] }
+      : validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
     // v1332 — a conferência volta a ser CHAMADA (ver avisosDeQualidadeDasMensagens). O contexto é
     // tudo o que se sabe deste lead: a conversa inteira, as observações do corretor e o Cérebro.
     let avisosMensagens = [];
@@ -6987,6 +7092,10 @@ ${revisaoSoDasMensagens}`;
         .map(m => `${String(a?.qual || "?").toUpperCase()}: ${m}`)
     );
     try {
+      if (esperaPerguntaComercial.aguardar) {
+        contextoQualidadeMensagens = null;
+        avisosMensagens = [];
+      } else {
       // v1335 — a conferência passa a conhecer os produtos REAIS desta conta (aprendidos do
       // material que o próprio corretor mandou nas conversas, sem tabela digitada). Assim o aviso
       // separa invenção da IA de produto certo na conversa errada. Falhou a leitura do catálogo?
@@ -7005,21 +7114,17 @@ ${revisaoSoDasMensagens}`;
         lacunaPrioritaria,
         // v1368 — havia o que entregar? É o que separa "as três perguntam porque é hora de
         // qualificar" de "as três perguntam quando já dava pra responder".
-        temOQueEntregar: (estadoComercial.valores || []).length > 0
-          || (estadoComercial.perguntasDoClienteAbertas || []).length > 0
-          || !!(estadoComercial.compromisso && estadoComercial.compromisso.continuaValido && estadoComercial.compromisso.pendencia)
+        temOQueEntregar: temEntregaConcretaPendente(estadoComercial)
       };
       avisosMensagens = avisosDeQualidadeDasMensagens(
         [{ qual: "a", texto: msgA }, { qual: "b", texto: msgB }, { qual: "c", texto: msgC }],
         contextoQualidadeMensagens
       );
+      }
     } catch (erroAviso) {
       console.warn("[direciona] conferência das três mensagens falhou:", erroAviso?.message || erroAviso);
     }
 
-    // Nenhuma sugestão de mensagem é reinterpretada localmente/deterministicamente: o código só
-    // identifica a violação. Se houver tempo, UMA nova chamada de IA reescreve as três em cima da
-    // leitura fechada; se não houver, a mensagem original continua visível com o aviso.
     // v1370 — AVISO BLOQUEANTE VIRA REPARO, NÃO TARJA VERMELHA ENTREGUE AO CORRETOR.
     // O print do Julsimar mostrou a falha estrutural: o app sabia que B pulava a etapa e que C
     // inventava ligação, mas mesmo assim mostrava as duas. Agora, se a conferência determinística
@@ -7056,11 +7161,7 @@ LEITURA COMERCIAL JÁ FECHADA:
 ${leituraFechadaParaReparo}
 
 ${ficharioDaConversa ? `FICHÁRIO FACTUAL DO APP:\n${ficharioDaConversa}\n` : ""}
-CÉREBRO COMERCIAL ATUAL:
-${instrucoesCerebroTexto || "Nenhuma regra adicional configurada."}
-
-${blocoPisoDeForma}
-${blocoReparoConvergencia}
+${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
 
 REGRAS BLOQUEANTES DESTE REPARO:
 - Se há LACUNA COMERCIAL PRIORITÁRIA, A, B e C precisam resolver ESSA MESMA lacuna. Não pule para outra pergunta só para variar.
@@ -7082,7 +7183,7 @@ Devolva JSON válido exatamente neste formato:
         try {
           const reparo = await chamarGPT4Json({
             openai,
-            systemPrompt: systemPromptReparoMensagens,
+            systemPrompt: systemPromptAnalise,
             prompt: promptReparo,
             model: modeloMensagens(),
             maxOutputTokens: Number(process.env.DIRECIONA_MENSAGENS_MAX_TOKENS || 2000),
@@ -7186,10 +7287,14 @@ Devolva JSON válido exatamente neste formato:
         pedidoEspontaneo: clean(d.pedidoEspontaneo, "Não identificado"),
         faltaDescobrir: arr(d.faltaDescobrir),
         quemDeveAgirAgora: clean(d.quemDeveAgirAgora, "Não identificado"),
-        proximoPasso: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
-        proximoPassoDeQuem: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
+        proximoPasso: esperaPerguntaComercial.aguardar
+          ? "Aguardar a resposta do cliente à pergunta comercial que já foi enviada."
+          : clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
+        proximoPassoDeQuem: esperaPerguntaComercial.aguardar
+          ? "Cliente — responder a pergunta que já está com ele."
+          : clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         etapaFunil: clean(d.etapaFunil || raw.etapaSugerida, "Não identificado"),
-        mensagemQueEuEnviariaHoje: clean(msgA || d.mensagemQueEuEnviariaHoje),
+        mensagemQueEuEnviariaHoje: esperaPerguntaComercial.aguardar ? "" : clean(msgA || d.mensagemQueEuEnviariaHoje),
         percepcaoTodaConversa: clean(raw.summary)
       },
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
@@ -7199,10 +7304,15 @@ Devolva JSON válido exatamente neste formato:
       produtosInteresse: arr(raw.produtosInteresse).length ? arr(raw.produtosInteresse) : (produtoAtual && produtoAtual !== "Não identificado" ? [produtoAtual] : []),
       etapaSugerida: clean(raw.etapaSugerida || d.etapaFunil, "Não identificado"),
       clientProfile: clean(raw.clientProfile),
-      nextAction: clean(raw.nextAction || d.quemDeveAgirAgora || d.ultimoCompromissoCliente),
+      nextAction: esperaPerguntaComercial.aguardar
+        ? "Aguardar a resposta do cliente à pergunta comercial que já foi enviada."
+        : clean(raw.nextAction || d.quemDeveAgirAgora || d.ultimoCompromissoCliente),
       recomendacaoContato: {
-        aguardar: raw?.recomendacaoContato?.aguardar === true,
-        motivo: raw?.recomendacaoContato?.aguardar === true ? clean(raw?.recomendacaoContato?.motivo) : ""
+        aguardar: esperaPerguntaComercial.aguardar || raw?.recomendacaoContato?.aguardar === true,
+        perguntaPendente: esperaPerguntaComercial.aguardar,
+        motivo: esperaPerguntaComercial.aguardar
+          ? `Você já fez uma pergunta comercial e o cliente ainda não respondeu. Aguarde completar o prazo de retomada de ${esperaPerguntaComercial.prazo} dias antes de mandar outra mensagem.`
+          : (raw?.recomendacaoContato?.aguardar === true ? clean(raw?.recomendacaoContato?.motivo) : "")
       },
       messages: {
         a: msgA,
@@ -8167,7 +8277,9 @@ export function montarTimelineComTranscricoes(messages, audioFilesRelevantes, tr
         ? `[Áudio transcrito] ${t.text}`
         : (t.status === "nao_transcrito_fora_do_periodo"
           ? `[Áudio: ${audioRef} — não transcrito por estar fora do período escolhido]`
-          : `[Áudio: ${audioRef} — ${t.status}]`);
+          : (t.status === "erro_preparo_audio"
+            ? `[Áudio: ${audioRef} — falha no processamento antes da transcrição]`
+            : `[Áudio: ${audioRef} — ${t.status}]`));
       timeline.push({
         ...msg,
         type: "audio",
@@ -8558,8 +8670,8 @@ export async function finalizarAnaliseDaConversa(payload) {
 
   const audioValues = Object.values(transcriptionMap || {});
   const audiosTranscritosNoArquivo = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;
-  const audiosComErro = audioValues.filter(item => item?.status === "erro_transcricao").length;
-  const primeiroErroAudio = audioValues.find(item => item?.status === "erro_transcricao")?.error || null;
+  const audiosComErro = audioValues.filter(item => /^erro_(?:transcricao|preparo_audio)$/i.test(String(item?.status || ""))).length;
+  const primeiroErroAudio = audioValues.find(item => /^erro_(?:transcricao|preparo_audio)$/i.test(String(item?.status || "")))?.error || null;
   const audiosTranscritosTotal = timeline.filter(m => m?.mediaFile && /^\[Áudio transcrito\]/i.test(String(m?.text || ""))).length;
   // Em reimportações, o navegador não precisa receber outra vez o histórico antigo inteiro.
   // O endpoint de atualização já o possui no banco e mescla apenas estas novidades.

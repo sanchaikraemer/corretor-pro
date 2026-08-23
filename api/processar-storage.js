@@ -274,9 +274,12 @@ function nomeStorageSeguro(value = "audio") {
     .slice(0, 100) || "audio";
 }
 
-function contentTypeAudio(name = "") {
-  const ext = String(name).toLowerCase().split(".").pop();
-  return ({ opus:"audio/opus", ogg:"audio/ogg", mp3:"audio/mpeg", m4a:"audio/mp4", wav:"audio/wav", aac:"audio/aac" })[ext] || "application/octet-stream";
+// v1373 — áudios extraídos ficam TEMPORARIAMENTE no mesmo bucket do ZIP.
+// Esse bucket é deliberadamente restrito a ZIP/octet-stream; enviar `audio/opus` aqui faz o
+// Supabase rejeitar o objeto antes mesmo de o Whisper receber qualquer byte. A extensão do nome
+// continua intacta (.opus/.ogg/...), então o transcritor ainda sabe o formato ao baixar.
+function contentTypeAudioTemporario() {
+  return "application/octet-stream";
 }
 
 // v1131 — roda `fn` sobre a lista com no máximo `limite` execuções ao mesmo tempo, preservando o
@@ -441,6 +444,60 @@ async function salvarManifesto(storage, manifestPath, manifest) {
   if (error) throw new Error(`Não consegui salvar o manifesto da importação: ${error.message}`);
 }
 
+export async function guardarAudiosExtraidosNoStorage({ storage, prefix, extracted = {}, cacheDoLead = {}, organizationId }) {
+  if (!storage || typeof storage.upload !== "function") throw new Error("Storage inválido para guardar áudios extraídos.");
+  if (!prefix) throw new Error("Prefixo de Storage ausente para guardar áudios extraídos.");
+  if (!organizationId) throw new Error("organizationId é obrigatório para guardar áudios extraídos.");
+
+  const audioStorage = {};
+  const audioHashes = {};
+  const transcriptions = {};
+  const temporaryFiles = [];
+  const audioPreparationFailures = [];
+
+  const CONCORRENCIA_UPLOAD = 4;
+  const entradas = Object.entries(extracted || {}).map(([base, audioBuffer], i) => {
+    const nome = normalizeName(base);
+    return { nome, audioBuffer, audioPath: `${prefix}/audio/${String(i + 1).padStart(4, "0")}-${nomeStorageSeguro(nome)}` };
+  });
+
+  const subirUm = async ({ nome, audioBuffer, audioPath }) => {
+    const hash = hashAudio(audioBuffer);
+    audioHashes[nome] = hash;
+    try {
+      const { error } = await storage.upload(audioPath, audioBuffer, {
+        contentType: contentTypeAudioTemporario(),
+        upsert: true,
+        cacheControl: "0"
+      });
+      if (error) throw new Error(error.message || String(error));
+      audioStorage[nome] = audioPath;
+      temporaryFiles.push(audioPath);
+
+      const doLead = cacheDoLead[nome];
+      if (doLead) {
+        transcriptions[nome] = { status: "transcrito_reaproveitado", text: doLead, reused: true, viaLeadAnterior: true };
+        return;
+      }
+      const cached = await carregarTranscricaoCache(storage, hash, organizationId);
+      if (cached) transcriptions[nome] = cached;
+    } catch (error) {
+      // Um áudio ruim ou uma falha pontual de Storage não pode apagar todo o TXT e os demais
+      // áudios. Ele fica marcado individualmente e a importação segue; numa nova tentativa, o
+      // manifesto parcial NÃO é reaproveitado e este upload é tentado de novo.
+      const motivo = errorMessage(error);
+      transcriptions[nome] = { status: "erro_preparo_audio", text: "", error: motivo };
+      audioPreparationFailures.push({ name: nome, error: motivo });
+    }
+  };
+
+  for (let i = 0; i < entradas.length; i += CONCORRENCIA_UPLOAD) {
+    await Promise.all(Array.from(entradas.slice(i, i + CONCORRENCIA_UPLOAD), subirUm));
+  }
+
+  return { audioStorage, audioHashes, transcriptions, temporaryFiles, audioPreparationFailures };
+}
+
 export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays, cacheDoLead = {}, cacheVisualDoLead = {}, cacheLinksDoLead = {}, organizationId }) {
   if (!organizationId) throw new Error("organizationId é obrigatório para preparar a extração.");
   // organizationId no prefixo isola manifesto e áudios extraídos de cada conta no bucket
@@ -453,7 +510,8 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   // v827-4: só reaproveita a extração anterior se a JANELA de áudio for a mesma. Antes,
   // trocar a janela reusava a extração antiga (áudios errados) sem refazer.
   if (existente?.sourceZipPath === storagePath && existente?.prep && existente?.audioStorage
-      && String(existente?.audioWindowDays || "90") === janelaSolicitada) {
+      && String(existente?.audioWindowDays || "90") === janelaSolicitada
+      && !(Array.isArray(existente?.audioPreparationFailures) && existente.audioPreparationFailures.length)) {
     return { manifest: existente, reusedPreparation: true };
   }
 
@@ -561,45 +619,14 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   prep.visuaisReaproveitados = visuaisReaproveitados;
   prep.linksReaproveitados = linksReaproveitados;
 
-  const audioStorage = {};
-  const audioHashes = {};
-  const transcriptions = {};
-  const arquivosTemporarios = [];
-  // O reaproveitamento por cliente é registrado aqui (e não dentro do upload) justamente porque
-  // esses áudios não passam mais pelo upload. `audiosParaTranscrever` é a lista da janela: só
-  // conta como reaproveitado o áudio que ESTA importação realmente precisaria transcrever.
-  for (const nome of (prep.audiosParaTranscrever || []).map(normalizeName)) {
-    const doLead = cacheDoLead[nome];
-    if (doLead) transcriptions[nome] = { status: "transcrito_reaproveitado", text: doLead, reused: true, viaLeadAnterior: true };
-  }
-  // v827-4 (ZIP grande): sobe os áudios em LOTES paralelos, senão um upload de cada vez
-  // estourava o tempo da função serverless em ZIPs com muitos áudios.
-  const CONCORRENCIA_UPLOAD = 4;
-  const entradas = Object.entries(extracted).map(([base, audioBuffer], i) => {
-    const nome = normalizeName(base);
-    return { nome, audioBuffer, audioPath: `${prefix}/audio/${String(i + 1).padStart(4, "0")}-${nomeStorageSeguro(nome)}` };
+  const audioPrep = await guardarAudiosExtraidosNoStorage({
+    storage, prefix, extracted, cacheDoLead, organizationId
   });
-  const subirUm = async ({ nome, audioBuffer, audioPath }) => {
-    const { error } = await storage.upload(audioPath, audioBuffer, {
-      contentType: contentTypeAudio(nome),
-      upsert: true,
-      cacheControl: "0"
-    });
-    if (error) throw new Error(`Não consegui guardar o áudio extraído ${nome}: ${error.message}`);
-    const hash = hashAudio(audioBuffer);
-    audioStorage[nome] = audioPath;
-    audioHashes[nome] = hash;
-    // O histórico do MESMO cliente (nome do arquivo — mais confiável, ver nota acima de
-    // transcricoesDoLeadAnterior) já foi resolvido antes desta etapa: quem chega aqui não tinha
-    // texto pronto. Sobra o cache por hash de conteúdo, que raramente bate entre importações
-    // separadas, mas não custa manter como reforço.
-    const cached = await carregarTranscricaoCache(storage, hash, organizationId);
-    if (cached) transcriptions[nome] = cached;
-    arquivosTemporarios.push(audioPath);
-  };
-  for (let i = 0; i < entradas.length; i += CONCORRENCIA_UPLOAD) {
-    await Promise.all(Array.from(entradas.slice(i, i + CONCORRENCIA_UPLOAD), subirUm));
-  }
+  const audioStorage = audioPrep.audioStorage;
+  const audioHashes = audioPrep.audioHashes;
+  const transcriptions = audioPrep.transcriptions;
+  const arquivosTemporarios = audioPrep.temporaryFiles;
+  const audioPreparationFailures = audioPrep.audioPreparationFailures;
 
   const manifest = {
     version: 1,
@@ -612,6 +639,7 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
     audioStorage,
     audioHashes,
     transcriptions,
+    audioPreparationFailures,
     temporaryFiles: arquivosTemporarios,
     prep
   };
@@ -814,8 +842,15 @@ export default async function handler(req, res) {
         const cached = await carregarTranscricaoCache(storage, hash, organizationId);
         if (cached) { existentes[nome] = cached; return; }
         const audioPath = manifest.audioStorage[nome];
-        if (!audioPath) return;
-        preparados[i] = { name: nome, buffer: await baixarBuffer(storage, audioPath) };
+        if (!audioPath) {
+          if (!existentes[nome]) existentes[nome] = { status: "erro_preparo_audio", text: "", error: "O áudio foi encontrado na conversa, mas não ficou disponível para transcrição." };
+          return;
+        }
+        try {
+          preparados[i] = { name: nome, buffer: await baixarBuffer(storage, audioPath) };
+        } catch (error) {
+          existentes[nome] = { status: "erro_preparo_audio", text: "", error: errorMessage(error) };
+        }
       });
       const arquivos = preparados.filter(Boolean);
       // v1119 — teto diário de transcrição de importação (a parte mais cara do custo, antes sem
