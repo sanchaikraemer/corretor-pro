@@ -2669,7 +2669,9 @@ export function montarFicharioDaConversa(timeline, corretorNome = "", lead = {},
 - Prioridade única agora: ${lacuna.rotulo}.
 - ID interno da lacuna: ${lacuna.id}.
 - Enquanto essa lacuna continuar aberta, NÃO avance para uma lacuna secundária só para variar as três sugestões.
-- As TRÊS mensagens devem tentar resolver ESTA MESMA lacuna, por abordagens comerciais realmente diferentes (contexto/benefício/forma de conduzir), sem virar três cópias da mesma frase.
+- As TRÊS mensagens devem ser três REDAÇÕES da MESMA jogada comercial e pedir ESTA MESMA lacuna. Não são três etapas nem três caminhos de qualificação.
+- Preserve nas três a arquitetura completa: retomar o assunto real → explicar em linguagem natural por que essa informação ajuda agora → perguntar a lacuna → dizer concretamente o que o corretor fará com a resposta.
+- Varie apenas a redação, o ritmo e o grau de objetividade. Não troque o dado pedido nem corte a consequência prática só para a opção parecer diferente.
 - Quando o cliente responder esta lacuna, ela deixa de ser prioridade e a próxima análise escolhe o próximo dado ou ação que realmente muda a venda.${lacuna.perguntaBase ? `
 - Pergunta decisiva que já ficou aberta: "${lacuna.perguntaBase}".` : ""}`);
     }
@@ -3737,7 +3739,8 @@ function _topicoGenericoDaPergunta(texto = "") {
   if (/\b(qual|quanto|ate quanto|que|me diz|me diga|informa|informe)\b.{0,45}\b(faixa|orcamento|teto|valor total|investir|investimento|pagar)\b/.test(t)
     || /\b(em que faixa|qual faixa|quanto pretende investir|quanto quer investir|valor total.*(?:pretende|quer|pensa).*invest)\b/.test(t)) return "faixa_valor";
   if (/\b(pretende|vai|quer|pensa|seria|consegue)\b.{0,22}\b(financiar|financiamento)\b|\bfinanciar o saldo\b/.test(t)) return "financiamento";
-  if (/\b(quanto|qual|tem|possui|dispoe|consegue)\b.{0,24}\b(entrada|sinal)\b/.test(t)) return "entrada";
+  if (/\b(quanto|qual valor|que valor|tem|possui|dispoe|consegue)\b.{0,45}\b(entrada|sinal)\b/.test(t)
+    || /\b(entrada|sinal)\b.{0,30}\b(quanto|qual valor|que valor)\b/.test(t)) return "entrada";
   if (/\b(qual|que|prefere)\b.{0,24}\b(bairro|regiao|localizacao)\b/.test(t)) return "localizacao";
   if (/\b(quantas?|1 ou 2|uma ou duas)\b.{0,18}\b(vaga|vagas|box|boxes)\b/.test(t)) return "garagem";
   return "";
@@ -3818,6 +3821,48 @@ function _mensagensMuitoParecidas(a = "", b = "") {
   return inter / uniao >= 0.72;
 }
 
+// v1372 — a pergunta certa, sozinha, ainda pode soar como formulário. O padrão aprovado pelo
+// dono no caso Julsimar tem uma segunda metade indispensável: depois de pedir o dado prioritário,
+// diz o que o corretor fará com a resposta. Isso transforma qualificação em benefício concreto
+// (filtrar poucas opções, montar a condição, comparar, selecionar), em vez de só devolver a bola.
+//
+// A checagem é propositalmente ampla: não exige uma frase pronta nem palavras específicas do caso;
+// só exige que exista, depois da pergunta (ou depois do pedido sem '?'), uma consequência prática
+// escrita como ação do corretor.
+function _topicosComerciaisPerguntadosNaMensagem(texto = "") {
+  const bruto = String(texto || "").trim();
+  if (!bruto) return [];
+  const frases = bruto.match(/[^.!?]+[.!?]?/g) || [bruto];
+  const topicos = [];
+  for (const fraseBruta of frases) {
+    const frase = String(fraseBruta || "").trim();
+    if (!frase) continue;
+    if (!frase.endsWith("?") && !_PEDIDO_SEM_INTERROGACAO.test(frase)) continue;
+    const topico = _topicoGenericoDaPergunta(frase);
+    if (topico && !topicos.includes(topico)) topicos.push(topico);
+  }
+  return topicos;
+}
+
+function _fechaLacunaComConsequenciaPratica(texto = "") {
+  const bruto = String(texto || "").trim();
+  if (!bruto) return false;
+  const t = _semAcentoMinuscula(bruto);
+  const acao = /\b(?:separ|filtr|selecion|mont|organiz|compar|pass|envi|mostr|indic|busc|ajust|simul|calcul|defin|confirm|prepar)\w*/i;
+  const ator = /\b(?:eu|consigo|vou|posso|te|lhe)\b/i;
+  const conector = /\b(?:a partir disso|com isso|assim|dai|depois disso|com esse valor|com essa faixa|com esse numero|com essa informacao|e eu|e consigo|e dai)\b/i;
+
+  const ultimoQ = bruto.lastIndexOf("?");
+  if (ultimoQ >= 0) {
+    const depois = _semAcentoMinuscula(bruto.slice(ultimoQ + 1));
+    return depois.length >= 12 && acao.test(depois) && (ator.test(depois) || conector.test(depois));
+  }
+
+  // Pedido sem interrogação: aceita "me diz a faixa e eu separo...", desde que a consequência
+  // venha na própria continuação.
+  return conector.test(t) && acao.test(t);
+}
+
 export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido = null) {
   const lista = (Array.isArray(mensagens) ? mensagens : []).filter(m => m && String(m.texto || "").trim());
   const avisos = [];
@@ -3830,15 +3875,22 @@ export function avisosDeQualidadeDasMensagens(mensagens = [], contextoConhecido 
     const topicoPerguntado = _topicoGenericoDaPergunta(perguntaFinal);
     const topicosRespondidos = Array.isArray(contextoConhecido?.topicosRespondidos) ? contextoConhecido.topicosRespondidos : [];
     const lacunaPrioritaria = contextoConhecido?.lacunaPrioritaria || null;
+    const topicosComerciaisPerguntados = _topicosComerciaisPerguntadosNaMensagem(texto);
 
     // v1370 — as três sugestões obedecem à mesma lacuna prioritária. Sem pedido/pergunta que
     // busque aquela lacuna, a mensagem está desviando do diagnóstico; perguntando outro tópico,
     // está pulando etapa. A tarja é rede de segurança — a regra principal continua no prompt.
     if (lacunaPrioritaria?.id) {
+      const secundarios = topicosComerciaisPerguntados.filter(t => t !== lacunaPrioritaria.id);
+      if (secundarios.length) {
+        motivos.push(`inclui pergunta secundária (${secundarios.join(", ")}) enquanto a lacuna prioritária é ${lacunaPrioritaria.rotulo || lacunaPrioritaria.id}`);
+      }
       if (!perguntaFinal) {
         motivos.push(`não busca a lacuna prioritária (${lacunaPrioritaria.rotulo || lacunaPrioritaria.id})`);
       } else if (topicoPerguntado !== lacunaPrioritaria.id) {
         motivos.push(`desvia da lacuna prioritária (${lacunaPrioritaria.rotulo || lacunaPrioritaria.id})`);
+      } else if (!_fechaLacunaComConsequenciaPratica(texto)) {
+        motivos.push("pergunta a lacuna certa, mas não diz o que fará com a resposta");
       }
     }
     if (topicoPerguntado && topicosRespondidos.some(t => String(t?.id || t) === topicoPerguntado)) {
@@ -6486,13 +6538,40 @@ Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não de
 
   const blocoEsquemaMensagens = `  "mensagens":{
     "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Define a faixa)",
-    "bLabel":"nome curto da segunda abordagem (ex.: Filtra as opções)",
-    "cLabel":"nome curto da terceira abordagem (ex.: Vai ao número)",
+    "bLabel":"nome curto da segunda redação do MESMO passo (ex.: Filtra as opções)",
+    "cLabel":"nome curto da terceira redação do MESMO passo (ex.: Vai ao ponto)",
     "ordemDeEnvio":"instrução prática de envio em 1 ou 2 frases: qual mandar primeiro, se sozinha, e o que esperar antes das outras",
-    "recomendada":"melhor mensagem para este momento — executa o próximo passo e, quando houver LACUNA COMERCIAL PRIORITÁRIA, busca resolver exatamente essa lacuna",
-    "maisSuave":"segunda abordagem para o MESMO objetivo comercial prioritário, com contexto/benefício diferente e menor pressão; não pule para uma lacuna secundária só para parecer diferente",
-    "maisDireta":"terceira abordagem para o MESMO objetivo comercial prioritário, mais objetiva; não invente ligação, visita, dia, hora ou compromisso que não exista no histórico"
+    "recomendada":"melhor mensagem para este momento — completa, natural e pronta para copiar; executa o único próximo passo eleito",
+    "maisSuave":"outra REDAÇÃO do mesmo próximo passo, preservando exatamente o dado pedido e o que será feito depois da resposta",
+    "maisDireta":"outra REDAÇÃO do mesmo próximo passo, mais objetiva, preservando exatamente o dado pedido e o que será feito depois da resposta"
   },`;
+
+  // v1372 — quando o app elege uma lacuna, as três sugestões NÃO são três caminhos de
+  // qualificação. São três redações da MESMA jogada comercial. O caso Julsimar mostrou que a
+  // instrução anterior ainda dava liberdade demais: A perguntava faixa, B pulava para entrada e C
+  // para parcelas/reforços. Aqui a arquitetura fica explícita antes de o modelo escrever.
+  const blocoConvergenciaLacuna = lacunaPrioritaria ? `MODO DE CONVERGÊNCIA — REGRA ESTRUTURAL DO PRODUTO
+A leitura determinística do app elegeu UMA única lacuna prioritária: ${lacunaPrioritaria.rotulo} (ID ${lacunaPrioritaria.id}).
+
+ANTES de escrever A/B/C, componha mentalmente UMA mensagem comercial canônica com esta arquitetura:
+1. cumprimento + nome;
+2. retomada natural do assunto real da conversa;
+3. uma frase curta dizendo POR QUE vale esclarecer ${lacunaPrioritaria.rotulo} agora;
+4. UMA pergunta clara que busque exatamente ${lacunaPrioritaria.rotulo};
+5. uma frase curta dizendo O QUE o corretor fará com a resposta (filtrar poucas opções, montar a condição ou executar o próximo passo sustentado pela conversa).
+
+Depois:
+- A é a melhor versão dessa mensagem canônica.
+- B é uma reescrita mais leve da MESMA mensagem.
+- C é uma reescrita mais direta da MESMA mensagem.
+- A/B/C NÃO são etapas em sequência e NÃO são oportunidades para descobrir dados diferentes.
+- É PROIBIDO B ou C trocar ${lacunaPrioritaria.rotulo} por entrada, parcelas, reforços, financiamento, visita, ligação ou qualquer outra lacuna secundária.
+- Preserve nas três o MESMO pedido central e a MESMA consequência prática da resposta. Varie apenas linguagem, ritmo e grau de objetividade.
+- Não escreva metalinguagem de sistema como "as condições já entraram na conversa", "na análise do empreendimento", "seu perfil de compra" ou "para avançarmos na qualificação". Fale como corretor de WhatsApp.
+
+EXEMPLO DE ARQUITETURA (somente forma; NÃO copie fatos nem valores):
+"Retomando nossa conversa sobre [assunto]: como você está analisando [situação real], queria entender uma coisa para eu conseguir montar algo mais objetivo. [Pergunta da lacuna]. A partir disso consigo [próximo passo concreto sustentado]."
+` : "";
 
   const blocoRegrasDasMensagens = `REGRAS PARA AS TRÊS MENSAGENS
 - As três nascem da mesma verdade factual e da mesma leitura comercial.
@@ -6500,19 +6579,19 @@ Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não de
   aVirada, a recomendada É a virada contada ao cliente: o fato, o que ele abre pra ele, e UMA
   pergunta que destrava a seleção. Não gaste a recomendada pedindo confirmação burocrática se
   existe uma virada pra entregar.
-- MAIS SUAVE explora/resolve o ponto mais importante com menor pressão — e o faz ABRINDO OUTRA
-  PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu.
-  Não é a recomendada com as palavras mais macias.
-- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Ela
-  propõe um PASSO CONCRETO — o que você vai fazer, e o que precisa dele para fazer. Não é a
-  recomendada encurtada.
-- Se houver um único próximo passo adequado, as três DEVEM convergir para ele por abordagens diferentes.
+- MAIS SUAVE e MAIS DIRETA só abrem caminhos comerciais diferentes quando NÃO existe lacuna
+  prioritária. Quando existe, elas são reescritas da mesma jogada: preservam o MESMO dado pedido,
+  a MESMA razão para pedir e o MESMO próximo passo depois da resposta.
+- MAIS SUAVE reduz a pressão pela forma de escrever; não muda a pergunta central.
+- MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa.
+- Se houver um único próximo passo adequado, as três DEVEM convergir para ele.
 - Se o fichário trouxer "LACUNA COMERCIAL PRIORITÁRIA", ela manda nas três mensagens. Enquanto essa
   lacuna estiver aberta, as três precisam buscar resolver o MESMO dado/decisão. Não use a sugestão 2
   para perguntar uma lacuna secundária e não use a 3 para trocar qualificação por ligação/visita.
-- MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM. Varie a estratégia: uma pode explicar que vai filtrar
-  poucas opções, outra que vai montar uma condição comparável, outra ir direto ao dado. O contexto,
-  a justificativa e a condução mudam; o objetivo comercial prioritário não muda.
+- MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM. As três preservam a MESMA arquitetura comercial
+  completa (retomada → motivo → pergunta → consequência prática), mas mudam a forma: uma é a melhor
+  versão, outra é mais leve e outra é mais direta. Não omita o que será feito com a resposta e não
+  transforme a variação de redação em outro caminho comercial.
 - CONFIRA ANTES DE DEVOLVER: as três podem terminar pedindo o mesmo DADO quando ele é a lacuna
   prioritária. O erro é copiar a mesma construção/frase três vezes ou mudar para um dado menos
   importante só para parecer diferente.
@@ -6703,7 +6782,7 @@ ${duasEtapas ? "" : blocoEsquemaMensagens}  "recomendacaoContato":{
   "nextAction":"menor próximo passo útil coerente com a leitura"
 }
 
-${duasEtapas ? "" : `${blocoRegrasDasMensagens}
+${duasEtapas ? "" : `${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
 `}
 CONVERSA ${entradaIncremental ? "— RESUMO ANTERIOR + NOVIDADE" : cortadaPorLimiteTecnico ? "— TRECHO DISPONÍVEL APÓS LIMITE TÉCNICO" : "COMPLETA"}:
 ${timelineText}
@@ -6837,7 +6916,7 @@ do próprio cliente.
 
 ${blocoPisoDeForma}
 
-${blocoRegrasDasMensagens}
+${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
 
 ÚLTIMAS MENSAGENS DA CONVERSA (para pegar o fio e o tom; o histórico completo já está na leitura acima):
 ${caudaDaConversa}
@@ -6909,7 +6988,7 @@ ${revisaoSoDasMensagens}`;
     let contextoQualidadeMensagens = null;
     const motivosBloqueantes1370 = (avisos = []) => (Array.isArray(avisos) ? avisos : []).flatMap(a =>
       (Array.isArray(a?.motivos) ? a.motivos : [])
-        .filter(m => /lacuna prioritária|inventa (?:ligação|visita|reunião\/café|compromisso)|inventa dia\/horário|repete quase a mesma mensagem/i.test(String(m || "")))
+        .filter(m => /lacuna prioritária|não diz o que fará com a resposta|inventa (?:ligação|visita|reunião\/café|compromisso)|inventa dia\/horário|repete quase a mesma mensagem/i.test(String(m || "")))
         .map(m => `${String(a?.qual || "?").toUpperCase()}: ${m}`)
     );
     try {
@@ -6979,11 +7058,12 @@ LEITURA COMERCIAL JÁ FECHADA:
 ${leituraFechadaParaReparo}
 
 ${ficharioDaConversa ? `FICHÁRIO FACTUAL DO APP:\n${ficharioDaConversa}\n` : ""}
-${blocoRegrasDasMensagens}
+${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
 
 REGRAS BLOQUEANTES DESTE REPARO:
 - Se há LACUNA COMERCIAL PRIORITÁRIA, A, B e C precisam resolver ESSA MESMA lacuna. Não pule para outra pergunta só para variar.
-- Varie abordagem, contexto e benefício; não copie a mesma mensagem três vezes.
+- Em cada uma, depois de pedir a lacuna, diga em uma frase curta o que o corretor fará com a resposta. Pergunta solta no fim não passa.
+- Varie redação, ritmo e grau de objetividade; não copie a mesma mensagem três vezes.
 - Não invente ligação, visita, reunião, avaliação, dia, horário ou compromisso. Só complete o MESMO compromisso que já exista e esteja válido no histórico.
 - Não explique os erros e não devolva diagnóstico.
 
@@ -7036,8 +7116,9 @@ Devolva JSON válido exatamente neste formato:
       }
     }
 
-    // A validação técnica continua exigindo as três sugestões. Violações comerciais v1370 tentam
-    // se reparar antes da resposta; só permanecem como aviso se o reparo não couber no tempo/falhar.
+    // A validação técnica continua exigindo as três sugestões. Violações comerciais tentam se
+    // reparar antes da resposta e, se ainda sobreviverem, aparecem como aviso — a análise comercial
+    // inteira não pode ser descartada por causa de uma redação ruim (regra histórica do produto).
     const trioOk = validacaoMensagens.ok;
     // v1174 — sem as três mensagens, a rota devolve erro e o app joga a análise fora: pro corretor
     // isso NÃO foi uma análise, então não pode consumir uma unidade do teto do dia dele.
