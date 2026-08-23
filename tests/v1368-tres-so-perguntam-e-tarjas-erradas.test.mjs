@@ -126,11 +126,12 @@ const temMotivo = (avisos, re) => semNomes(avisos).some(a => a.motivos.some(m =>
   assert.ok(/Reconhecer o intervalo NÃO é escrever quantos dias/.test(fichario),
     "o fichário precisa explicar que reconhecer o intervalo não é contar os dias");
 
-  // O dever de entregar (há valor citado nesta conversa).
-  assert.ok(/PELO MENOS UMA DAS TRÊS MENSAGENS PRECISA ENTREGAR/.test(fichario),
-    "havendo o que entregar, o fichário precisa exigir entrega");
-  assert.ok(/não é entregar/.test(fichario),
-    "e precisa dizer que prometer preparar não conta como entrega");
+  // v1373 — valor antigo citado NÃO é, sozinho, uma entrega pendente. O print do Arnildo mostrou
+  // a consequência da regra antiga: a conferência acusava "as três só perguntam" mesmo quando o
+  // passo correto era simplesmente qualificar/aguardar. A obrigação de entregar só nasce de uma
+  // pergunta do cliente, promessa do corretor ou compromisso real ainda aberto.
+  assert.ok(!/PELO MENOS UMA DAS TRÊS MENSAGENS PRECISA ENTREGAR/.test(fichario),
+    "valor já citado, sem obrigação aberta, não pode forçar uma entrega nova");
 
   // O que é do corretor não vira pergunta pro cliente (raiz do caso Flavio).
   assert.ok(/O QUE É DO CORRETOR NUNCA VIRA PERGUNTA PARA O CLIENTE/.test(fichario),

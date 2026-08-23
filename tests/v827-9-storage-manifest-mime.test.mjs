@@ -19,7 +19,8 @@ const storage = {
   },
   async upload(path, payload, options = {}) {
     const type = String(options.contentType || "application/octet-stream");
-    if (!allowed.has(type) && !type.startsWith("audio/")) {
+    // v1373 — reproduz o bucket REAL: ele aceita ZIP/octet-stream e NÃO abre exceção para audio/*.
+    if (!allowed.has(type)) {
       return { data: null, error: { message: `mime type ${type} is not supported` } };
     }
     const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
@@ -42,4 +43,4 @@ assert.equal(result.manifest.status, "prepared");
 assert.equal(result.manifest.prep.messages.length, 2);
 assert.ok(objects.has(manifestPath), "manifesto precisa ser persistido");
 assert.equal(uploadTypes.get(manifestPath), "application/octet-stream");
-console.log("v827-9: manifesto interno salvo mesmo com bucket restrito a ZIP/áudio/octet-stream.");
+console.log("v827-9: manifesto interno salvo com bucket real restrito a ZIP/octet-stream.");
