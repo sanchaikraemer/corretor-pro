@@ -34,11 +34,16 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
     const qs = () => null;
     const getLeadsData = async (f) => { chamadas.getLeadsData++; return { ok:true, items:[{ id:'novo', etapa:'Contato' }] }; };
     const _processarDashboard = (data) => { chamadas.processar.push(data); };
+    // v1372 — carregarDashboard passou a marcar a carteira em memória como sincronizada
+    // via cpCarteiraSincronizada(). Este teste executa a função isolada com new Function,
+    // então precisa fornecer essa dependência do app como stub neutro. Sem isso, o teste
+    // quebra por ReferenceError embora a função exista normalmente em app.js.
+    const cpCarteiraSincronizada = () => {};
     const fn = new Function(
-      'state', 'qs', 'getLeadsData', '_processarDashboard',
+      'state', 'qs', 'getLeadsData', '_processarDashboard', 'cpCarteiraSincronizada',
       `${src}\nreturn carregarDashboard(${force === undefined ? '' : force});`
     );
-    await fn(state, qs, getLeadsData, _processarDashboard);
+    await fn(state, qs, getLeadsData, _processarDashboard, cpCarteiraSincronizada);
     return chamadas;
   }
 
