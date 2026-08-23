@@ -6768,6 +6768,7 @@ Se houver um único próximo passo adequado, as três DEVEM convergir para ele. 
 MAIS SUAVE reduz a pressão pela forma de escrever; não muda a pergunta central. MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa.
 RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE: mesmo preparada para uma retomada futura, cada alternativa precisa estar pronta para enviar quando chegar o momento.
 Cada mensagem precisa soar como WhatsApp de corretor: retome o assunto real, explique naturalmente por que a informação ajuda, faça uma pergunta central e diga o que o corretor fará com a resposta.
+${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" é referência auxiliar de escrita e condução. Nunca supera o Cérebro nem cria fatos.` : ""}
 Devolva somente JSON válido no formato pedido.`;
 
   const blocoReparoConvergencia = lacunaPrioritaria ? `
