@@ -6537,41 +6537,14 @@ do produto, porque o corretor COPIA E COLA no WhatsApp e não fica consertando r
 Mensagem que começa direto no assunto, sem cumprimento, é rascunho — não devolva rascunho.`;
 
   const blocoEsquemaMensagens = `  "mensagens":{
-    "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Define a faixa)",
-    "bLabel":"nome curto da segunda redação do MESMO passo (ex.: Filtra as opções)",
-    "cLabel":"nome curto da terceira redação do MESMO passo (ex.: Vai ao ponto)",
+    "aLabel":"nome curto da jogada da recomendada (2 a 4 palavras, ex.: Reposiciona a faixa)",
+    "bLabel":"nome curto da jogada da maisSuave (ex.: Puxa a avaliação)",
+    "cLabel":"nome curto da jogada da maisDireta (ex.: Reabre pelo ponto da objeção)",
     "ordemDeEnvio":"instrução prática de envio em 1 ou 2 frases: qual mandar primeiro, se sozinha, e o que esperar antes das outras",
-    "recomendada":"melhor mensagem para este momento — completa, natural e pronta para copiar; executa o único próximo passo eleito",
-    "maisSuave":"outra REDAÇÃO do mesmo próximo passo, preservando exatamente o dado pedido e o que será feito depois da resposta",
-    "maisDireta":"outra REDAÇÃO do mesmo próximo passo, mais objetiva, preservando exatamente o dado pedido e o que será feito depois da resposta"
+    "recomendada":"melhor mensagem para este momento — a JOGADA PRINCIPAL: quando existe aVirada, é ela que a recomendada entrega ao cliente",
+    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico, que ABRE OUTRA PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu. Nunca a recomendada com palavras mais macias",
+    "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite, propondo um PASSO CONCRETO (o que você vai fazer e o que precisa dele para fazer). Nunca a recomendada encurtada"
   },`;
-
-  // v1372 — quando o app elege uma lacuna, as três sugestões NÃO são três caminhos de
-  // qualificação. São três redações da MESMA jogada comercial. O caso Julsimar mostrou que a
-  // instrução anterior ainda dava liberdade demais: A perguntava faixa, B pulava para entrada e C
-  // para parcelas/reforços. Aqui a arquitetura fica explícita antes de o modelo escrever.
-  const blocoConvergenciaLacuna = lacunaPrioritaria ? `MODO DE CONVERGÊNCIA — REGRA ESTRUTURAL DO PRODUTO
-A leitura determinística do app elegeu UMA única lacuna prioritária: ${lacunaPrioritaria.rotulo} (ID ${lacunaPrioritaria.id}).
-
-ANTES de escrever A/B/C, componha mentalmente UMA mensagem comercial canônica com esta arquitetura:
-1. cumprimento + nome;
-2. retomada natural do assunto real da conversa;
-3. uma frase curta dizendo POR QUE vale esclarecer ${lacunaPrioritaria.rotulo} agora;
-4. UMA pergunta clara que busque exatamente ${lacunaPrioritaria.rotulo};
-5. uma frase curta dizendo O QUE o corretor fará com a resposta (filtrar poucas opções, montar a condição ou executar o próximo passo sustentado pela conversa).
-
-Depois:
-- A é a melhor versão dessa mensagem canônica.
-- B é uma reescrita mais leve da MESMA mensagem.
-- C é uma reescrita mais direta da MESMA mensagem.
-- A/B/C NÃO são etapas em sequência e NÃO são oportunidades para descobrir dados diferentes.
-- É PROIBIDO B ou C trocar ${lacunaPrioritaria.rotulo} por entrada, parcelas, reforços, financiamento, visita, ligação ou qualquer outra lacuna secundária.
-- Preserve nas três o MESMO pedido central e a MESMA consequência prática da resposta. Varie apenas linguagem, ritmo e grau de objetividade.
-- Não escreva metalinguagem de sistema como "as condições já entraram na conversa", "na análise do empreendimento", "seu perfil de compra" ou "para avançarmos na qualificação". Fale como corretor de WhatsApp.
-
-EXEMPLO DE ARQUITETURA (somente forma; NÃO copie fatos nem valores):
-"Retomando nossa conversa sobre [assunto]: como você está analisando [situação real], queria entender uma coisa para eu conseguir montar algo mais objetivo. [Pergunta da lacuna]. A partir disso consigo [próximo passo concreto sustentado]."
-` : "";
 
   const blocoRegrasDasMensagens = `REGRAS PARA AS TRÊS MENSAGENS
 - As três nascem da mesma verdade factual e da mesma leitura comercial.
@@ -6579,37 +6552,31 @@ EXEMPLO DE ARQUITETURA (somente forma; NÃO copie fatos nem valores):
   aVirada, a recomendada É a virada contada ao cliente: o fato, o que ele abre pra ele, e UMA
   pergunta que destrava a seleção. Não gaste a recomendada pedindo confirmação burocrática se
   existe uma virada pra entregar.
-- MAIS SUAVE e MAIS DIRETA só abrem caminhos comerciais diferentes quando NÃO existe lacuna
-  prioritária. Quando existe, elas são reescritas da mesma jogada: preservam o MESMO dado pedido,
-  a MESMA razão para pedir e o MESMO próximo passo depois da resposta.
-- MAIS SUAVE reduz a pressão pela forma de escrever; não muda a pergunta central.
-- MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa.
-- Se houver um único próximo passo adequado, as três DEVEM convergir para ele.
-- Se o fichário trouxer "LACUNA COMERCIAL PRIORITÁRIA", ela manda nas três mensagens. Enquanto essa
-  lacuna estiver aberta, as três precisam buscar resolver o MESMO dado/decisão. Não use a sugestão 2
-  para perguntar uma lacuna secundária e não use a 3 para trocar qualificação por ligação/visita.
-- MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM. As três preservam a MESMA arquitetura comercial
-  completa (retomada → motivo → pergunta → consequência prática), mas mudam a forma: uma é a melhor
-  versão, outra é mais leve e outra é mais direta. Não omita o que será feito com a resposta e não
-  transforme a variação de redação em outro caminho comercial.
-- CONFIRA ANTES DE DEVOLVER: as três podem terminar pedindo o mesmo DADO quando ele é a lacuna
-  prioritária. O erro é copiar a mesma construção/frase três vezes ou mudar para um dado menos
-  importante só para parecer diferente.
-- CADA MENSAGEM TEM NOME DE JOGADA (aLabel/bLabel/cLabel): 2 a 4 palavras dizendo COMO ela conduz
-  para o mesmo objetivo (ex.: "Define a faixa", "Filtra opções", "Vai ao número").
+- MAIS SUAVE explora/resolve o ponto mais importante com menor pressão — e o faz ABRINDO OUTRA
+  PORTA: entrega algo que o cliente ainda não sabe, ou responde algo que ele pediu e não recebeu.
+  Não é a recomendada com as palavras mais macias.
+- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Ela
+  propõe um PASSO CONCRETO — o que você vai fazer, e o que precisa dele para fazer. Não é a
+  recomendada encurtada.
+- Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
+- CONFIRA ANTES DE DEVOLVER: leia a ÚLTIMA FRASE das três. Se as três terminam pedindo a MESMA
+  coisa ao cliente, você devolveu uma mensagem escrita três vezes — refaça duas delas. Pelo menos
+  duas das três precisam pedir coisas diferentes: uma pode confirmar a faixa, outra trazer o que
+  ele não sabe, outra propor o passo concreto.
+- CADA MENSAGEM TEM NOME DE JOGADA (aLabel/bLabel/cLabel): 2 a 4 palavras dizendo O QUE ELA FAZ
+  (ex.: "Reposiciona a faixa", "Puxa a avaliação", "Reabre pelo prazo"). Se você não consegue dar
+  nomes diferentes às três, elas são a mesma jogada — volte e refaça.
 - ORDEM DE ENVIO (ordemDeEnvio): diga qual mandar primeiro e por quê. Três mensagens juntas viram
   bloco, e cliente que já sumiu duas vezes some de novo — em regra, a principal vai sozinha e as
   outras esperam a resposta.
-- CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA. Quando existe lacuna prioritária, todas podem pedir
-  o mesmo dado, mas precisam chegar nele por três abordagens úteis. Sem lacuna prioritária, preserve
-  a diversidade normal e siga o pedido/pendência que a leitura apontou.
+- CONVERGIR NO PASSO NÃO É REPETIR A PERGUNTA. Mesmo indo todas para o mesmo próximo passo, as três
+  são três CAMINHOS até ele — uma responde o que o cliente pediu, outra traz o que ele ainda não
+  sabe, outra trata a objeção que ficou de pé, outra busca o dado que destrava. Se as três terminam
+  na mesma pergunta, com as mesmas palavras, você não escreveu três caminhos: escreveu uma mensagem
+  três vezes. Trocar palavra não é trocar caminho.
 - Não repita pergunta já respondida nem transforme falta de dado em interrogatório.
 - Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil.
 - Não invente ação já realizada, novidade, disponibilidade, prazo, condição, urgência ou escassez.
-- NÃO INVENTE COMPROMISSO: ligação, visita, reunião, avaliação, dia ou horário só podem aparecer como
-  próximo passo quando esse MESMO tipo de compromisso já nasceu do histórico e continua válido.
-  Não crie "posso te ligar terça às 10h" para variar uma qualificação. Se a conversa abriu uma
-  visita, complete a visita; se abriu uma ligação, complete a ligação; se não abriu nenhum, não crie.
 - Não prometa fazer no passado algo que ainda será feito. Diferencie "vou verificar" de "verifiquei".
 - Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
 - Não despeje catálogo quando os critérios já permitem curadoria.
@@ -6663,11 +6630,10 @@ Antes de devolver o JSON, confirme:
 5. O nextAction é realmente o menor passo útil agora?
 6. As três mensagens executam essa leitura, em vez de seguir um roteiro automático?
 7. Alguma mensagem força visita/encontro/proposta sem maturidade?
-8. Alguma mensagem inventa novidade, urgência, ligação, visita, dia, hora ou compromisso sem base no histórico?
-9. Se existe LACUNA COMERCIAL PRIORITÁRIA, as três mensagens resolvem essa mesma lacuna sem pular para outra?
-10. A análise considerou o começo, o meio e o fim do histórico fornecido?
-11. A resposta está fiel ao Cérebro Comercial atual?
-12. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+8. Alguma mensagem inventa novidade, urgência ou ação do corretor?
+9. A análise considerou o começo, o meio e o fim do histórico fornecido?
+10. A resposta está fiel ao Cérebro Comercial atual?
+11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
     alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   const revisaoSoDaLeitura = `REVISÃO FINAL SILENCIOSA
@@ -6684,12 +6650,11 @@ Antes de devolver o JSON, confirme:
 Antes de devolver o JSON, confirme:
 1. As três mensagens executam a leitura acima, em vez de seguir um roteiro automático?
 2. Alguma mensagem força visita/encontro/proposta sem maturidade?
-3. Alguma mensagem inventa novidade, urgência, ligação, visita, dia, hora ou compromisso sem base no histórico?
-4. Se existe LACUNA COMERCIAL PRIORITÁRIA, as três buscam resolver essa mesma lacuna?
-5. Alguma mensagem repete pergunta que a leitura marcou como já respondida, ou pede o que o
+3. Alguma mensagem inventa novidade, urgência ou ação do corretor?
+4. Alguma mensagem repete pergunta que a leitura marcou como já respondida, ou pede o que o
    cliente já informou?
-6. As três estão fiéis ao Cérebro Comercial atual?
-7. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+5. As três estão fiéis ao Cérebro Comercial atual?
+6. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   const prompt = `Execute a análise usando o Cérebro Comercial e TODO o contexto fornecido abaixo.
@@ -6782,13 +6747,42 @@ ${duasEtapas ? "" : blocoEsquemaMensagens}  "recomendacaoContato":{
   "nextAction":"menor próximo passo útil coerente com a leitura"
 }
 
-${duasEtapas ? "" : `${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
+${duasEtapas ? "" : `${blocoRegrasDasMensagens}
 `}
 CONVERSA ${entradaIncremental ? "— RESUMO ANTERIOR + NOVIDADE" : cortadaPorLimiteTecnico ? "— TRECHO DISPONÍVEL APÓS LIMITE TÉCNICO" : "COMPLETA"}:
 ${timelineText}
 
 ${duasEtapas ? revisaoSoDaLeitura : revisaoCompleta}`;
   // ===== FIM DO MIOLO DO PROMPT =====
+
+  // v1372 — O PORTEIRO DA v1327 PROTEGE O MIOLO MEDIDO DA ANÁLISE. As correções de Julsimar
+  // ficam DEPOIS dele, como validação/reparo da saída, sem fingir que a bateria comercial foi
+  // rodada novamente. O diagnóstico continua saindo do prompt medido; só uma mensagem reprovada
+  // pela conferência determinística entra nesta segunda chamada curta.
+  const systemPromptReparoMensagens = `Você é o revisor final das mensagens comerciais do Corretor Pro.
+A leitura comercial recebida já está fechada: NÃO refaça diagnóstico, NÃO invente fatos e NÃO mude timing, produto, objeção ou próximo passo.
+Sua única tarefa é reescrever A, B e C para obedecer às regras determinísticas informadas pelo app e ao Cérebro Comercial fornecido.
+Quando houver uma LACUNA COMERCIAL PRIORITÁRIA, as três mensagens devem resolver ESSA MESMA lacuna; variam apenas linguagem, ritmo e grau de objetividade.
+NÃO INVENTE COMPROMISSO: não crie ligação, visita, reunião, avaliação, dia, horário ou compromisso que não exista no histórico. Não crie "posso te ligar terça às 10h" só para variar a abordagem.
+Se houver um único próximo passo adequado, as três DEVEM convergir para ele. CONVERGIR NO PASSO NÃO É COPIAR A PERGUNTA; MESMA LACUNA NÃO SIGNIFICA MESMA MENSAGEM.
+MAIS SUAVE reduz a pressão pela forma de escrever; não muda a pergunta central. MAIS DIRETA encurta o caminho até a pergunta central; não troca a pergunta por outra etapa.
+RECOMENDAR ESPERAR NÃO LIBERA MENSAGEM PELA METADE: mesmo preparada para uma retomada futura, cada alternativa precisa estar pronta para enviar quando chegar o momento.
+Cada mensagem precisa soar como WhatsApp de corretor: retome o assunto real, explique naturalmente por que a informação ajuda, faça uma pergunta central e diga o que o corretor fará com a resposta.
+Devolva somente JSON válido no formato pedido.`;
+
+  const blocoReparoConvergencia = lacunaPrioritaria ? `
+MODO DE CONVERGÊNCIA DO REPARO
+Lacuna comercial prioritária: ${lacunaPrioritaria.rotulo} (ID ${lacunaPrioritaria.id}).
+- A, B e C devem pedir exatamente essa lacuna — nenhuma pode trocar por entrada, parcelas, reforços, financiamento, visita, ligação ou outra qualificação.
+- Cada uma usa UMA pergunta comercial central. Saudação social (ex.: "Tudo bem?") não conta como segunda qualificação.
+- Estrutura obrigatória: retomada do assunto real → motivo natural → pergunta da lacuna → consequência prática da resposta.
+- Depois da resposta, diga concretamente o que o corretor fará: filtrar poucas opções, selecionar unidades, montar/ajustar condição, comparar ou outro próximo passo sustentado pela leitura.
+- As três são alternativas, não sequência. Varie a redação, não o objetivo comercial.
+` : `
+MODO DE REPARO SEM LACUNA ÚNICA
+- Preserve exatamente o próximo passo já definido pela leitura comercial.
+- Corrija apenas o motivo bloqueante apontado pelo app; não abra nova etapa de qualificação.
+`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
@@ -6916,7 +6910,7 @@ do próprio cliente.
 
 ${blocoPisoDeForma}
 
-${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
+${blocoRegrasDasMensagens}
 
 ÚLTIMAS MENSAGENS DA CONVERSA (para pegar o fio e o tom; o histórico completo já está na leitura acima):
 ${caudaDaConversa}
@@ -7022,6 +7016,9 @@ ${revisaoSoDasMensagens}`;
       console.warn("[direciona] conferência das três mensagens falhou:", erroAviso?.message || erroAviso);
     }
 
+    // Nenhuma sugestão de mensagem é reinterpretada localmente/deterministicamente: o código só
+    // identifica a violação. Se houver tempo, UMA nova chamada de IA reescreve as três em cima da
+    // leitura fechada; se não houver, a mensagem original continua visível com o aviso.
     // v1370 — AVISO BLOQUEANTE VIRA REPARO, NÃO TARJA VERMELHA ENTREGUE AO CORRETOR.
     // O print do Julsimar mostrou a falha estrutural: o app sabia que B pulava a etapa e que C
     // inventava ligação, mas mesmo assim mostrava as duas. Agora, se a conferência determinística
@@ -7058,7 +7055,11 @@ LEITURA COMERCIAL JÁ FECHADA:
 ${leituraFechadaParaReparo}
 
 ${ficharioDaConversa ? `FICHÁRIO FACTUAL DO APP:\n${ficharioDaConversa}\n` : ""}
-${blocoConvergenciaLacuna}${blocoRegrasDasMensagens}
+CÉREBRO COMERCIAL ATUAL:
+${instrucoesCerebroTexto || "Nenhuma regra adicional configurada."}
+
+${blocoPisoDeForma}
+${blocoReparoConvergencia}
 
 REGRAS BLOQUEANTES DESTE REPARO:
 - Se há LACUNA COMERCIAL PRIORITÁRIA, A, B e C precisam resolver ESSA MESMA lacuna. Não pule para outra pergunta só para variar.
@@ -7080,7 +7081,7 @@ Devolva JSON válido exatamente neste formato:
         try {
           const reparo = await chamarGPT4Json({
             openai,
-            systemPrompt: systemPromptAnalise,
+            systemPrompt: systemPromptReparoMensagens,
             prompt: promptReparo,
             model: modeloMensagens(),
             maxOutputTokens: Number(process.env.DIRECIONA_MENSAGENS_MAX_TOKENS || 2000),
