@@ -147,7 +147,7 @@ export const CATALOGO_ENV = [
 
   // ── Ajuste fino da análise ──────────────────────────────────────────────────────────────────
   { nome: "DIRECIONA_ANALYSIS_BUDGET_MS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
-    oQueFaz: "Quanto tempo a análise tem para responder, em milésimos de segundo (padrão 150000 = 2min30)." },
+    oQueFaz: "Quanto tempo a análise tem para responder, em milésimos de segundo (padrão 240000 = 4min)." },
   { nome: "DIRECIONA_ANALYSIS_TIMEOUT_MS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",
     oQueFaz: "Tempo máximo de UMA chamada à IA antes de desistir." },
   { nome: "DIRECIONA_ANALYSIS_MAX_TOKENS", tipo: "numero", obrigatoria: false, grupo: "Ajuste fino",

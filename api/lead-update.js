@@ -7,10 +7,10 @@ import { COMMERCIAL_SCHEMA_VERSION, commercialSchemaFrom, stampCommercialSchema 
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { resolveOrganizationId, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
-import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681, _mesclarAnaliseV681 } from "./_persistence.js";
+import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, limparMarcasDaAnaliseAnterior, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681, _mesclarAnaliseV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
-  getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial, corrigirNomeDoCliente,
+  getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial, corrigirNomeDoCliente, analiseSemMensagemValida,
   ARQUITETURA_MENSAGENS_ATUAL, invalidarMemoriaComercialCache,
   upsertConfigComOrganizacao, invalidarConhecimentoCorretorCache
 } from "./_pipeline.js";
@@ -32,11 +32,14 @@ function json(res, status, payload) {
 // gravação de uma análise que já estava pronta na tela.
 export function obterAnaliseValidadaDaImportacao(result) {
   const analysis = result?.analysis;
-  const trio = [analysis?.messages?.a, analysis?.messages?.b, analysis?.messages?.c];
-  const trioPreenchido = trio.every(v => String(v || "").trim().length >= 10);
-  if (!analysis || typeof analysis !== "object" || analysis.sugestoesPendentes === true || !trioPreenchido) {
+  const principalOk = String(analysis?.messages?.a || "").trim().length >= 10;
+  const semMensagemAgoraOk = analiseSemMensagemValida(analysis);
+  // v1411 hotfix — a Condução Interativa não exige três mensagens. Quando há mensagem agora,
+  // a recomendada (a) basta; quando a melhor conduta é aguardar, nenhuma mensagem é resultado
+  // válido desde que o estado sem mensagem passe pela validação semântica central.
+  if (!analysis || typeof analysis !== "object" || analysis.sugestoesPendentes === true || (!principalOk && !semMensagemAgoraOk)) {
     const detalhes = Array.isArray(analysis?.validacaoSugestoes) ? analysis.validacaoSugestoes.join("; ") : "";
-    throw new Error(detalhes || "A importação não contém três mensagens já validadas pelo Cérebro.");
+    throw new Error(detalhes || "A importação não contém uma condução comercial válida pelo Cérebro.");
   }
   return analysis;
 }
@@ -502,6 +505,9 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
     confirmedAppointments: []
   };
   delete merged._importacaoPendente;
+  // v1385 — a tarja "Sugestões da análise anterior" e os avisos de problema pertencem à análise
+  // que os gerou, não ao cliente: análise nova que não os traz limpa os do cadastro antigo.
+  limparMarcasDaAnaliseAnterior(merged, nova);
 
 
 

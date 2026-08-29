@@ -9,7 +9,7 @@
 // contrário do fluxo manual (importar → conferir → "Salvar lead"). Mesma lógica de
 // persistProcessingResult que api/lead-update.js (ação "salvar-novo") já usa.
 import { resolveOrganizationIdByAtalhoToken, persistProcessingResult } from "./_persistence.js";
-import { processZipBuffer, marcarAprendizadoPendente } from "./_pipeline.js";
+import { processZipBuffer, marcarAprendizadoPendente, analiseSemMensagemValida } from "./_pipeline.js";
 import { lerZipDaRequisicao } from "./_zipUpload.js";
 
 function json(res, status, payload) {
@@ -37,13 +37,13 @@ export default async function handler(req, res) {
 
     const result = await processZipBuffer(zipBuffer, { audioWindowDays, organizationId });
     const analysis = result?.analysis || null;
-    const messages = analysis?.messages || {};
-    const complete = [messages.a, messages.b, messages.c].every(v => String(v || "").trim().length >= 10);
-    if (!analysis || analysis.mode === "erro_api" || analysis.mode === "sem_api" || analysis.sugestoesPendentes === true || !complete) {
+    const principalOk = String(analysis?.messages?.a || "").trim().length >= 10;
+    const semMensagemAgoraOk = analiseSemMensagemValida(analysis);
+    if (!analysis || analysis.mode === "erro_api" || analysis.mode === "sem_api" || analysis.sugestoesPendentes === true || (!principalOk && !semMensagemAgoraOk)) {
       return json(res, 502, {
         ok: false,
         error: "A conversa foi importada, mas a análise comercial não foi concluída. Abra o Corretor Pro e importe esse ZIP por lá pra tentar de novo.",
-        details: analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A IA não devolveu as três mensagens.",
+        details: analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A IA não devolveu uma condução comercial válida.",
         recoverable: true
       });
     }
