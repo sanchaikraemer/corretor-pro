@@ -227,7 +227,10 @@ import './js/pwa-install.js?v=__VERSION__';
 // A v1353 tinha feito eles viajarem junto (eram apagados aqui e por isso a leitura de imagem/PDF
 // do servidor nunca tinha o que ler). O envio ficou mais pesado e a importação dele foi recusada
 // com 56,5 MB; o dono mandou reverter. Só texto e áudio sobem.
-export const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac)$/i;
+// v1409 — mídia comercial volta de forma SELETIVA. O importador não manda todas as fotos/PDFs:
+// js/importacao.js mantém apenas arquivos citados no TXT, com teto de quantidade e bytes.
+// Vídeo continua fora.
+export const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac|jpe?g|png|webp|pdf)$/i;
 
 // ===== v929 — atividade de uso (Desempenho): análises, importações e tempo no app =====
 // Fica só no localStorage DESTE aparelho (não sincroniza celular↔PC) — é contagem de USO, não
@@ -1111,7 +1114,7 @@ function icTab(which, dadosJaCarregados=false){
   if(gc) gc.style.display = cer ? "" : "none";
   if(ga) ga.style.display = cer ? "none" : "";
   const bc = qs("#icTabCerebro"), ba = qs("#icTabAprend");
-  [[bc,cer],[ba,!cer]].forEach(([b,on])=>{ if(!b) return; b.style.borderColor = on?"var(--lime)":"var(--line)"; b.style.background = on?"rgba(255,98,88,.15)":"transparent"; b.style.color = on?"var(--lime)":"var(--muted)"; });
+  [[bc,cer],[ba,!cer]].forEach(([b,on])=>{ if(!b) return; b.style.borderColor = on?"var(--lime)":"var(--line)"; b.style.background = on?"var(--brand-primary-soft)":"transparent"; b.style.color = on?"var(--lime)":"var(--muted)"; });
   if(!cer && !dadosJaCarregados) carregarAprendizado();
 }
 window.icTab = icTab;
@@ -1333,7 +1336,7 @@ function diagnosticoClienteHTML(a){
     h += `<div class="diag-row"><span class="diag-ic">${ic}</span><span class="diag-lab">${lab}:</span> <span class="diag-val">${escapeHtml(String(v).trim())}</span></div>`;
   }
   if(leituraLinhas.length){
-    h += `<div class="diag-perg" style="border-color:rgba(86,199,242,.24);background:rgba(86,199,242,.05)"><div class="diag-perg-lab">🧭 Raio-X comercial</div>`;
+    h += `<div class="diag-perg" style="border-color:var(--brand-secondary-soft);background:var(--brand-secondary-soft)"><div class="diag-perg-lab">🧭 Raio-X comercial</div>`;
     for(const [lab,v] of leituraLinhas){
       h += `<div style="display:flex;gap:7px;margin-top:5px;font-size:12px;line-height:1.35"><b style="color:var(--muted);min-width:112px">${escapeHtml(lab)}:</b><span style="color:var(--text)">${escapeHtml(String(v).trim())}</span></div>`;
     }
@@ -1363,7 +1366,7 @@ export function renderAnalysis(analysis, lead){
       if(!similares.length) return;
       const box = qs("#analysisBox");
       if(!box || !box.innerHTML.includes("class=\"analysis-grid\"")) return;
-      const html = '<div style="margin-top:12px;padding:10px;background:rgba(155,140,255,.06);border:1px solid rgba(155,140,255,.18);border-radius:12px"><div class="small" style="color:var(--cerebro);text-transform:uppercase;letter-spacing:.1em;font-size:10px;font-weight:950;margin-bottom:6px">Leads parecidos</div>' +
+      const html = '<div style="margin-top:12px;padding:10px;background:rgba(16,192,191,.06);border:1px solid rgba(16,192,191,.18);border-radius:12px"><div class="small" style="color:var(--cerebro);text-transform:uppercase;letter-spacing:.1em;font-size:10px;font-weight:950;margin-bottom:6px">Leads parecidos</div>' +
         similares.map(s => `<div class="small" style="padding:4px 0">• <span onclick='abrirLead(${JSON.stringify(String(s.id||""))})' style="cursor:pointer;text-decoration:underline">${escapeHtml(s.name||"?")}</span> — ${escapeHtml(s.etapa||"")}</div>`).join("") +
         '</div>';
       box.insertAdjacentHTML("beforeend", html);
@@ -1397,7 +1400,7 @@ export function renderAnalysis(analysis, lead){
     html += '</ul></div>';
   }
   if(analysis.messages){
-    html += '<div style="margin-top:12px;color:var(--muted);font-size:13px">3 mensagens prontas estão na aba <b>Msg</b> — escolha entre Direta, Consultiva e Retomada.</div>';
+    html += '<div style="margin-top:12px;color:var(--muted);font-size:13px">A mensagem recomendada está na aba <b>Msg</b>; alternativas aparecem somente quando úteis.</div>';
   }
   box.innerHTML = html;
   setMsgStyle(state.msgStyle);
@@ -1428,13 +1431,44 @@ function limparAutorAtend(autor){
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
 // IMPORTANTE: precisa ser IDÊNTICA à ARQUITETURA_MENSAGENS_ATUAL do backend (api/_pipeline.js).
 // Se ficarem diferentes, toda análise recém-gerada é tratada como "antiga" e a tela pede reanálise em loop.
-const ARQUITETURA_MENSAGENS_ATUAL = "v852-cerebro-unico-obrigatorio";
+const ARQUITETURA_MENSAGENS_ATUAL = "v1409-conducao-interativa";
+
+function analiseSemMensagemValidaUI(a){
+  if(!a || a.messageNeededNow!==false) return false;
+  const cs=(a.commercialState&&typeof a.commercialState==="object")?a.commercialState:{};
+  const actor=String(a.nextActor||cs.next_actor||"").trim().toLowerCase();
+  const operationalState=String(a.operationalState||cs.operational_state||"").trim().toLowerCase();
+  const paresValidos={
+    broker:["action_due","waiting_broker"],
+    lead:["waiting_lead"],
+    external:["waiting_external"],
+    system:["scheduled"],
+    none:["closed"]
+  };
+  if(!paresValidos[actor]||!paresValidos[actor].includes(operationalState)) return false;
+
+  const loops=Array.isArray(cs.open_loops)?cs.open_loops:[];
+  const loopCoerente=loops.some(l=>{
+    if(!l||l.status!=="open") return false;
+    const owner=String(l.owner||"").trim().toLowerCase();
+    const donoEsperado=actor==="broker"?"broker":actor==="lead"?"lead":"";
+    return (!donoEsperado||owner===donoEsperado)&&String(l.normalized_action||"").replace(/\s+/g," ").trim().length>=5;
+  });
+  const textos=[a.nextAction,a?.recomendacaoContato?.motivo,cs?.next_action?.objective,cs?.next_action?.reason,cs?.next_trigger?.condition]
+    .map(v=>String(v||"").replace(/\s+/g," ").trim())
+    .filter(v=>v&&!/^(?:acao|ação|aguardar|esperar|não identificado|nao identificado|nenhum|none|sem ação|sem acao)$/i.test(v));
+  if(!loopCoerente&&!textos.some(v=>v.length>=12)) return false;
+  if(actor==="broker"&&a?.recomendacaoContato?.aguardar===true) return false;
+  return true;
+}
 
 function analiseAtualValida752(a){
-  return !!(a && typeof a === "object" &&
-    String(a.arquiteturaMensagens || "") === ARQUITETURA_MENSAGENS_ATUAL &&
-    a.sugestoesPendentes !== true &&
-    !["erro_api","reconciliacao_local","reanalise_pendente"].includes(String(a.mode || "")));
+  if(!a || typeof a!=="object") return false;
+  if(String(a.arquiteturaMensagens||"")!==ARQUITETURA_MENSAGENS_ATUAL) return false;
+  if(["erro_api","reconciliacao_local","reanalise_pendente"].includes(String(a.mode||""))) return false;
+  if(a.messageNeededNow===false) return analiseSemMensagemValidaUI(a);
+  const principal=String(a?.messages?.a||"").trim();
+  return a.sugestoesPendentes!==true && principal.length>=10;
 }
 
 function mensagemAprovadaSemAlteracao(texto){
@@ -1471,7 +1505,9 @@ function mensagensDaAnalise(a){
   const aMsg = pick("a");
   const bMsg = pick("b");
   const cMsg = pick("c");
-  const aprovada = !!(aMsg && bMsg && cMsg);
+  // v1409 — uma recomendação principal basta; alternativas são opcionais.
+  // Quando messageNeededNow=false, ausência de mensagem é um resultado válido.
+  const aprovada = a?.messageNeededNow === false ? analiseSemMensagemValidaUI(a) : !!aMsg;
   return {
     direta:aMsg, consultiva:bMsg, retomada:cMsg,
     a:aMsg, b:bMsg, c:cMsg,
@@ -2587,7 +2623,7 @@ function semDialogoReal(l){
 
 // Caixa de erro amigável com "Tentar de novo" — evita "Carregando..." preso e texto técnico.
 function boxErro(retryJs){
-  return `<div class="empty" style="text-align:center;padding:22px 14px">Não consegui carregar agora.<br><span class="small" style="color:var(--muted)">Confira sua internet e tente de novo.</span><br><button type="button" onclick='invalidarLeadsCache();${retryJs}' style="margin-top:12px;padding:8px 18px;border:1px solid var(--lime);background:rgba(255,98,88,.1);color:var(--lime);border-radius:999px;font-weight:950;cursor:pointer">Tentar de novo</button></div>`;
+  return `<div class="empty" style="text-align:center;padding:22px 14px">Não consegui carregar agora.<br><span class="small" style="color:var(--muted)">Confira sua internet e tente de novo.</span><br><button type="button" onclick='invalidarLeadsCache();${retryJs}' style="margin-top:12px;padding:8px 18px;border:1px solid var(--lime);background:var(--brand-primary-soft);color:var(--lime);border-radius:999px;font-weight:950;cursor:pointer">Tentar de novo</button></div>`;
 }
 window.boxErro = boxErro;
 
@@ -2806,14 +2842,14 @@ function cpBarraMensagensMini(l, maxMsgs){
   // mensagens" (v1016) — mensagensDoCliente (histórico inteiro) continua existindo pro ranking/
   // outras telas (ver comentário de mensagensDoClienteRecente), só esta barra usa a versão nova.
   const n = (typeof mensagensDoClienteRecente === 'function') ? mensagensDoClienteRecente(l) : 0;
-  const cor = n >= 15 ? '#ff6258' : n >= 5 ? '#ff8f88' : '#8a99a0';
+  const cor = n >= 15 ? 'var(--brand-primary)' : n >= 5 ? 'var(--brand-primary-hover)' : 'var(--text-muted)';
   // v973 — pedido do dono: barra em gradiente, não mais cor chapada. Os 3 níveis/limiares de
   // "cor" continuam os mesmos de sempre (intocados, travados pelo teste v942).
   // v977 — pedido do dono: gradiente vira branco → cor (Opção B, escolhida entre 3 prévias:
-  // coral→coral-claro da v973, azul-claro→coral, branco→coral). Branco fixo (#F7FAFB, o mesmo
+  // coral→coral-claro da v973, azul-claro→coral, branco→coral). Branco fixo (var(--text-primary), o mesmo
   // tom do texto do app, --text) — não é um tom mais claro do nível (v973/corClara, removido);
   // harmoniza melhor no fundo escuro, segundo o dono.
-  const BRANCO_GRADIENTE = '#F7FAFB';
+  const BRANCO_GRADIENTE = 'var(--text-primary)';
   const teto = Math.max(1, Number(maxMsgs) || 1);
   const pct = n <= 0 ? 0 : Math.max(8, Math.min(100, Math.round(n / teto * 100)));
   return `<span class="chr-bar" title="${n} ${n===1?'mensagem':'mensagens'} do cliente nos últimos 90 dias"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${BRANCO_GRADIENTE},${cor})"></i></span><b style="color:${cor}">${n}</b></span>`;
@@ -2918,11 +2954,10 @@ function cpHomeLeadRow(l, maxMsgs){
     <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`${diasRotulo} ${escapeHtml(dias)}`:''}</span>
   </button>`;
 }
-// Copia a mensagem sugerida (direta, com saudação) de um lead.
-// v826 §6.2/§6.5 — Copiar uma sugestão significa que ela VAI ser enviada. Então conta
-// como atendimento (data/hora, entra em Últimos atendimentos e na fila) E entra na
-// linha do tempo do cliente como "Mensagem enviada". Nunca altera a etapa comercial e
-// não alimenta o aprendizado de estilo (o texto é sugestão da própria IA).
+// Compatibilidade para uma futura/antiga ação EXPLÍCITA de marcar mensagem como enviada.
+// v1409 — esta função NÃO é chamada por nenhum botão de copiar. Copiar registra apenas
+// `mensagem_copiada`; envio real só pode ser marcado por ação explícita ou confirmado por
+// mensagem reimportada do WhatsApp. O nome é mantido para não quebrar históricos/testes legados.
 async function registrarMensagemEnviada(id, msg){
   const texto = String(msg || "").trim();
   if(!id || !texto) return;
@@ -3075,10 +3110,10 @@ function renderBotoesHome(){
     const meta = GRUPOS_HOME[grupo];
     const n = (grupos[grupo] || []).length;
     const cor = destaque ? "var(--lime)" : "var(--soft)";
-    const bg = destaque ? "rgba(255,98,88,.14)" : "rgba(255,255,255,.05)";
+    const bg = destaque ? "var(--brand-primary-soft)" : "rgba(255,255,255,.05)";
     return `<button type="button" onclick='abrirGrupoHome(${JSON.stringify(grupo)})' style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:${bg};border:1px solid var(--line);font-size:12px;font-weight:950;cursor:pointer;color:var(--text)">
       <span>${meta.titulo}</span>
-      <b style="background:${destaque?"var(--lime)":"rgba(255,255,255,.1)"};color:${destaque?"#FFFFFF":"var(--text)"};padding:1px 9px;border-radius:999px;font-size:11px">${n}</b>
+      <b style="background:${destaque?"var(--lime)":"rgba(255,255,255,.1)"};color:${destaque?"var(--on-brand)":"var(--text)"};padding:1px 9px;border-radius:999px;font-size:11px">${n}</b>
     </button>`;
   };
 
@@ -3176,7 +3211,7 @@ function renderBotoesHome(){
       .home-m1-kpis .kpi b{display:block;font-size:20px;font-weight:950;margin-bottom:2px;color:var(--text)}
       .home-m1-kpis .kpi span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:950}
       .home-m1-desemp-titulo{color:var(--lime);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:10px;margin:16px 0 8px}
-      .home-m1-semana{margin-top:10px;padding:12px 16px;background:linear-gradient(135deg,rgba(86,199,242,.04),rgba(155,140,255,.04));border:1px solid var(--line);border-radius:14px}
+      .home-m1-semana{margin-top:10px;padding:12px 16px;background:var(--surface-primary);border:1px solid var(--border-primary);border-radius:14px}
       .home-m1-semana-titulo{color:var(--dados);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:10px;margin-bottom:8px}
       .home-m1-semana-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
       .home-m1-semana-kpis .kpi{text-align:center}
@@ -3229,14 +3264,14 @@ function renderBotoesHome(){
       /* v1278 — título da fila que agora vem listada embaixo da lista do dia. */
       .cp-fila-titulo{font-size:10.5px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
-      .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
-      .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
+      .cp-atender-mais{border:1px solid var(--brand-primary-line);background:var(--brand-primary-soft);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
+      .cp-atender-mais:hover{background:var(--brand-primary-soft)}
       .cp-hoje-done{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);color:var(--soft);font-size:13px;font-weight:700;text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
       .cp-hoje-vazio{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;text-align:center;margin-bottom:8px}
       /* v1168 — "Compromissos de hoje": faixa própria, cor diferente da "Ficaram de te dar uma
          resposta" (que é coral/accent) pra não parecer a mesma coisa — aqui é hora marcada, ali é
          prazo do cliente. Usa --acao (o mesmo verde da seção "Compromissos hoje" da tela Agenda). */
-      .cp1168-faixa{border:1px solid var(--acao-line);background:var(--acao-soft);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+      .cp1168-faixa{border:1px solid var(--acao);background:var(--surface-primary);border-radius:14px;padding:12px 14px;margin-bottom:12px}
       .cp1168-tit{color:var(--acao);text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:11px;margin-bottom:8px}
       .cp1168-row{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;border-bottom:1px solid rgba(255,255,255,.06);padding:8px 0;font:inherit;color:var(--text);text-align:left;cursor:pointer}
       .cp1168-row:last-of-type{border-bottom:0}
@@ -3431,9 +3466,9 @@ function cp1251LinhaHTML(cor, icone, titulo, sub, valor){
 function cp1251PainelHTML(d, opts = {}){
   const compacto = opts.compacto === true;
   const pct = (n) => d.total > 0 ? Math.round((Number(n) || 0) / d.total * 100) + "%" : "—";
-  const coral = { fundo:"rgba(255,98,88,.14)", cor:"var(--cp-coral, var(--accent))" };
-  const azul  = { fundo:"rgba(85,184,232,.14)", cor:"var(--cp-blue, var(--dados))" };
-  const ciano = { fundo:"rgba(97,199,232,.14)", cor:"var(--cp-green, var(--dados))" };
+  const coral = { fundo:"var(--brand-primary-soft)", cor:"var(--cp-coral, var(--accent))" };
+  const azul  = { fundo:"rgba(16,192,191,.14)", cor:"var(--cp-blue, var(--dados))" };
+  const ciano = { fundo:"var(--brand-secondary-soft)", cor:"var(--cp-green, var(--dados))" };
   const mes = d.mesNome.charAt(0).toUpperCase() + d.mesNome.slice(1);
   // Dentro da folha do celular o título já está na barra de cima — repetir "Seu mês" duas vezes,
   // uma embaixo da outra, é ruído.
@@ -4016,7 +4051,7 @@ async function _processarDashboard(data){
       const foco = qs("#leadFocoArea");
       if(foco){
         foco.innerHTML = `
-          <div class="card compact" style="background:linear-gradient(135deg,rgba(255,98,88,.04),rgba(86,199,242,.04));border:1px solid var(--line)">
+          <div class="card compact" style="background:linear-gradient(135deg,var(--brand-primary-soft),var(--brand-secondary-soft));border:1px solid var(--line)">
             <div style="padding:28px 20px">
               <h2 class="title" style="font-size:22px;margin:0 0 8px;text-align:center">Comece pelo WhatsApp</h2>
               <div class="small" style="color:var(--soft);margin:0 auto 22px;line-height:1.6;text-align:center;max-width:520px">
@@ -4208,7 +4243,7 @@ function abrirEditarLead(id, nome, telefone){
   if(parecePhone(nomeIni)){
     if(!telIni) telIni = nomeIni;
     nomeIni = "";
-    dica = `<div style="margin-bottom:12px;padding:9px 11px;background:rgba(86,199,242,.06);border:1px solid var(--timing);border-radius:8px;font-size:11px;color:var(--soft);line-height:1.4"><b style="color:var(--timing)">Atenção:</b> o sistema não identificou o nome. Coloque o nome real.</div>`;
+    dica = `<div style="margin-bottom:12px;padding:9px 11px;background:var(--brand-secondary-soft);border:1px solid var(--timing);border-radius:8px;font-size:11px;color:var(--soft);line-height:1.4"><b style="color:var(--timing)">Atenção:</b> o sistema não identificou o nome. Coloque o nome real.</div>`;
   }
   qs("#editarLeadModal")?.remove();
   const overlay = document.createElement("div");
@@ -4622,9 +4657,9 @@ export async function abrirLead(id, options={}){
 window.abrirLead = abrirLead;
 
 const TIPO_CONTATO_LABEL = {
-  "cliente-final": { txt:"Cliente final", cor:"var(--dados)", bg:"rgba(86,199,242,.12)" },
-  "corretora-parceira": { txt:"Corretora parceira (B2B)", cor:"var(--cerebro)", bg:"rgba(155,140,255,.14)" },
-  "indicacao": { txt:"Indicação", cor:"var(--lime)", bg:"rgba(255,98,88,.12)" },
+  "cliente-final": { txt:"Cliente final", cor:"var(--dados)", bg:"var(--brand-secondary-soft)" },
+  "corretora-parceira": { txt:"Corretora parceira (B2B)", cor:"var(--cerebro)", bg:"rgba(16,192,191,.14)" },
+  "indicacao": { txt:"Indicação", cor:"var(--lime)", bg:"var(--brand-primary-soft)" },
   "outro": { txt:"Tipo indefinido", cor:"var(--muted)", bg:"rgba(255,255,255,.06)" }
 };
 
@@ -4834,7 +4869,7 @@ function cp704Css(){
     if(document.getElementById('cp704LeadUxCSS')) return;
     const css=document.createElement('style'); css.id='cp704LeadUxCSS';
     css.textContent=`
-      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}.cp704-obscard{gap:6px}.cp704-obscard textarea{width:100%;box-sizing:border-box}.cp704-tools-open .cp704-card-title{margin-bottom:12px}.cp704-tools-row{display:flex;flex-wrap:wrap;gap:10px}.cp704-tools-row button{flex:1 1 160px;min-width:140px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:transform .06s ease,border-color .15s,box-shadow .15s,background .15s}.cp704-tools-row button:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-tools-row button:active{transform:translateY(0);box-shadow:0 3px 10px rgba(0,0,0,.2)}.cp704-tools-row button.good{border-color:var(--acao-line);background:linear-gradient(180deg,var(--acao-soft),var(--acao-soft));color:var(--acao)}.cp704-tools-row button.good:hover{border-color:var(--acao);box-shadow:0 8px 22px var(--acao-soft)}.cp704-tools-row button.cp704-danger{border-color:rgba(255,98,88,.42);background:linear-gradient(180deg,rgba(255,98,88,.12),rgba(255,98,88,.04));color:var(--risco)}.cp704-tools-row button.cp704-danger:hover{border-color:rgba(255,98,88,.7);box-shadow:0 8px 22px rgba(255,98,88,.16)}.cp704-hist-inline{flex:1 1 160px;min-width:140px;align-self:flex-start;padding:0;border:0;background:transparent}.cp704-hist-inline[open]{flex-basis:100%}.cp704-hist-inline>summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap;transition:transform .06s ease,border-color .15s,box-shadow .15s}.cp704-hist-inline>summary:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-hist-inline>summary::-webkit-details-marker{display:none}.cp704-hist-inline[open]>summary .cp704-hist-arrow{transform:rotate(180deg)}.cp704-hist-inline .cp704-body{margin-top:10px;max-height:340px;overflow:auto;width:100%}
+      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}.cp704-obscard{gap:6px}.cp704-obscard textarea{width:100%;box-sizing:border-box}.cp704-tools-open .cp704-card-title{margin-bottom:12px}.cp704-tools-row{display:flex;flex-wrap:wrap;gap:10px}.cp704-tools-row button{flex:1 1 160px;min-width:140px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:transform .06s ease,border-color .15s,box-shadow .15s,background .15s}.cp704-tools-row button:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-tools-row button:active{transform:translateY(0);box-shadow:0 3px 10px rgba(0,0,0,.2)}.cp704-tools-row button.good{border-color:var(--acao-line);background:var(--acao-soft);color:var(--acao)}.cp704-tools-row button.good:hover{border-color:var(--acao);box-shadow:0 8px 22px var(--acao-soft)}.cp704-tools-row button.cp704-danger{border-color:var(--danger-line);background:var(--danger-soft);color:var(--risco)}.cp704-tools-row button.cp704-danger:hover{border-color:var(--brand-primary-line);box-shadow:0 8px 22px var(--brand-primary-soft)}.cp704-hist-inline{flex:1 1 160px;min-width:140px;align-self:flex-start;padding:0;border:0;background:transparent}.cp704-hist-inline[open]{flex-basis:100%}.cp704-hist-inline>summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:var(--text);font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap;transition:transform .06s ease,border-color .15s,box-shadow .15s}.cp704-hist-inline>summary:hover{border-color:rgba(255,255,255,.3);box-shadow:0 8px 22px rgba(0,0,0,.24);transform:translateY(-1px)}.cp704-hist-inline>summary::-webkit-details-marker{display:none}.cp704-hist-inline[open]>summary .cp704-hist-arrow{transform:rotate(180deg)}.cp704-hist-inline .cp704-body{margin-top:10px;max-height:340px;overflow:auto;width:100%}
       .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
       .cp704-reanalyse-destaque{background:var(--surface-soft)!important;border-color:var(--line2)!important;color:var(--text)!important;box-shadow:none}
       .cp704-reanalyse-destaque:hover{background:var(--surface-hover)!important;border-color:var(--line2)!important}
@@ -4843,7 +4878,7 @@ function cp704Css(){
 .cp704-back:hover{color:var(--text);border-color:var(--muted)}
 .cp704-back:active{transform:translateY(1px)}
       /* Marcar atendimento = ação principal do bloco (coral). Verde só quando já atendido (concluído). */
-      .cp704-attended{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
+      .cp704-attended{border:1px solid var(--accent);background:var(--accent);color:var(--on-brand);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
       .cp704-desmarcar{background:transparent;border:0;color:var(--muted);font-size:12px;font-weight:800;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:4px 8px;white-space:nowrap}
       .cp704-desmarcar:hover{color:var(--text)}
       /* v1365 — 5 lugares na barra (Voltar, Mensagens, Agendar, Atendido, Mais). O resto mora no
@@ -4865,52 +4900,61 @@ function cp704Css(){
       /* v1216 — o fundo e a borda continuavam com o verde cravado (a v1214 só trocou a cor do
          texto), então o botão seguia esverdeado no print do dono. Agora os três vêm do token. */
       .cp704-ico.done{background:var(--acao-soft);border-color:var(--acao-line);color:var(--acao)}
-.cp704-ico-danger{color:var(--risco);border-color:rgba(255,98,88,.4)}.cp704-ico-danger:hover{color:var(--risco);border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.08)}
+.cp704-ico-danger{color:var(--risco);border-color:var(--brand-primary-line)}.cp704-ico-danger:hover{color:var(--risco);border-color:var(--danger-line);background:var(--danger-soft)}
 .cp704-hist-card .cp704-hist-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.cp704-hist-card .cp704-copy-history{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--soft);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
       .cp704-ico-loading{opacity:.6;pointer-events:none}
       .cp704-ico-loading svg{animation:cp704-spin 1s linear infinite}
       @keyframes cp704-spin{to{transform:rotate(360deg)}}
       @media (prefers-reduced-motion:reduce){.cp704-ico-loading svg{animation:none}}
       .cp704-attended:not(:disabled){cursor:pointer}.cp704-attended:disabled{opacity:1;background:var(--acao-soft);border-color:var(--acao-line);color:var(--acao)}
-      .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
+      .cp704-hero{border:1px solid var(--border-primary);background:var(--surface-primary);border-radius:18px;padding:15px;box-shadow:none}
       .cp704-hero h1{font-size:28px;line-height:1.04;margin:0 0 8px;font-weight:950;letter-spacing:-.03em;color:var(--text)}
+      /* v1407 — as três datas voltam pro TOPO do lead, por ordem do dono (27/08/2026): "preciso q
+         as 3 informações estejam mais no topo do lead". Elas moravam dentro do recolhível "Resumo
+         do contato" desde a v1365 — abrir o lead e não ver quando foi a última análise, o último
+         atendimento e a última mensagem custava dois toques. Agora ficam em linha, logo abaixo do
+         nome e da situação, sem empurrar a mensagem sugerida pra baixo. */
+      .cp1407-datas{display:flex;flex-wrap:wrap;gap:4px 14px;margin:11px 0 0;padding-top:10px;border-top:1px solid var(--border-primary)}
+      .cp1407-datas span{color:var(--soft);font-size:12px;line-height:1.4;font-weight:700;white-space:nowrap}
+      .cp1407-datas span b{color:var(--muted);font-weight:800}
+      @media(max-width:560px){.cp1407-datas{gap:3px 0;flex-direction:column}.cp1407-datas span{white-space:normal}}
       .cp704-tags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.cp704-tag{font-size:11px;color:var(--muted);background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.075);padding:5px 8px;border-radius:999px;font-weight:850}
-      .cp704-mainrow{display:grid;grid-template-columns:1fr;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(184,194,201,.45);background:rgba(184,194,201,.10);color:var(--soft)}.cp704-pill.green{border-color:var(--acao-line);background:var(--acao-soft);color:var(--acao)}.cp704-pill.red{border-color:rgba(255,98,88,.45);background:rgba(255,98,88,.10);color:var(--risco)}.cp704-situation p{margin:0;color:rgba(237,246,248,.92);font-size:14px;line-height:1.45}.cp704-etapa{gap:7px}.cp704-etapa .cp704-etapa-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
-      .cp704-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}.cp704-metric{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:rgba(237,246,248,.92)}.cp704-metric small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px}
-      .cp704-card{border:1px solid rgba(255,255,255,.10);background:rgba(7,52,64,.72);border-radius:16px;padding:14px}.cp704-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.cp704-card-title h2{font-size:17px;margin:0;font-weight:950}.cp704-card-title small{font-size:11px;color:var(--muted);font-weight:850}
-      .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
-      .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:var(--acao);font-weight:950}
-      .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
+      .cp704-mainrow{display:grid;grid-template-columns:1fr;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(182,182,178,.45);background:rgba(182,182,178,.10);color:var(--soft)}.cp704-pill.green{border-color:var(--acao-line);background:var(--acao-soft);color:var(--acao)}.cp704-pill.red{border-color:var(--danger-line);background:var(--danger-soft);color:var(--risco)}.cp704-situation p{margin:0;color:rgba(242,242,242,.92);font-size:14px;line-height:1.45}.cp704-etapa{gap:7px}.cp704-etapa .cp704-etapa-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
+      .cp704-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}.cp704-metric{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:rgba(242,242,242,.92)}.cp704-metric small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px}
+      .cp704-card{border:1px solid var(--border-primary);background:var(--surface-primary);border-radius:16px;padding:14px}.cp704-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.cp704-card-title h2{font-size:17px;margin:0;font-weight:950}.cp704-card-title small{font-size:11px;color:var(--muted);font-weight:850}
+      .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(242,242,242,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+      .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(242,242,242,.92);font-size:14px}.cp704-ai i{font-style:normal;color:var(--acao);font-weight:950}
+      .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(242,242,242,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
       /* v1345 — as duas últimas mensagens trocadas, no espaço vazio da ficha (pedido do dono). */
       .cp1345-ultimas{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:8px}
       .cp1345-tit{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
       .cp1345-msg{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.035);border-left:3px solid rgba(255,255,255,.18)}
       /* A fala do cliente ganha a cor de "ação" pra dar pra ver de relance quem falou por último. */
-      .cp1345-msg.do-cliente{border-left-color:var(--acao);background:var(--acao-soft)}
+      .cp1345-msg.do-cliente{border-left-color:var(--brand-secondary);background:rgba(255,255,255,.055)}
       .cp1345-msg b{font-size:11px;font-weight:900;color:var(--soft);letter-spacing:.01em}
-      .cp1345-msg.do-cliente b{color:var(--acao)}
+      .cp1345-msg.do-cliente b{color:var(--brand-secondary)}
       /* Duas linhas no máximo: a ficha não pode virar o histórico. */
-      .cp1345-msg span{font-size:13px;line-height:1.45;color:rgba(237,246,248,.92);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-msg-item.cp704-msg-copiada{border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.12)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:#fff}.cp704-msg-alerta{grid-column:1/-1;border:1px solid var(--risco-line,rgba(255,98,88,.45));background:var(--risco-soft,rgba(255,98,88,.10));border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.45;color:var(--risco)}.cp704-msg-alerta b{font-weight:950}.cp704-msg-item.cp704-msg-suja{border-color:var(--risco-line,rgba(255,98,88,.45))}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
-      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
-      .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:var(--acao-line);color:var(--acao)}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:var(--risco)}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:var(--risco)!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:var(--acao);border-color:var(--acao-line)}
-      .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
+      .cp1345-msg span{font-size:13px;line-height:1.45;color:rgba(242,242,242,.92);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(242,242,242,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:var(--brand-primary-hover)}.cp704-msg-item:nth-child(3) .cp704-num{background:var(--brand-primary)}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(242,242,242,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:var(--brand-primary-line);background:var(--brand-primary-soft)}.cp704-msg-item.cp704-msg-copiada{border-color:var(--brand-primary-line);background:var(--brand-primary-soft)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:var(--on-brand)}.cp704-msg-alerta{grid-column:1/-1;border:1px solid var(--risco-line,var(--brand-primary-line));background:var(--risco-soft,var(--brand-primary-soft));border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.45;color:var(--risco)}.cp704-msg-alerta b{font-weight:950}.cp704-msg-item.cp704-msg-suja{border-color:var(--risco-line,var(--brand-primary-line))}.cp704-empty-analysis{border:1px solid rgba(182,182,178,.35);background:rgba(182,182,178,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(182,182,178,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
+      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid var(--border-primary);border-radius:14px;background:var(--surface-primary);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:var(--brand-primary-line);background:var(--brand-primary-soft)}.cp704-body{padding:0 14px 14px;color:rgba(242,242,242,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:var(--brand-primary-line);background:var(--brand-primary-soft);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:var(--text-muted);opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(221,221,221,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(242,242,242,.94)}
+      .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:var(--acao-line);color:var(--acao)}.cp704-actions-grid button.warn{border-color:rgba(182,182,178,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:var(--brand-primary-line);color:var(--risco)}.cp704-danger{width:100%;border:1px solid var(--brand-primary-line)!important;color:var(--risco)!important;background:var(--brand-primary-soft)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:var(--acao);border-color:var(--acao-line)}
+      .cp704-stale{border-color:rgba(182,182,178,.28);background:rgba(182,182,178,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(182,182,178,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
       /* v1365 — "Fazer agora" é o coração do produto e ganha o destaque da marca (ordem do dono:
          o que ele paga pra ver não pode ficar escondido atrás de rolagem). */
-      .cp704-agora{border-color:var(--accent-line);box-shadow:0 12px 36px rgba(255,98,88,.10)}
+      .cp704-agora{border-color:var(--brand-primary);box-shadow:none}
       .cp704-agora .cp704-card-title h2{color:var(--accent)}
-      .cp704-agora.cp704-aguardar{border-color:rgba(184,194,201,.35);box-shadow:none}
+      .cp704-agora.cp704-aguardar{border-color:rgba(182,182,178,.35);box-shadow:none}
       .cp704-agora.cp704-aguardar .cp704-card-title h2{color:var(--soft)}
       /* v1365 — o "Resumo do contato" recolhível herda as metalinhas do topo; a primeira não
          precisa da régua de cima que ela tinha no herói. */
       .cp1365-resumo .cp704-metaline:first-child{margin-top:0;padding-top:0;border-top:0}
       .cp1365-resumo .cp1345-ultimas:first-child{margin-top:0;padding-top:0;border-top:0}
-      .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
+      .cp715-reading{font-size:13px;line-height:1.46;color:rgba(242,242,242,.94)}
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
       @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
-      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{justify-self:start;width:auto;padding:6px 4px}.cp704-toolbar{width:100%}.cp704-ico,.cp704-back{min-width:0;padding:9px 4px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{justify-self:start;width:auto;padding:6px 4px}.cp704-toolbar{width:100%}.cp704-ico,.cp704-back{min-width:0;padding:9px 4px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(16,16,16,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -4918,7 +4962,6 @@ function cp704Css(){
   // v1259 — "Não identificado"/"Nenhum" não vira linha na tela: linha vazia é pior que linha
   // ausente, porque ocupa espaço dizendo que não sabe.
   function cp704Semvalor(v){ const t=cp704Text(v); return /^(nenhum|não identificado|nao identificado)$/i.test(t) ? '' : t; }
-
   function cp705FormatDateTime(v){
     const raw=String(v||'').trim();
     if(!raw) return '';
@@ -4980,9 +5023,9 @@ function cp704Css(){
 
 
   function cp705MessagesReady(msgs){
-    const vals=[msgs?.a,msgs?.b,msgs?.c].map(cp705PlainText);
-    if(vals.some(v=>!v)) return false;
-    return !vals.some(v=>/atualize a an[aá]lise comercial|gerar a resposta|resposta recomendada|resposta mais suave|resposta mais direta/i.test(v));
+    const principal=cp705PlainText(msgs?.a);
+    if(!principal) return false;
+    return !/atualize a an[aá]lise comercial|gerar a resposta|resposta recomendada/i.test(principal);
   }
 
   function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
@@ -5246,16 +5289,14 @@ function cp704Css(){
     const perdeuForca = Array.isArray(L.ondePerdeuForca) ? L.ondePerdeuForca.map(cp704Text).filter(Boolean) : [];
     const plano = Array.isArray(L.planoDeAgora) ? L.planoDeAgora.map(cp704Text).filter(Boolean) : [];
     const linhas = [
-      ['O que o cliente quer', L.oQueOClienteQuer],
       ['Onde a conversa parou', L.ondeParou],
       ['O que mudou no tempo', L.oQueMudouNoTempo],
-      ['Condição que o cliente colocou', /^nenhuma$/i.test(cp704Text(L.condicaoDoCliente)) ? '' : L.condicaoDoCliente]
     ].filter(r => cp704Text(r[1]));
     if(!conduzir && !linhas.length && !virada && !perdeuForca.length && !plano.length) return '';
     const listaHtml = (itens, numerada) => itens.map((t,i)=>`<div class="cp704-row"><div>${numerada?`<b style="color:var(--lime)">${i+1}.</b> `:''}${escapeHtml(t)}</div></div>`).join('');
     return `<section class="cp704-card cp704-conducao">
       <div class="cp704-card-title"><h2>Como conduzir este atendimento</h2></div>
-      ${virada?`<div style="border:1px solid rgba(255,98,88,.5);background:rgba(255,98,88,.10);border-radius:12px;padding:11px 12px;margin:0 0 10px"><small style="display:block;text-transform:uppercase;letter-spacing:.13em;font-size:9px;font-weight:950;color:var(--lime);margin-bottom:4px">A virada desta conversa</small><div style="font-size:13.5px;line-height:1.5;color:var(--text);font-weight:700">${escapeHtml(virada)}</div></div>`:''}
+      ${virada?`<div style="border:1px solid var(--brand-primary-line);background:var(--brand-primary-soft);border-radius:12px;padding:11px 12px;margin:0 0 10px"><small style="display:block;text-transform:uppercase;letter-spacing:.13em;font-size:9px;font-weight:950;color:var(--lime);margin-bottom:4px">A virada desta conversa</small><div style="font-size:13.5px;line-height:1.5;color:var(--text);font-weight:700">${escapeHtml(virada)}</div></div>`:''}
       ${conduzir?`<p class="cp704-conducao-txt">${escapeHtml(conduzir)}</p>`:''}
       ${linhas.length?`<div class="cp704-rows">${linhas.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('')}</div>`:''}
       ${perdeuForca.length?`<div class="cp704-rows" style="margin-top:8px"><div class="cp704-row"><small>Onde o atendimento perdeu força</small></div>${listaHtml(perdeuForca,false)}</div>`:''}
@@ -5276,10 +5317,8 @@ function cp704Css(){
       ['Produto',cp704Produto(lead,mc)],
       ['Unidades específicas de interesse',produtosInteresse.length>1?produtosInteresse.join('; '):''],
       ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
-      ['Permuta / entrada com imóvel',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
-      ['Pedido do cliente ainda sem resposta direta',/^(nenhum|não identificado)$/i.test(cp704Text(a?.diagnostico?.pedidoSemResposta))?'':a?.diagnostico?.pedidoSemResposta],
       // v1259 — o que a CONVERSA já respondeu. Antes isso ficava só dentro da cabeça da IA e ela
       // mesma esquecia: o dono flagrou as três sugestões pedindo a faixa de valor que a própria
       // conversa já delimitava. Mostrando na tela ele confere o que foi entendido e cobra o que
@@ -5291,9 +5330,32 @@ function cp704Css(){
       // limite que o corretor aceita) e o número aparece aqui. É a diferença entre "ele quer dar um
       // imóvel" e "ele quer dar 83% do negócio num limite de 50%".
       ['A conta da troca',/^(não se aplica|não identificado)$/i.test(cp704Text(a?.diagnostico?.contaDoObstaculo))?'':a?.diagnostico?.contaDoObstaculo],
-      ['Por que ele quer mudar',cp704Semvalor(a?.diagnostico?.motivoDaMudanca)],
       ['Quem decide junto',cp704Semvalor(a?.diagnostico?.quemDecide)],
+      // v1405 — QUATRO PARES FUNDIDOS, por ordem do dono ("funde os quatro pares repetidos",
+      // 27/08/2026). Cada par dizia a mesma coisa em dois cards; ficou UM de cada:
+      //   "O que o cliente quer"        → absorvido por "O cliente já contou"
+      //   "Condição que o cliente colocou" → idem
+      //   "Por que ele quer mudar"      → absorvido por "Impedimento principal"
+      //   "Permuta / entrada com imóvel" → absorvido por "Imóvel do cliente na negociação"
+      //   "Pedido do cliente ainda sem resposta direta" → absorvido por "O que ainda falta
+      //      descobrir", que passa a abrir pelo pedido em aberto quando existir
+      //
+      // Medido num print dele: numa análise só, a casa que o cliente colocava na negociação
+      // aparecia em ONZE campos e o teto de valor em SEIS. Os cards que ficaram são os que o
+      // resto do sistema usa (exportação, outras telas) ou os que a própria IA cita como regra.
       ['O cliente já contou',Array.isArray(a?.diagnostico?.jaSabemos)?a.diagnostico.jaSabemos.filter(Boolean).join(' · '):''],
+      // v1404 — OS TRÊS CARDS DA v1388 SAÍRAM, POR ORDEM DO DONO ("tira os tres blocos novos de
+      // 25/08", 27/08/2026). Eram "O que o cliente exige", "O que o imóvel em análise não atende" e
+      // "Conflito com o que existe hoje".
+      //
+      // Medido num print do dono, com o texto real de uma análise na mão: os três somavam 540
+      // letras por análise repetindo o que os cards vizinhos já diziam — "O cliente já contou",
+      // "Faixa de valor" e "Imóvel do cliente na negociação". Na mesma análise, a casa que o
+      // cliente colocava na negociação aparecia em ONZE campos diferentes, e o teto de valor
+      // dele em SEIS.
+      //
+      // Não recrie estes três sem ordem dele. Se um dia voltarem, que voltem no lugar de um card
+      // existente — não somados a ele.
       // v1271 — o pedido que partiu do próprio cliente (o critério que ele levantou sozinho, o mais
       // valioso da conversa) e a pauta que ainda falta levantar — que é assunto do encontro, não
       // interrogatório por mensagem.
@@ -5390,7 +5452,7 @@ function cp704Css(){
     const bruto=(a.messages&&typeof a.messages==='object')?a.messages:{};
     const brutoA=cp704Text(bruto.a), brutoB=cp704Text(bruto.b), brutoC=cp704Text(bruto.c);
     const diagMsg=cp704Text(a?.diagnostico?.mensagemQueEuEnviariaHoje);
-    if(!brutoA&&!brutoB&&!brutoC&&!diagMsg) linhas.push('A IA não devolveu nenhuma das 3 mensagens nesta reanálise.');
+    if(a?.messageNeededNow!==false&&!brutoA&&!diagMsg) linhas.push('A IA não devolveu a mensagem recomendada nesta reanálise.');
     else if(brutoA||diagMsg){
       const faltando=[!brutoB&&'B (mais suave)',!brutoC&&'C (mais direta)'].filter(Boolean);
       if(faltando.length) linhas.push('A IA gerou a mensagem A, mas faltou: '+faltando.join(' e ')+'.');
@@ -5463,7 +5525,9 @@ function cp704Css(){
     //
     // Continuam em sequência (nunca em paralelo) de propósito: as duas gravam no MESMO campo do
     // cliente, lendo antes de escrever — em paralelo, uma apagaria a outra.
-    try{ await registrarMensagemEnviada(leadId, msg); }catch(_){}
+    // v1409 — COPIAR != ENVIAR. A cópia registra somente `mensagem_copiada`; não altera
+    // atendimento, timeline nem estado comercial. O envio real só pode ser confirmado por
+    // mensagem importada ou ação explícita do corretor.
     if(leadId){
       try{
         const r = await fetch("./api/lead-update", {
@@ -5586,9 +5650,9 @@ export function cpUpgradeProHTML(a){
   // Pro Master → plano maior); os textos fixos abaixo são só reserva de compatibilidade.
   const rotulo = String(a?.upgrade?.botao || "Falar no WhatsApp e liberar o Pro");
   const msg = encodeURIComponent(String(a?.upgrade?.mensagemWhats || "Olá! Atingi o limite de análises do teste grátis do Corretor Pro e quero contratar o pacote Pro."));
-  return `<div style="margin-top:12px;padding:12px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.45);border-radius:12px">`+
+  return `<div style="margin-top:12px;padding:12px;background:var(--brand-primary-soft);border:1px solid var(--brand-primary-line);border-radius:12px">`+
     `<div class="small" style="margin-bottom:10px"><b>Quer continuar analisando?</b> Fale direto com a gente e libere na hora:</div>`+
-    `<a href="https://wa.me/${fone}?text=${msg}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25d366;color:#062b16;font-weight:950;text-decoration:none;padding:13px 18px;border-radius:12px;font-size:14px">`+
+    `<a href="https://wa.me/${fone}?text=${msg}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:var(--brand-primary);color:var(--on-brand);font-weight:950;text-decoration:none;padding:13px 18px;border-radius:12px;font-size:14px">`+
     `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.6-6.1c-.3-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.7.8-.8 1-.1.2-.3.2-.6.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4 0-.5.1-.7l.5-.6c.1-.2.1-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.9.9-1.1 2.2-.2 3.9a10.2 10.2 0 0 0 4.3 4.1c1.6.8 2.6.9 3.5.6.5-.2 1.5-.7 1.7-1.3.2-.6.2-1.1.1-1.2 0-.1-.2-.2-.4-.3Z"/></svg>`+
     `${escapeHtml(rotulo)}</a></div>`;
 }
@@ -5735,7 +5799,7 @@ function cp1308FaixaModoHtml(a){
   const lista = desligadas.length === 1
     ? desligadas[0]
     : desligadas.slice(0, -1).join(", ") + " e " + desligadas[desligadas.length - 1];
-  return `<div style="border:1px solid var(--risco-line,rgba(255,98,88,.45));background:var(--risco-soft,rgba(255,98,88,.10));border-radius:12px;padding:10px 12px;margin:0 0 10px"><b style="color:var(--risco);font-size:12.5px">Análise de teste: ${escapeHtml(lista)} ${desligadas.length === 1 ? "estava desligado" : "estavam desligados"}.</b><div class="small" style="color:var(--muted);margin-top:3px">Você desligou essa chave em Cérebro → Chaves da análise. Religue e reanalise para voltar ao normal.</div></div>`;
+  return `<div style="border:1px solid var(--risco-line,var(--brand-primary-line));background:var(--risco-soft,var(--brand-primary-soft));border-radius:12px;padding:10px 12px;margin:0 0 10px"><b style="color:var(--risco);font-size:12.5px">Análise de teste: ${escapeHtml(lista)} ${desligadas.length === 1 ? "estava desligado" : "estavam desligados"}.</b><div class="small" style="color:var(--muted);margin-top:3px">Você desligou essa chave em Cérebro → Chaves da análise. Religue e reanalise para voltar ao normal.</div></div>`;
 }
 
 // v1323 — O MATERIAL QUE A IA NÃO VIU, DITO NA TELA.
@@ -5790,13 +5854,20 @@ function renderLeadFoco(lead){
     // v1059 — a análise pode recomendar não mandar nenhuma mensagem agora (cliente pediu espaço,
     // "vai pensar", recusa clara) mesmo com as 3 sugestões prontas — elas continuam disponíveis
     // caso o corretor decida contatar mesmo assim, só que com esse aviso em destaque acima.
-    const aguardarContato=analiseAtualValida752(a) && a?.recomendacaoContato?.aguardar===true;
-    const motivoAguardar=cp704Text(a?.recomendacaoContato?.motivo)||'A leitura da conversa aponta que ainda não é a hora de retomar contato.';
-    // v1370 — se a orientação é esperar, o card não pode gritar "Fazer agora". O estado visual
-    // passa a obedecer a própria análise: AGUARDAR agora, mensagem preparada para a retomada.
-    const tituloAcao=aguardarContato?'Aguardar':'Fazer agora';
+    const nextActor=cp704Text(a?.nextActor || a?.commercialState?.next_actor || '').toLowerCase();
+    const operationalState=cp704Text(a?.operationalState || a?.commercialState?.operational_state || '').toLowerCase();
+    const semMensagemAgora=analiseAtualValida752(a) && a?.messageNeededNow===false;
+    // v1411 — "aguardar" nunca pode aparecer junto de "Sua vez". Se next_actor=broker,
+    // messageNeededNow=false significa uma ação interna antes do contato, não espera pelo cliente.
+    const aguardarContato=analiseAtualValida752(a) && nextActor!=="broker" &&
+      (a?.recomendacaoContato?.aguardar===true || ["lead","external","system","none"].includes(nextActor));
+    const motivoAguardar=cp704Text(a?.recomendacaoContato?.motivo || a?.commercialState?.next_trigger?.condition)||'A leitura da conversa aponta que não há mensagem para enviar agora.';
+    // v1409 — a interface deriva de quem deve agir, não da existência de três textos.
+    const tituloAcao=nextActor==='broker'?'Sua vez':nextActor==='lead'?'Aguardando cliente':nextActor==='external'?'Aguardando retorno externo':nextActor==='system'||operationalState==='scheduled'?'Retomada agendada':nextActor==='none'?'Sem ação agora':(aguardarContato?'Aguardar':'Fazer agora');
     const perguntaPendente=aguardarContato && a?.recomendacaoContato?.perguntaPendente===true;
-    const subtituloMensagens=perguntaPendente?'Nenhuma mensagem para enviar agora':(aguardarContato?'Mensagem preparada para a retomada · escolha a melhor quando chegar a hora':'Sugestões de mensagem · copie a melhor opção');
+    const subtituloMensagens=semMensagemAgora
+      ? (nextActor==="broker"?'Conclua a ação indicada antes de enviar mensagem':'Nenhuma mensagem necessária agora')
+      : (aguardarContato?'Mensagem disponível somente se a estratégia pedir contato':'Mensagem recomendada · alternativas são opcionais');
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     // v937 — "Última mensagem" puxa a hora da PRÓPRIA última mensagem real (mesma fonte do
@@ -5898,11 +5969,16 @@ function renderLeadFoco(lead){
       <section class="cp704-hero">
         <h1>${escapeHtml(lead.name||'Contato')}</h1>
         <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
+        <div class="cp1407-datas">
+          <span><b>Última análise</b> — ${escapeHtml(analiseEm||'sem data registrada')}</span>
+          ${ultimaMsgEm?`<span><b>${escapeHtml(ultimaMsgRotulo)}</b> — ${escapeHtml(ultimaMsgEm)}</span>`:''}
+          ${mostrarLinhaMensagem?`<span><b>Última mensagem</b> — ${escapeHtml(ultimaMsgConversaEm)}</span>`:''}
+        </div>
       </section>
       ${typeof cpCadenciaNoticeHTML==='function'?cpCadenciaNoticeHTML(lead):''}
       <div class="cp704-workspace">
         <main class="cp704-primary">
-          ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
+          ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há uma condução comercial válida para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
           <section class="cp704-card cp704-agora${aguardarContato?' cp704-aguardar':''}">
             <div class="cp704-card-title"><h2>${escapeHtml(tituloAcao)}</h2></div>
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
@@ -5913,8 +5989,8 @@ function renderLeadFoco(lead){
               ? `<div class="cp704-empty-analysis"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`
               : `
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
-            ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis">${cp704Text(a.falhaAmigavel)?`<b style="color:var(--risco)">${escapeHtml(cp704Text(a.falhaAmigavel))}</b><span>Preferimos avisar a te entregar uma leitura pior sem você saber.</span>`:`<b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Mais" no topo e escolha "Reanalisar" para criar a sugestão correta.'}</span>`}${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
-            ${msgs.ordemDeEnvio?`<div style="border:1px solid rgba(86,199,242,.4);background:rgba(86,199,242,.08);border-radius:10px;padding:9px 11px;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--text)"><b>Ordem de envio:</b> ${escapeHtml(msgs.ordemDeEnvio)}</div>`:''}<div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}${cp1308ClasseSuja(a,'a')}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button>${cp1308AvisoSugestaoHtml(a,'a')}</div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}${cp1308ClasseSuja(a,'b')}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button>${cp1308AvisoSugestaoHtml(a,'b')}</div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}${cp1308ClasseSuja(a,'c')}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button>${cp1308AvisoSugestaoHtml(a,'c')}</div>`:''}</div>`}
+            ${!messagesReady?((semAcaoUrgente||semMensagemAgora)?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:`<div class="cp704-empty-analysis">${cp704Text(a.falhaAmigavel)?`<b style="color:var(--risco)">${escapeHtml(cp704Text(a.falhaAmigavel))}</b><span>Preferimos avisar a te entregar uma leitura pior sem você saber.</span>`:`<b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Mais" no topo e escolha "Reanalisar" para criar a sugestão correta.'}</span>`}${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
+            ${msgs.ordemDeEnvio?`<div style="border:1px solid var(--brand-secondary-soft);background:var(--brand-secondary-soft);border-radius:10px;padding:9px 11px;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--text)"><b>Ordem de envio:</b> ${escapeHtml(msgs.ordemDeEnvio)}</div>`:''}<div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}${cp1308ClasseSuja(a,'a')}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button>${cp1308AvisoSugestaoHtml(a,'a')}</div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}${cp1308ClasseSuja(a,'b')}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button>${cp1308AvisoSugestaoHtml(a,'b')}</div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}${cp1308ClasseSuja(a,'c')}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button>${cp1308AvisoSugestaoHtml(a,'c')}</div>`:''}</div>`}
               `}
           </section>
           ${cp717MudancasHtml(a)}
@@ -5928,9 +6004,9 @@ function renderLeadFoco(lead){
           <div class="cp704-accordions">
             <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
             <details class="cp704-details"><summary>Resumo do contato</summary><div class="cp704-body cp1365-resumo">
-              ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
-              ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`${ultimaMsgRotulo} — ${ultimaMsgEm}`)}</div>`:''}
-              ${mostrarLinhaMensagem?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgConversaEm}`)}</div>`:''}
+              ${/* v1407 — as três datas saíram daqui e foram pro topo do lead (ordem do dono,
+                    27/08/2026). Não voltam pra cá: ficariam repetidas na mesma tela. Este bloco
+                    continua guardando as últimas mensagens da conversa. */''}
               ${cp1345UltimasMensagensHTML(lead)}
             </div></details>
           </div>
@@ -6135,7 +6211,7 @@ async function carregarAgendaTopo(){
       const keyJs = safeJson(String(it.key||""));
       // Formato natural: "Visita hoje à tarde · Nome do cliente" + um × pra remover se a IA errou.
       const frase = `${it.tipo} ${it.quando}${it.periodo}`;
-      return `<span style="display:inline-flex;align-items:center;background:${bg};border:1px solid ${cor};border-radius:999px"><button type="button" onclick='abrirLead(${idJs})' style="background:none;border:none;color:var(--white);padding:7px 4px 7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><span style="color:${cor};font-weight:950">${escapeHtml(frase)}</span><span style="opacity:.5">·</span><span style="font-weight:700">${escapeHtml(nome)}</span></button><button type="button" title="Não é compromisso — remover" onclick='dispensarCompromisso(${keyJs})' style="margin:0 5px 0 2px;width:20px;height:20px;border-radius:999px;background:rgba(227,84,84,.22);border:1px solid rgba(227,84,84,.7);color:var(--risco);cursor:pointer;font-size:13px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto">×</button></span>`;
+      return `<span style="display:inline-flex;align-items:center;background:${bg};border:1px solid ${cor};border-radius:999px"><button type="button" onclick='abrirLead(${idJs})' style="background:none;border:none;color:var(--white);padding:7px 4px 7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><span style="color:${cor};font-weight:950">${escapeHtml(frase)}</span><span style="opacity:.5">·</span><span style="font-weight:700">${escapeHtml(nome)}</span></button><button type="button" title="Não é compromisso — remover" onclick='dispensarCompromisso(${keyJs})' style="margin:0 5px 0 2px;width:20px;height:20px;border-radius:999px;background:var(--danger-line);border:1px solid var(--danger-line);color:var(--risco);cursor:pointer;font-size:13px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto">×</button></span>`;
     }).join("");
   }catch(_){ /* falha silenciosa */ }
 }
@@ -6156,7 +6232,7 @@ function agendaCardHTML(l, extra, horaHtml){
       <div class="agenda-acoes">
         <button type="button" onclick='abrirLead(${idJs})' style="padding:7px 13px;font-size:11px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;cursor:pointer;font-weight:950">Ver análise</button>
         ${l.analysis?.lembrete?.quando ? reagendarControlHTML(l.id, l.analysis.lembrete) : ""}
-        ${l.analysis?.lembrete?.quando ? `<button type="button" onclick='removerLembrete(${idJs})' style="padding:6px 10px;font-size:11px;background:rgba(227,84,84,.10);color:var(--risco);border:1px solid rgba(227,84,84,.26);border-radius:8px;cursor:pointer;font-weight:950">🗑 Excluir</button>` : ""}
+        ${l.analysis?.lembrete?.quando ? `<button type="button" onclick='removerLembrete(${idJs})' style="padding:6px 10px;font-size:11px;background:var(--danger-soft);color:var(--risco);border:1px solid var(--danger-line);border-radius:8px;cursor:pointer;font-weight:950">🗑 Excluir</button>` : ""}
       </div>
     </div>`;
 }
@@ -6505,15 +6581,15 @@ async function carregarAgenda(){
         }
         for(const v of vencidos){
           const keyJs = safeJson(String(v.key)); // v1227 — texto livre na chave: ver comentário no outro keyJs
-          linhas.push(`<div class="small" style="margin-top:4px;display:flex;align-items:center;gap:8px"><span style="min-width:0">${escapeHtml(v.oQue)} — era ${escapeHtml(v.dataBR)}${v.trecho ? ` · <i style="color:var(--muted)">"${escapeHtml(v.trecho.slice(0,60))}"</i>` : ''}</span><button type="button" title="Não é compromisso — descartar" onclick='dispensarCompromisso(${keyJs});carregarAgenda()' style="flex:0 0 auto;width:20px;height:20px;border-radius:999px;background:rgba(227,84,84,.22);border:1px solid rgba(227,84,84,.7);color:var(--risco);cursor:pointer;font-size:13px;font-weight:900;line-height:1">×</button></div>`);
+          linhas.push(`<div class="small" style="margin-top:4px;display:flex;align-items:center;gap:8px"><span style="min-width:0">${escapeHtml(v.oQue)} — era ${escapeHtml(v.dataBR)}${v.trecho ? ` · <i style="color:var(--muted)">"${escapeHtml(v.trecho.slice(0,60))}"</i>` : ''}</span><button type="button" title="Não é compromisso — descartar" onclick='dispensarCompromisso(${keyJs});carregarAgenda()' style="flex:0 0 auto;width:20px;height:20px;border-radius:999px;background:var(--danger-line);border:1px solid var(--danger-line);color:var(--risco);cursor:pointer;font-size:13px;font-weight:900;line-height:1">×</button></div>`);
         }
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(227,84,84,.06);border-left:3px solid var(--risco);border-radius:6px;font-size:12px"><b style="color:var(--risco)">Atrasado há ${at.dias} dia${at.dias===1?'':'s'} (era ${escapeHtml(at.dataLabel)})</b>${linhas.join('')}</div>`;
+        const extra = `<div style="margin-top:6px;padding:6px 8px;background:var(--danger-soft);border-left:3px solid var(--risco);border-radius:6px;font-size:12px"><b style="color:var(--risco)">Atrasado há ${at.dias} dia${at.dias===1?'':'s'} (era ${escapeHtml(at.dataLabel)})</b>${linhas.join('')}</div>`;
         return agendaCardHTML(l, extra);
       }).join("");
       html += lembretesArquivadosVencidos.map(l => {
         const lem = l.analysis?.lembrete || {};
         const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(86,199,242,.05);border-left:3px solid var(--timing);border-radius:6px;font-size:12px"><b style="color:var(--timing)">⏰ Lembrete venceu (${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""}) · está arquivado</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
+        const extra = `<div style="margin-top:6px;padding:6px 8px;background:var(--brand-secondary-soft);border-left:3px solid var(--timing);border-radius:6px;font-size:12px"><b style="color:var(--timing)">⏰ Lembrete venceu (${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""}) · está arquivado</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
         return agendaCardHTML(l, extra);
       }).join("");
     } else if(f === 'depois'){
@@ -6600,6 +6676,11 @@ function cpNormalizarDiasAtendimento(valor){
 
 // v1308 — chave da análise: desligada só quando está EXPLICITAMENTE desligada.
 function cpChaveLigada(v){ return (v === false || v === "false" || v === 0 || v === "0") ? false : true; }
+// v1400 — as quatro chaves só valem quando foram escolhidas DEPOIS de voltarem a funcionar.
+// Ver o comentário em api/_pipeline.js: da v1382 à v1399 elas não faziam nada, então "desligado"
+// gravado nessa janela não é ordem de ninguém. O número tem de bater com o do servidor.
+const CP_VERSAO_CHAVES_VALEM = 1400;
+function cpChavesSaoEscolhaDeVerdade(config){ return Number(config?.chavesAnaliseVersao) >= CP_VERSAO_CHAVES_VALEM; }
 function cpLerChaveDoFormulario(id, cfg, campo){
   const el = qs("#" + id);
   if(!el) return cpChaveLigada(cfg?.[campo]);
@@ -6631,6 +6712,9 @@ function sanitizeCerebroConfigV762(cfg) {
     diasAtendimento: cpNormalizarDiasAtendimento(c.diasAtendimento),
     // v1308 — as três chaves da análise. Só ficam desligadas quando o corretor desligou de
     // verdade: campo ausente (todo Cérebro salvo antes desta versão) vale como ligado.
+    // v1400 — o carimbo tem de sobreviver ao saneamento, senão cada gravação apagaria a escolha
+    // do corretor e as chaves voltariam para "ligadas" para sempre.
+    chavesAnaliseVersao: Math.max(0, Number(c.chavesAnaliseVersao) || 0),
     usarCerebro: cpChaveLigada(c.usarCerebro),
     usarAprendizado: cpChaveLigada(c.usarAprendizado),
     usarRegrasEscrita: cpChaveLigada(c.usarRegrasEscrita),
@@ -6665,10 +6749,12 @@ export function obterCerebroConfigParaAnalise() {
     cfg = {
       ...(cfg || {}),
       corretorNome: qs("#cerebroCorretorNome")?.value || cfg?.corretorNome || "",
-      metodo: qs("#cerebroMetodo")?.value ?? cfg?.metodo ?? "",
-      tom: qs("#cerebroTom")?.value ?? cfg?.tom ?? "",
-      diferenciais: qs("#cerebroDiferenciais")?.value ?? cfg?.diferenciais ?? "",
-      evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
+      // v1392 — os cinco campos antigos saíram da tela: o Cérebro inteiro mora em regrasTexto.
+      // Sem zerar aqui, o texto velho salvo continuaria indo junto pra IA, duplicado.
+      metodo: "",
+      tom: "",
+      diferenciais: "",
+      evitar: "",
       // v1198 — o campo do período dos áudios saiu da tela: vale o que está salvo (90 por padrão).
       diasImportacao: cfg?.diasImportacao || 90,
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || cfg?.atendimentosPorDia || 10,
@@ -6678,12 +6764,15 @@ export function obterCerebroConfigParaAnalise() {
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || cfg?.diasDescansoPosAtendimento || 5,
       fusoHorario: cpFusoDefinir(qs("#cerebroFusoHorario")?.value) || cpFuso(),
       regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
-      objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
+      objecoesTexto: "",
       diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? cpNormalizarDiasAtendimento(cfg?.diasAtendimento),
       usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", cfg, "usarCerebro"),
       usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", cfg, "usarAprendizado"),
       usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", cfg, "usarRegrasEscrita"),
       usarPisoComercial: cpLerChaveDoFormulario("cerebroUsarPisoComercial", cfg, "usarPisoComercial"),
+      // v1400 — o formulário está carregado (é a condição deste ramo), então o que está marcado na
+      // tela É a escolha do corretor: carimba.
+      chavesAnaliseVersao: CP_VERSAO_CHAVES_VALEM,
       regras: [],
       objecoes: []
     };
@@ -6768,11 +6857,11 @@ async function carregarUsoAprendizado(){
           <div style="font-size:9px;color:var(--acao);text-transform:uppercase;letter-spacing:.18em;font-weight:950">WhatsApp abertos</div>
           <div style="font-size:24px;font-weight:950;margin-top:2px">${stats.whatsappAbertos}</div>
         </div>
-        <div style="padding:10px 12px;background:rgba(86,199,242,.05);border:1px solid var(--line);border-radius:10px">
+        <div style="padding:10px 12px;background:var(--brand-secondary-soft);border:1px solid var(--line);border-radius:10px">
           <div style="font-size:9px;color:var(--dados);text-transform:uppercase;letter-spacing:.18em;font-weight:950">Mensagens copiadas</div>
           <div style="font-size:24px;font-weight:950;margin-top:2px">${stats.mensagensCopiadas}</div>
         </div>
-        ${estiloMaisUsado ? `<div style="padding:10px 12px;background:rgba(155,140,255,.05);border:1px solid var(--line);border-radius:10px">
+        ${estiloMaisUsado ? `<div style="padding:10px 12px;background:rgba(16,192,191,.05);border:1px solid var(--line);border-radius:10px">
           <div style="font-size:9px;color:var(--cerebro);text-transform:uppercase;letter-spacing:.18em;font-weight:950">Estilo + usado</div>
           <div style="font-size:18px;font-weight:950;margin-top:2px">${ESTILO_LABEL[estiloMaisUsado] || estiloMaisUsado}</div>
         </div>`:""}
@@ -6992,7 +7081,7 @@ async function carregarAprendizado(){
       ? (pendenciasAuto ? `${pendenciasAuto} ${pl(pendenciasAuto, "atualização aguardando", "atualizações aguardando")} leitura automática.` : "Carteira inicial processada. Novas mensagens entram automaticamente.")
       : "Processando os históricos existentes em segundo plano.";
     const header = `<div style="margin-bottom:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:14px 16px;background:linear-gradient(135deg,rgba(255,98,88,.08),rgba(86,199,242,.04));border:1px solid var(--lime);border-radius:12px">
+      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:14px 16px;background:linear-gradient(135deg,var(--brand-primary-soft),var(--brand-secondary-soft));border:1px solid var(--lime);border-radius:12px">
         <div style="font-size:42px;font-weight:950;line-height:1;color:var(--lime)">${totalCasos}</div>
         <div>
           <div style="font-size:13px;font-weight:950">caso${totalCasos===1?" comercial real":"s comerciais reais"}</div>
@@ -7005,13 +7094,13 @@ async function carregarAprendizado(){
         <div class="small" style="color:var(--muted);font-size:11px;margin-top:3px">${escapeHtml(autoStatus)}</div>
         <div class="small" style="color:var(--soft);font-size:10px;margin-top:5px">${total} observações de estilo e técnica também preservadas</div>
       </div>
-      <div style="grid-column:1/-1;padding:14px 16px;background:linear-gradient(135deg,rgba(86,199,242,.06),rgba(255,98,87,.05));border:1px solid var(--dados);border-radius:12px">
+      <div style="grid-column:1/-1;padding:14px 16px;background:linear-gradient(135deg,var(--brand-secondary-soft),rgba(167,230,1,.05));border:1px solid var(--dados);border-radius:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div style="min-width:200px;flex:1">
             <div style="font-size:12px;font-weight:950">Exportar aprendizado</div>
             <div class="small" style="color:var(--muted);font-size:11px;margin-top:3px">Gera um Excel anônimo com casos, estilo, técnicas, objeções e o Cérebro atual. Não altera nenhuma configuração e não chama a IA.</div>
           </div>
-          <button type="button" id="exportarAprendizado" onclick="exportarAprendizadoExcel(this)" style="padding:11px 16px;background:var(--dados);color:#052B36;border:0;border-radius:10px;font-size:12px;font-weight:950;cursor:pointer;white-space:nowrap">Exportar aprendizado (.xlsx)</button>
+          <button type="button" id="exportarAprendizado" onclick="exportarAprendizadoExcel(this)" style="padding:11px 16px;background:var(--dados);color:var(--bg-primary);border:0;border-radius:10px;font-size:12px;font-weight:950;cursor:pointer;white-space:nowrap">Exportar aprendizado (.xlsx)</button>
         </div>
       </div>
     </div>`;
@@ -7292,6 +7381,25 @@ document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && !cpAp
 setInterval(()=>{ if(!document.hidden && navigator.onLine && !cpAprendAutoRodando) iniciarAprendizadoContinuoAutomatico({ somentePendentes:true }).catch(()=>{}); }, 60000);
 
 
+// v1392 — O CÉREBRO VIROU UMA CAIXA SÓ. Esta função é a ponte pra quem já tinha os seis campos
+// preenchidos: junta o que existir, na ordem, com o título de cada um por cima — assim nada some
+// da tela nem do que vai pra IA. Quem já tem só o texto único não é tocado.
+function cerebroTextoUnicoDeConfig(config){
+  const limpo = (v) => String(v ?? "").trim();
+  const soRegras = limpo(config?.regrasTexto);
+  const outros = ["metodo","tom","diferenciais","evitar","objecoesTexto"].map(k => limpo(config?.[k])).filter(Boolean);
+  if(!outros.length) return soRegras;
+  const partes = [
+    ["MÉTODO", limpo(config?.metodo)],
+    ["TOM E ESCRITA", limpo(config?.tom)],
+    ["DIFERENCIAIS A DESTACAR", limpo(config?.diferenciais)],
+    ["O QUE EVITAR", limpo(config?.evitar)],
+    ["REGRAS COMERCIAIS", soRegras],
+    ["SINAIS DO CLIENTE → COMO CONDUZIR", limpo(config?.objecoesTexto)]
+  ].filter(([, txt]) => txt);
+  return partes.map(([tit, txt]) => (txt.toUpperCase().startsWith(tit.slice(0, 6)) ? txt : `${tit}\n\n${txt}`)).join("\n\n\n");
+}
+
 function kpiMini(label, value, cor){
   return `<div style="padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:10px">
     <div style="font-size:9px;color:${cor};text-transform:uppercase;letter-spacing:.18em;font-weight:950">${label}</div>
@@ -7330,7 +7438,7 @@ async function carregarEstadoIA(){
       <div style="font-size:20px;font-weight:950">${(ia[c.key]||[]).length}</div>
     </div>`).join("");
     box.innerHTML = `
-      <div style="padding:13px 14px;border:1px solid var(--acao);border-radius:12px;background:linear-gradient(135deg,var(--acao-soft),rgba(86,199,242,.03));margin-bottom:12px">
+      <div style="padding:13px 14px;border:1px solid var(--acao);border-radius:12px;background:linear-gradient(135deg,var(--acao-soft),var(--brand-secondary-soft));margin-bottom:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div>
             <div style="color:var(--acao);font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:950">Aprendizado contínuo ativo</div>
@@ -7384,7 +7492,7 @@ async function carregarPlanos(){
     const seloTopo = planoAtual?.principal
       ? '<div class="plano-selo-atual" style="background:rgba(255,255,255,.06);border-color:var(--line);color:var(--soft)">Conta principal — fora dos planos comerciais</div>'
       : planoAtual?.emTeste
-        ? '<div class="plano-selo-atual" style="background:rgba(255,196,90,.12);border-color:rgba(255,196,90,.4);color:#ffc45a">Você está no teste grátis de 7 dias</div>'
+        ? '<div class="plano-selo-atual" style="background:rgba(242,179,61,.12);border-color:rgba(242,179,61,.4);color:var(--warning)">Você está no teste grátis de 7 dias</div>'
         : "";
     box.innerHTML = `
       ${seloTopo}
@@ -7439,10 +7547,6 @@ async function carregarCerebro(){
   config = sanitizeCerebroConfigV762(config);
   try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(config)); }catch(_){}
   if(qs("#cerebroCorretorNome")) qs("#cerebroCorretorNome").value = config.corretorNome || "";
-  qs("#cerebroMetodo").value = config.metodo || "";
-  qs("#cerebroTom").value = config.tom || "";
-  qs("#cerebroDiferenciais").value = config.diferenciais || "";
-  qs("#cerebroEvitar").value = config.evitar || "";
   const inpAtend = qs("#cerebroAtendimentosDia");
   if(inpAtend) inpAtend.value = (Number(config.atendimentosPorDia) >= 1) ? config.atendimentosPorDia : 10;
   const inpResg = qs("#cerebroResgatesDia");
@@ -7470,16 +7574,22 @@ async function carregarCerebro(){
       : `Atenção: seu aparelho está em ${doAparelho}, diferente do que está salvo aqui (${fusoAtivo}). Vale o que está salvo.`;
   }
   // v1308 — as três chaves da análise.
-  const chaveCer = qs("#cerebroUsarCerebro"); if(chaveCer) chaveCer.checked = cpChaveLigada(config.usarCerebro);
-  const chaveApr = qs("#cerebroUsarAprendizado"); if(chaveApr) chaveApr.checked = cpChaveLigada(config.usarAprendizado);
-  const chaveReg = qs("#cerebroUsarRegrasEscrita"); if(chaveReg) chaveReg.checked = cpChaveLigada(config.usarRegrasEscrita);
-  const chavePiso = qs("#cerebroUsarPisoComercial"); if(chavePiso) chavePiso.checked = cpChaveLigada(config.usarPisoComercial);
+  // v1400 — sem o carimbo `chavesAnaliseVersao`, o que está gravado é lixo da época em que os
+  // botões não faziam nada (v1382→v1399): a tela mostra LIGADO, que é como a análise realmente
+  // rodou. Se a tela mostrasse o valor gravado e o motor usasse outro, voltaríamos a ter uma tela
+  // mentindo — que foi o problema que abriu esta investigação.
+  const chavesValem = cpChavesSaoEscolhaDeVerdade(config);
+  const marcar = (valor) => chavesValem ? cpChaveLigada(valor) : true;
+  const chaveCer = qs("#cerebroUsarCerebro"); if(chaveCer) chaveCer.checked = marcar(config.usarCerebro);
+  const chaveApr = qs("#cerebroUsarAprendizado"); if(chaveApr) chaveApr.checked = marcar(config.usarAprendizado);
+  const chaveReg = qs("#cerebroUsarRegrasEscrita"); if(chaveReg) chaveReg.checked = marcar(config.usarRegrasEscrita);
+  const chavePiso = qs("#cerebroUsarPisoComercial"); if(chavePiso) chavePiso.checked = marcar(config.usarPisoComercial);
   // v1091 — marca os dias em que ele atende.
   const diasSalvos = cpNormalizarDiasAtendimento(config.diasAtendimento);
   qsa('#cerebroDiasSemana input[type="checkbox"]').forEach(c => { c.checked = diasSalvos.includes(Number(c.dataset.dia)); });
   // Regras e objeções em blocos únicos de texto.
-  if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = config.regrasTexto || "";
-  if(qs("#cerebroObjecoesTexto")) qs("#cerebroObjecoesTexto").value = config.objecoesTexto || "";
+  if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = cerebroTextoUnicoDeConfig(config);
+
   cerebroFormularioCarregado = true;
   // v1137 — o guia de primeiro uso aparece enquanto o Cérebro está VAZIO (mesma régua do servidor,
   // hasCerebroInstructions: só os campos de instrução contam — nome sozinho não tira o guia).
@@ -7560,10 +7670,12 @@ async function salvarCerebro(){
   const descansoN = Number(descansoRaw);
   const config = {
     corretorNome: qs("#cerebroCorretorNome")?.value || "",
-    metodo: qs("#cerebroMetodo").value,
-    tom: qs("#cerebroTom").value,
-    diferenciais: qs("#cerebroDiferenciais").value,
-    evitar: qs("#cerebroEvitar").value,
+    // v1392 — a caixa única guarda tudo em regrasTexto; os cinco campos antigos vão vazios, senão
+    // o conteúdo velho continuaria sendo enviado à IA por baixo, duplicando o texto novo.
+    metodo: "",
+    tom: "",
+    diferenciais: "",
+    evitar: "",
     diasImportacao: cpDiasImportacaoSalvo(),
     atendimentosPorDia: (Number.isFinite(atendN) && atendN >= 1 && atendN <= 50) ? Math.round(atendN) : 10,
     resgatesPorDia: (Number.isFinite(resgN) && resgN >= 0 && resgN <= 20) ? Math.round(resgN) : 2,
@@ -7574,8 +7686,9 @@ async function salvarCerebro(){
     usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", null, "usarAprendizado"),
     usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", null, "usarRegrasEscrita"),
     usarPisoComercial: cpLerChaveDoFormulario("cerebroUsarPisoComercial", null, "usarPisoComercial"),
+    chavesAnaliseVersao: CP_VERSAO_CHAVES_VALEM,
     regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
-    objecoesTexto: qs("#cerebroObjecoesTexto")?.value || "",
+    objecoesTexto: "",
     regras: [],
     objecoes: []
   };
@@ -7614,7 +7727,7 @@ async function salvarCerebro(){
       status.textContent = "Salvo no banco.";
       toast("Cérebro salvo.");
     } else {
-      status.innerHTML = '<span style="color:#ff5b7a">Erro: '+escapeHtml(data?.error||"")+'</span>';
+      status.innerHTML = '<span style="color:var(--danger)">Erro: '+escapeHtml(data?.error||"")+'</span>';
     }
   }catch(err){
     status.innerHTML = '<span style="color:var(--soft)">Salvo no navegador (sem banco): '+escapeHtml(String(err?.message||err))+'</span>';
@@ -7657,6 +7770,7 @@ async function zerarCerebroTudo(){
       usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", null, "usarAprendizado"),
       usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", null, "usarRegrasEscrita"),
       usarPisoComercial: cpLerChaveDoFormulario("cerebroUsarPisoComercial", null, "usarPisoComercial"),
+      chavesAnaliseVersao: CP_VERSAO_CHAVES_VALEM,
       regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
     };
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
@@ -7665,7 +7779,7 @@ async function zerarCerebroTudo(){
     toast("Cérebro e aprendizado zerados. Análise agora roda pura.");
     carregarCerebro();
   }catch(e){
-    if(status) status.innerHTML = '<span style="color:#ff5b7a">Erro ao zerar: '+escapeHtml(String(e?.message||e))+'</span>';
+    if(status) status.innerHTML = '<span style="color:var(--danger)">Erro ao zerar: '+escapeHtml(String(e?.message||e))+'</span>';
   }
 }
 window.zerarCerebroTudo = zerarCerebroTudo;
@@ -7790,7 +7904,17 @@ function cpioPintarPct(valor){
 // processFile (e disparava no meio do salvamento). Toda vez que a importação dá sinal de vida, o
 // relógio é rearmado; se ficar todo esse tempo sem nenhum sinal, a tela se fecha sozinha pra
 // nunca prender ninguém. É folgado de propósito: uma conversa cheia de áudio pode demorar.
-const CPIO_VIGIA_MS = 120000;
+// v1384 — O VIGIA NÃO PODE DESISTIR ANTES DO SERVIDOR TERMINAR.
+//
+// "agora travou em 46%" (dono, 24/08/2026). 46% é a faixa entre "Abrindo o arquivo" e "Ouvindo os
+// áudios" — e é exatamente onde roda a viagem única (preparar + analisar na mesma chamada, v1359).
+// Nessa etapa o servidor não manda sinal nenhum: é UMA requisição longa. O vigia media 120s de
+// silêncio e fechava a tela; só que a v1383 subiu o orçamento da análise no servidor para 240s.
+// Resultado: análise entre 2 e 4 minutos = a tela larga no meio, o corretor vê "travou", e o
+// servidor segue trabalhando e COBRANDO por uma análise que ninguém vai ver.
+// Agora o vigia espera mais que o servidor pode demorar (240s + folga). Ele continua existindo
+// pra não prender ninguém pra sempre — só parou de desistir cedo demais.
+const CPIO_VIGIA_MS = 270000;
 let _cpioVigia = null;
 // v1290 — O TEMPO COM O APP EM SEGUNDO PLANO NÃO CONTA PRO VIGIA.
 //
@@ -8105,7 +8229,7 @@ Tamanho: ${file?((file.size/1024/1024).toFixed(1)+" MB"):""}`;
   if(/HTTP 4\d\d/i.test(raw)){
     return "O servidor não aceitou o arquivo. Verifique se é o ZIP exportado pelo WhatsApp (com texto e mídia).";
   }
-  if(/A conversa foi lida|Falha na análise IA|análise comercial|IA não concluiu|não devolveu as 3 mensagens/i.test(raw)){
+  if(/A conversa foi lida|Falha na análise IA|análise comercial|IA não concluiu|não devolveu (as 3 mensagens|a recomendação)/i.test(raw)){
     return raw;
   }
   if(/HTTP 5\d\d/i.test(raw)){
@@ -8189,7 +8313,7 @@ export function cpImportacaoFalhouNaGravacao(titulo, err){
   if(pendingBox){
     pendingBox.style.background = "var(--risco-soft)";
     pendingBox.style.borderColor = "var(--risco-line)";
-    pendingBox.style.color = "#ffd9d9";
+    pendingBox.style.color = "var(--danger-soft)";
     pendingBox.innerHTML = `<b>${escapeHtml(titulo)}.</b><br>${escapeHtml(motivo)}<br><br>A análise <b>não foi perdida</b> — os botões abaixo continuam valendo.`;
   }
   toast(titulo + ": " + motivo);
@@ -8905,9 +9029,9 @@ const CP1149_PASSOS_ANDROID = [
       <rect x="46" y="11" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.55)"/>
       <rect x="46" y="20" width="34" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
       <rect x="24" y="40" width="110" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
-      <rect x="66" y="76" width="110" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="66" y="76" width="110" height="20" rx="8" fill="var(--brand-primary-line)"/>
       <rect x="24" y="106" width="90" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
-      <rect x="86" y="142" width="90" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="86" y="142" width="90" height="20" rx="8" fill="var(--brand-primary-line)"/>
       <rect x="24" y="248" width="152" height="18" rx="9" fill="rgba(255,255,255,.08)"/>`)
   },
   {
@@ -8915,8 +9039,8 @@ const CP1149_PASSOS_ANDROID = [
     texto: "No canto de cima, à direita. Em alguns celulares é preciso tocar em <b>“Mais”</b> depois disso.",
     desenho: cp1149Telinha(`
       <rect x="46" y="11" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.45)"/>
-      <circle cx="170" cy="9" r="3" fill="#FF6258"/><circle cx="170" cy="17" r="3" fill="#FF6258"/><circle cx="170" cy="25" r="3" fill="#FF6258"/>
-      <circle cx="170" cy="17" r="17" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+      <circle cx="170" cy="9" r="3" fill="var(--brand-primary)"/><circle cx="170" cy="17" r="3" fill="var(--brand-primary)"/><circle cx="170" cy="25" r="3" fill="var(--brand-primary)"/>
+      <circle cx="170" cy="17" r="17" fill="none" stroke="var(--brand-primary)" stroke-width="2.5"/>
       <rect x="24" y="60" width="110" height="24" rx="8" fill="rgba(255,255,255,.08)"/>
       <rect x="66" y="94" width="110" height="24" rx="8" fill="rgba(255,255,255,.08)"/>`)
   },
@@ -8928,8 +9052,8 @@ const CP1149_PASSOS_ANDROID = [
       <rect x="96" y="42" width="66" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
       <rect x="96" y="60" width="52" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
       <rect x="96" y="78" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
-      <rect x="90" y="92" width="90" height="22" rx="6" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="96" y="100" width="74" height="6" rx="3" fill="#FF6258"/>
+      <rect x="90" y="92" width="90" height="22" rx="6" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="96" y="100" width="74" height="6" rx="3" fill="var(--brand-primary)"/>
       <rect x="96" y="126" width="56" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>`)
   },
   {
@@ -8940,8 +9064,8 @@ const CP1149_PASSOS_ANDROID = [
       <rect x="34" y="110" width="120" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
       <rect x="34" y="122" width="96" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
       <rect x="34" y="142" width="58" height="20" rx="6" fill="rgba(255,255,255,.06)"/>
-      <rect x="102" y="142" width="66" height="20" rx="6" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="110" y="149" width="50" height="6" rx="3" fill="#FF6258"/>`)
+      <rect x="102" y="142" width="66" height="20" rx="6" fill="var(--brand-primary-line)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="110" y="149" width="50" height="6" rx="3" fill="var(--brand-primary)"/>`)
   },
   {
     titulo: "5. Escolha o Corretor Pro na lista",
@@ -8951,11 +9075,11 @@ const CP1149_PASSOS_ANDROID = [
       <rect x="30" y="134" width="140" height="22" rx="6" fill="rgba(255,255,255,.07)"/>
       <rect x="38" y="142" width="104" height="6" rx="3" fill="rgba(255,255,255,.35)"/>
       <circle cx="46" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
-      <g><rect x="72" y="173" width="30" height="30" rx="9" fill="rgba(255,98,88,.18)" stroke="#FF6258" stroke-width="2.5"/>
-      <path d="M79 192 L87 183 L95 192" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/></g>
+      <g><rect x="72" y="173" width="30" height="30" rx="9" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2.5"/>
+      <path d="M79 192 L87 183 L95 192" fill="none" stroke="var(--brand-primary)" stroke-width="2.5" stroke-linecap="round"/></g>
       <circle cx="128" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
       <circle cx="164" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
-      <rect x="66" y="212" width="42" height="5" rx="2.5" fill="#FF6258"/>
+      <rect x="66" y="212" width="42" height="5" rx="2.5" fill="var(--brand-primary)"/>
       <rect x="30" y="238" width="140" height="18" rx="9" fill="rgba(255,255,255,.06)"/>`)
   },
   {
@@ -8969,10 +9093,10 @@ const CP1149_PASSOS_ANDROID = [
     // pra mim" — mandar procurar um botão que pode não existir é beco sem saída.
     texto: cp1149TextoInstalar,
     desenho: cp1149Telinha(`
-      <rect x="22" y="40" width="156" height="54" rx="12" fill="rgba(255,98,88,.14)" stroke="#FF6258" stroke-width="2"/>
-      <circle cx="46" cy="67" r="12" fill="rgba(255,98,88,.35)"/>
-      <path d="M46 61 v11 M41 67 l5 5 l5 -5" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>
-      <rect x="66" y="58" width="92" height="6" rx="3" fill="#FF6258"/>
+      <rect x="22" y="40" width="156" height="54" rx="12" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <circle cx="46" cy="67" r="12" fill="var(--brand-primary-line)"/>
+      <path d="M46 61 v11 M41 67 l5 5 l5 -5" fill="none" stroke="var(--brand-primary)" stroke-width="2.5" stroke-linecap="round"/>
+      <rect x="66" y="58" width="92" height="6" rx="3" fill="var(--brand-primary)"/>
       <rect x="66" y="70" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.45)"/>
       <rect x="22" y="112" width="156" height="1.5" fill="rgba(255,255,255,.14)"/>
       <rect x="22" y="130" width="156" height="44" rx="10" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>
@@ -9008,19 +9132,19 @@ const CP1149_PASSOS_IOS = [
       <rect x="46" y="11" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.55)"/>
       <rect x="46" y="20" width="34" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
       <rect x="24" y="40" width="110" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
-      <rect x="66" y="76" width="110" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="66" y="76" width="110" height="20" rx="8" fill="var(--brand-primary-line)"/>
       <rect x="24" y="106" width="90" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
-      <rect x="86" y="142" width="90" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="86" y="142" width="90" height="20" rx="8" fill="var(--brand-primary-line)"/>
       <rect x="24" y="248" width="152" height="18" rx="9" fill="rgba(255,255,255,.08)"/>`)
   },
   {
     titulo: "2. Toque no nome do cliente",
     texto: "Lá em cima, no topo da conversa. No iPhone é por aí que se abre a ficha do contato — <b>não existe “⋮”</b> como no Android.",
     desenho: cp1149Telinha(`
-      <rect x="46" y="11" width="60" height="5" rx="2.5" fill="#FF6258"/>
-      <rect x="46" y="20" width="34" height="4" rx="2" fill="rgba(255,98,88,.55)"/>
-      <circle cx="34" cy="16" r="7" fill="rgba(255,98,88,.45)"/>
-      <rect x="20" y="2" width="100" height="28" rx="9" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+      <rect x="46" y="11" width="60" height="5" rx="2.5" fill="var(--brand-primary)"/>
+      <rect x="46" y="20" width="34" height="4" rx="2" fill="var(--brand-primary-line)"/>
+      <circle cx="34" cy="16" r="7" fill="var(--brand-primary-line)"/>
+      <rect x="20" y="2" width="100" height="28" rx="9" fill="none" stroke="var(--brand-primary)" stroke-width="2.5"/>
       <rect x="24" y="50" width="110" height="26" rx="8" fill="rgba(255,255,255,.08)"/>
       <rect x="66" y="86" width="110" height="20" rx="8" fill="rgba(255,255,255,.08)"/>`)
   },
@@ -9033,9 +9157,9 @@ const CP1149_PASSOS_IOS = [
       <rect x="26" y="120" width="148" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
       <rect x="26" y="140" width="120" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
       <rect x="26" y="160" width="134" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
-      <rect x="22" y="182" width="156" height="26" rx="7" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="32" y="192" width="102" height="6" rx="3" fill="#FF6258"/>
-      <path d="M100 226 v18 M92 236 l8 8 l8 -8" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>`)
+      <rect x="22" y="182" width="156" height="26" rx="7" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="32" y="192" width="102" height="6" rx="3" fill="var(--brand-primary)"/>
+      <path d="M100 226 v18 M92 236 l8 8 l8 -8" fill="none" stroke="var(--brand-primary)" stroke-width="2.5" stroke-linecap="round"/>`)
   },
   {
     titulo: "4. Toque em “Anexar mídia”",
@@ -9045,8 +9169,8 @@ const CP1149_PASSOS_IOS = [
       <rect x="34" y="110" width="120" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
       <rect x="34" y="122" width="96" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
       <rect x="34" y="142" width="58" height="20" rx="6" fill="rgba(255,255,255,.06)"/>
-      <rect x="102" y="142" width="66" height="20" rx="6" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="110" y="149" width="50" height="6" rx="3" fill="#FF6258"/>`)
+      <rect x="102" y="142" width="66" height="20" rx="6" fill="var(--brand-primary-line)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="110" y="149" width="50" height="6" rx="3" fill="var(--brand-primary)"/>`)
   },
   {
     titulo: "5. Toque em “Salvar em Arquivos”",
@@ -9060,10 +9184,10 @@ const CP1149_PASSOS_IOS = [
       <rect x="28" y="176" width="144" height="1.5" fill="rgba(255,255,255,.14)"/>
       <rect x="30" y="188" width="86" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
       <rect x="30" y="206" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
-      <rect x="24" y="222" width="152" height="26" rx="7" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="34" y="232" width="96" height="6" rx="3" fill="#FF6258"/>
-      <rect x="148" y="228" width="16" height="13" rx="3" fill="none" stroke="#FF6258" stroke-width="2"/>
-      <path d="M100 62 v22 M92 76 l8 8 l8 -8" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>`)
+      <rect x="24" y="222" width="152" height="26" rx="7" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="34" y="232" width="96" height="6" rx="3" fill="var(--brand-primary)"/>
+      <rect x="148" y="228" width="16" height="13" rx="3" fill="none" stroke="var(--brand-primary)" stroke-width="2"/>
+      <path d="M100 62 v22 M92 76 l8 8 l8 -8" fill="none" stroke="var(--brand-primary)" stroke-width="2.5" stroke-linecap="round"/>`)
   },
   {
     titulo: "6. Volte aqui e escolha o arquivo",
@@ -9072,10 +9196,10 @@ const CP1149_PASSOS_IOS = [
       <rect x="22" y="40" width="156" height="40" rx="10" fill="rgba(255,255,255,.06)"/>
       <rect x="34" y="54" width="90" height="6" rx="3" fill="rgba(255,255,255,.40)"/>
       <rect x="34" y="66" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
-      <rect x="22" y="96" width="156" height="30" rx="10" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2.5"/>
-      <rect x="42" y="108" width="116" height="7" rx="3.5" fill="#FF6258"/>
+      <rect x="22" y="96" width="156" height="30" rx="10" fill="var(--brand-primary-line)" stroke="var(--brand-primary)" stroke-width="2.5"/>
+      <rect x="42" y="108" width="116" height="7" rx="3.5" fill="var(--brand-primary)"/>
       <rect x="22" y="146" width="156" height="26" rx="8" fill="rgba(255,255,255,.05)"/>
-      <rect x="32" y="156" width="24" height="7" rx="3.5" fill="rgba(255,98,88,.65)"/>
+      <rect x="32" y="156" width="24" height="7" rx="3.5" fill="var(--brand-primary-line)"/>
       <rect x="66" y="156" width="86" height="6" rx="3" fill="rgba(255,255,255,.35)"/>
       <rect x="22" y="180" width="156" height="26" rx="8" fill="rgba(255,255,255,.04)"/>
       <rect x="32" y="190" width="24" height="7" rx="3.5" fill="rgba(255,255,255,.18)"/>
@@ -9103,8 +9227,8 @@ const CP1155_PASSOS_ANDROID = [
     desenho: () => cp1149Telinha(`
       <rect x="14" y="26" width="172" height="22" rx="6" fill="rgba(255,255,255,.10)"/>
       <rect x="26" y="34" width="104" height="6" rx="3" fill="rgba(255,255,255,.35)"/>
-      <circle cx="170" cy="31" r="3" fill="#FF6258"/><circle cx="170" cy="38" r="3" fill="#FF6258"/><circle cx="170" cy="45" r="3" fill="#FF6258"/>
-      <circle cx="170" cy="38" r="16" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+      <circle cx="170" cy="31" r="3" fill="var(--brand-primary)"/><circle cx="170" cy="38" r="3" fill="var(--brand-primary)"/><circle cx="170" cy="45" r="3" fill="var(--brand-primary)"/>
+      <circle cx="170" cy="38" r="16" fill="none" stroke="var(--brand-primary)" stroke-width="2.5"/>
       <rect x="26" y="70" width="148" height="60" rx="10" fill="rgba(255,255,255,.06)"/>
       <rect x="26" y="142" width="120" height="8" rx="4" fill="rgba(255,255,255,.18)"/>`)
   },
@@ -9115,8 +9239,8 @@ const CP1155_PASSOS_ANDROID = [
       <rect x="70" y="30" width="114" height="150" rx="10" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
       <rect x="80" y="44" width="62" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>
       <rect x="80" y="62" width="76" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>
-      <rect x="74" y="78" width="106" height="24" rx="6" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="82" y="87" width="82" height="6" rx="3" fill="#FF6258"/>
+      <rect x="74" y="78" width="106" height="24" rx="6" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="82" y="87" width="82" height="6" rx="3" fill="var(--brand-primary)"/>
       <rect x="80" y="114" width="58" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>
       <rect x="80" y="132" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>`)
   },
@@ -9125,12 +9249,12 @@ const CP1155_PASSOS_ANDROID = [
     texto: "O celular pergunta se quer adicionar — confirme. O <b>ícone do Corretor Pro</b> aparece na tela inicial, e a partir daí ele também aparece na lista de compartilhar do WhatsApp.",
     desenho: () => cp1149Telinha(`
       <rect x="34" y="80" width="132" height="90" rx="12" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
-      <rect x="46" y="96" width="30" height="30" rx="9" fill="rgba(255,98,88,.18)" stroke="#FF6258" stroke-width="2.5"/>
-      <path d="M53 115 L61 106 L69 115" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>
+      <rect x="46" y="96" width="30" height="30" rx="9" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2.5"/>
+      <path d="M53 115 L61 106 L69 115" fill="none" stroke="var(--brand-primary)" stroke-width="2.5" stroke-linecap="round"/>
       <rect x="86" y="102" width="66" height="6" rx="3" fill="rgba(255,255,255,.55)"/>
       <rect x="86" y="114" width="44" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>
-      <rect x="96" y="140" width="58" height="20" rx="6" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="106" y="147" width="38" height="6" rx="3" fill="#FF6258"/>`)
+      <rect x="96" y="140" width="58" height="20" rx="6" fill="var(--brand-primary-line)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="106" y="147" width="38" height="6" rx="3" fill="var(--brand-primary)"/>`)
   }
 ];
 const CP1155_PASSOS_IOS = [
@@ -9139,9 +9263,9 @@ const CP1155_PASSOS_IOS = [
     texto: "No iPhone tem que ser pelo <b>Safari</b>. Toque no ícone de <b>quadrado com a seta para cima</b>, na barra de baixo.",
     desenho: () => cp1149Telinha(`
       <rect x="14" y="240" width="172" height="30" rx="8" fill="rgba(255,255,255,.10)"/>
-      <rect x="60" y="250" width="26" height="12" rx="3" fill="none" stroke="#FF6258" stroke-width="2.5"/>
-      <path d="M73 258 v-12 M68 250 l5 -5 l5 5" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>
-      <circle cx="73" cy="255" r="18" fill="none" stroke="#FF6258" stroke-width="2"/>
+      <rect x="60" y="250" width="26" height="12" rx="3" fill="none" stroke="var(--brand-primary)" stroke-width="2.5"/>
+      <path d="M73 258 v-12 M68 250 l5 -5 l5 5" fill="none" stroke="var(--brand-primary)" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="73" cy="255" r="18" fill="none" stroke="var(--brand-primary)" stroke-width="2"/>
       <rect x="26" y="60" width="148" height="120" rx="10" fill="rgba(255,255,255,.05)"/>`)
   },
   {
@@ -9151,8 +9275,8 @@ const CP1155_PASSOS_IOS = [
       <rect x="22" y="60" width="156" height="150" rx="12" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
       <rect x="34" y="76" width="80" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>
       <rect x="34" y="96" width="96" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>
-      <rect x="28" y="112" width="144" height="26" rx="7" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
-      <rect x="38" y="122" width="112" height="6" rx="3" fill="#FF6258"/>
+      <rect x="28" y="112" width="144" height="26" rx="7" fill="var(--brand-primary-soft)" stroke="var(--brand-primary)" stroke-width="2"/>
+      <rect x="38" y="122" width="112" height="6" rx="3" fill="var(--brand-primary)"/>
       <rect x="34" y="152" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>`)
   }
 ];
@@ -9166,8 +9290,8 @@ const CP1155_PASSO_JA_INSTALADO = {
     <rect x="38" y="56" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
     <rect x="86" y="56" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
     <rect x="134" y="56" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
-    <rect x="38" y="104" width="28" height="28" rx="8" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2.5"/>
-    <circle cx="52" cy="118" r="17" fill="none" stroke="#FF6258" stroke-width="2"/>
+    <rect x="38" y="104" width="28" height="28" rx="8" fill="var(--brand-primary-line)" stroke="var(--brand-primary)" stroke-width="2.5"/>
+    <circle cx="52" cy="118" r="17" fill="none" stroke="var(--brand-primary)" stroke-width="2"/>
     <rect x="86" y="104" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
     <rect x="134" y="104" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
     <rect x="38" y="148" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
@@ -9711,6 +9835,28 @@ async function auditarDadosV681(btn){
 window.auditarDadosV681 = auditarDadosV681;
 
 
+// v1380 — DE QUAL CONTA DA OPENAI É A CHAVE QUE ESTE APP USA.
+//
+// "eu botei dez dólares sexta-feira e mal usei o aplicativo. Esse crédito tem que estar em algum
+// lugar, de repente outra chave" (dono, 24/08/2026). Crédito na OpenAI fica na ORGANIZAÇÃO: se o
+// dinheiro entrou numa e a chave do app é de outra, o saldo existe e o app continua dizendo que
+// não tem. Sem ver o nome da organização lado a lado com a chave, não dá pra descobrir isso.
+//
+// O servidor só manda esses campos pro administrador da plataforma; pra qualquer outro corretor
+// eles vêm vazios e este bloco não aparece.
+function cpIdentidadeDaChaveOpenAI(cc, semSaldo){
+  const org = String(cc?.organizacaoDaChave || "").trim();
+  const chave = String(cc?.keyPrefix || "").trim();
+  if (!org && !chave) return "";
+  const pedacos = [];
+  if (org) pedacos.push(`organização <b>${escapeHtml(org)}</b>`);
+  if (chave) pedacos.push(`chave ${escapeHtml(chave)}…${escapeHtml(String(cc?.keyTail || ""))}`);
+  const alerta = semSaldo
+    ? "<br>Confira se foi <b>nessa mesma organização</b> que você colocou o crédito. Se você depositou em outra, o dinheiro está lá parado e não serve pra esta chave."
+    : "";
+  return `<br><br><span style="color:var(--soft);font-size:12px">O app está usando a ${pedacos.join(" · ")}.${alerta}</span>`;
+}
+
 // Testa a OpenAI e o modelo principal de análise/mensagens pelo mesmo endpoint usado no deploy.
 async function testarIAOpenAI(btn){
   const out = qs("#openaiDiagOut");
@@ -9725,11 +9871,23 @@ async function testarIAOpenAI(btn){
     if(!cc.configured){
       html = `<b style="color:var(--risco)">❌ A chave da OpenAI não chegou ao app.</b><br>No Vercel, confira <b>OPENAI_API_KEY</b> e depois faça um novo deploy.`;
     } else if(tModelo && tModelo.ok){
-      html = `<b style="color:var(--acao)">✅ OpenAI conectada e modelo principal funcionando.</b><br>Chave ${escapeHtml(cc.keyPrefix||"")}…${escapeHtml(cc.keyTail||"")} · análise ${escapeHtml(cc.analysisModel||"")} · mensagens ${escapeHtml(cc.messagesModel||"")}.`;
+      html = `<b style="color:var(--acao)">✅ OpenAI conectada e modelo principal funcionando.</b><br>Chave ${escapeHtml(cc.keyPrefix||"")}…${escapeHtml(cc.keyTail||"")} · análise ${escapeHtml(cc.analysisModel||"")} · mensagens ${escapeHtml(cc.messagesModel||"")}.`
+        + cpIdentidadeDaChaveOpenAI(cc, false);
     } else {
+      // v1378 — a ordem estava invertida pra quem lê. O que aparecia primeiro (e grande) era o
+      // erro cru em inglês, e a explicação em português vinha depois, apagadinha. O dono leu o
+      // inglês, foi conferir no painel da OpenAI e olhou o número errado. Agora o que fazer vem
+      // primeiro; o texto técnico continua ali embaixo, pequeno, pro suporte.
       const msg = (tModelo && tModelo.error) || (d.primeiroErro && d.primeiroErro.mensagem) || "erro desconhecido";
       const dica = (tModelo && tModelo.hint) || (d.primeiroErro && d.primeiroErro.dica) || "";
-      html = `<b style="color:#ffd27a">⚠️ A chave foi encontrada, mas o modelo principal não respondeu.</b><br>Modelo ${escapeHtml(cc.analysisModel||"")}.<br>Motivo: ${escapeHtml(String(msg))}${dica?`<br><span style="color:var(--muted)">${escapeHtml(String(dica))}</span>`:""}`;
+      const semSaldo = /sem SALDO|sem saldo|cr[ée]dito/i.test(String(dica));
+      const titulo = semSaldo
+        ? "⚠️ A conta da OpenAI está sem saldo — por isso nenhuma análise nova sai."
+        : "⚠️ A chave foi encontrada, mas o modelo principal não respondeu.";
+      html = `<b style="color:var(--warning)">${titulo}</b>`
+        + (dica ? `<br><br>${escapeHtml(String(dica))}` : "")
+        + cpIdentidadeDaChaveOpenAI(cc, semSaldo)
+        + `<br><br><span style="color:var(--muted);font-size:11px">Detalhe técnico (para o suporte): modelo ${escapeHtml(cc.analysisModel||"")} · ${escapeHtml(String(msg))}</span>`;
     }
     if(out) out.innerHTML = html;
   }catch(e){
@@ -9868,7 +10026,7 @@ qs("#copyMessage").addEventListener("click",async()=>{
   //
   // O atendimento vai PRIMEIRO (lição da v1097: copiar é quando o app vai pro fundo e a segunda
   // gravação morre no caminho — se só uma sobreviver, que seja a que importa).
-  try{ await registrarMensagemEnviada(state.lead?.id, textoCopiado); }catch(_){}
+  // v1409 — COPIAR != ENVIAR. Não marca atendimento nem cria `mensagem_enviada`.
   registrarAprendizado("mensagem_copiada");
 });
 qs("#openWhatsapp").addEventListener("click",()=>{
@@ -11694,7 +11852,8 @@ function cpPct(n,total){ return total>0?Math.round((n/total)*100):0; }
 function cpOpenLead(id){ if(id) abrirLead(String(id)); }
 function cpAvatarStyle(name){
   let h=0; for(const c of String(name||"")) h=(h*31+c.charCodeAt(0))>>>0;
-  const palette=["#315766","#3B5F6A","#4B586E","#586655"];
+  // v1389 — tons neutros derivados do grafite da identidade (antes eram azuis-petróleo da paleta velha).
+  const palette=["var(--avatar-1)","var(--avatar-2)","var(--avatar-3)","var(--avatar-4)"];
   return `background:${palette[h%palette.length]};`;
 }
 
@@ -11747,7 +11906,9 @@ function cpTempoAppSegundosPeriodo(iniMs, fimMs){
 // conversa é reimportada. Isso está escrito na tela, embaixo do número, porque número sem essa
 // ressalva vira mentira.
 function cpResultadoDasSugestoes(todos, dentro){
-  const r = { enviadas: 0, responderam: 0, semResposta: 0 };
+  // v1409 — isto mede CORRELAÇÃO DEPOIS DA CÓPIA, não envio. Sem integração com WhatsApp não
+  // existe evidência de que o corretor colou/enviou a sugestão exatamente como estava.
+  const r = { copiadas: 0, responderamDepois: 0, semRespostaDepois: 0 };
   for(const l of (Array.isArray(todos) ? todos : [])){
     const eventos = l?.analysis?.aprendizado?.eventos || [];
     let ultimaCopia = 0;
@@ -11759,14 +11920,14 @@ function cpResultadoDasSugestoes(todos, dentro){
       if(ehCopia && t > ultimaCopia) ultimaCopia = t;
     }
     if(!ultimaCopia) continue;
-    r.enviadas++;
+    r.copiadas++;
     let respondeu = false;
     for(const m of (Array.isArray(l?.recentMessages) ? l.recentMessages : [])){
       const t = Date.parse(m?.iso || "");
       if(!Number.isFinite(t) || t <= ultimaCopia) continue;
       if(cpMensagemEhDoCliente(l, m)){ respondeu = true; break; }
     }
-    if(respondeu) r.responderam++; else r.semResposta++;
+    if(respondeu) r.responderamDepois++; else r.semRespostaDepois++;
   }
   return r;
 }
@@ -11920,28 +12081,29 @@ function cpRenderDesempenhoMetricas(items, all){
       <button type="button" class="cp-met-mes-chip${vendoMesPassado ? "" : " ativo"}" onclick="cpDesempenhoTrocarMes('atual')">Este mês</button>
       <button type="button" class="cp-met-mes-chip${vendoMesPassado ? " ativo" : ""}" onclick="cpDesempenhoTrocarMes('anterior')">${escapeHtml(nomeMes(iniAnt))[0].toUpperCase()+escapeHtml(nomeMes(iniAnt)).slice(1)}</button>
     </div>`;
-  // v1340 — o número que faltava: das sugestões que você mandou, em quantas o cliente voltou a falar.
-  const sug = m.resultadoSugestoes || { enviadas:0, responderam:0, semResposta:0 };
-  const pct = sug.enviadas ? Math.round((sug.responderam / sug.enviadas) * 100) : 0;
+  // v1409 — copiar não é enviar: esta métrica não pode mais chamar a cópia de mensagem enviada
+  // nem sugerir causalidade. Ela mostra apenas o que aconteceu DEPOIS de uma cópia registrada.
+  const sug = m.resultadoSugestoes || { copiadas:0, responderamDepois:0, semRespostaDepois:0 };
+  const pct = sug.copiadas ? Math.round((sug.responderamDepois / sug.copiadas) * 100) : 0;
   const blocoSugestoes = `
     <div class="cp-met-tags-row">
-      <small>As sugestões estão funcionando?</small>
-      ${sug.enviadas ? `
+      <small>Retorno depois de copiar sugestão</small>
+      ${sug.copiadas ? `
       <div style="display:flex;align-items:baseline;gap:10px;margin:6px 0 2px">
-        <b style="font-size:26px;font-weight:950;color:var(--acao)">${sug.responderam} de ${sug.enviadas}</b>
-        <span style="font-size:13px;color:var(--soft)">clientes voltaram a falar (${pct}%)</span>
+        <b style="font-size:26px;font-weight:950;color:var(--acao)">${sug.responderamDepois} de ${sug.copiadas}</b>
+        <span style="font-size:13px;color:var(--soft)">clientes voltaram a falar depois da cópia (${pct}%)</span>
       </div>
       <div style="font-size:13px;color:var(--soft);line-height:1.5">
-        ${sug.semResposta === 0
-          ? "Todos responderam depois da sua mensagem."
-          : `${sug.semResposta === 1 ? "1 ainda não respondeu" : `${sug.semResposta} ainda não responderam`} depois da sua última mensagem ${escapeHtml(rotuloMes)}.`}
+        ${sug.semRespostaDepois === 0
+          ? "Em todas as cópias registradas houve fala posterior do cliente."
+          : `${sug.semRespostaDepois === 1 ? "1 cópia ainda não teve fala posterior do cliente" : `${sug.semRespostaDepois} cópias ainda não tiveram fala posterior do cliente`} ${escapeHtml(rotuloMes)}.`}
       </div>` : `
       <div style="font-size:13px;color:var(--soft);line-height:1.5;margin-top:4px">
         Ainda não dá pra medir ${escapeHtml(rotuloMes)}: nenhuma sugestão foi copiada pelo botão do app neste período.
       </div>`}
       <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:8px">
-        Conta só o que passou pelo app: sugestão copiada no botão, e a resposta do cliente aparecendo
-        na conversa depois que você reimporta. Quem respondeu por outro caminho não entra.
+        Isto NÃO confirma envio nem prova que a sugestão causou a resposta. O app só sabe que houve uma
+        cópia e, após reimportar o WhatsApp, que o cliente falou depois.
       </div>
     </div>`;
   box.innerHTML = seletorMes + rows + propostasRow + blocoSugestoes + `
@@ -12241,7 +12403,7 @@ function ui682ProgressReanalise(btn){
   if(old) old.remove();
   const box = document.createElement("div");
   box.className = "ui682-analysis-progress";
-  box.style.cssText = "margin:10px 0 0 0;padding:10px 12px;border:1px solid rgba(255,194,102,.35);border-radius:12px;background:rgba(255,194,102,.08);color:var(--soft);font-size:12px;width:100%;min-width:0;box-sizing:border-box";
+  box.style.cssText = "margin:10px 0 0 0;padding:10px 12px;border:1px solid rgba(242,179,61,.35);border-radius:12px;background:rgba(242,179,61,.08);color:var(--soft);font-size:12px;width:100%;min-width:0;box-sizing:border-box";
   box.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;font-weight:950;color:#fff;min-width:0"><span id="ui682ProgressText" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Preparando análise...</span><span id="ui682ProgressPct" style="flex:0 0 auto">5%</span></div><div style="height:6px;background:rgba(255,255,255,.10);border-radius:999px;overflow:hidden;margin-top:8px"><i id="ui682ProgressBar" style="display:block;height:100%;width:5%;background:linear-gradient(90deg,var(--morno),var(--lime));transition:width .35s ease"></i></div>`;
   const top = btn.closest?.(".cp704-top");
   if(top) top.insertAdjacentElement("afterend", box);
@@ -12930,13 +13092,13 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
     const idJs = leadId(l);
     const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
     return `
-      <div data-arquivado-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(86,199,242,.04);border-radius:14px;padding:12px;margin-bottom:10px">
+      <div data-arquivado-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:var(--brand-secondary-soft);border-radius:14px;padding:12px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
           <div style="flex:1;min-width:0">
-            <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(86,199,242,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
+            <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:var(--brand-secondary-soft)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
             <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
           </div>
-          <span class="tag" style="background:rgba(86,199,242,.12);color:#bff0ff;border-color:rgba(86,199,242,.32);font-size:10px">ARQUIVADO</span>
+          <span class="tag" style="background:var(--brand-secondary-soft);color:var(--brand-secondary);border-color:var(--brand-secondary-soft);font-size:10px">ARQUIVADO</span>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
@@ -13272,7 +13434,7 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
     html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}
     .main-col,.desktop-layout,.app,.screen,#home,#carteira,#carteiraBody,.ui-priority-list,.cp695-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}
     .cp695-list{max-width:760px;margin-left:auto;margin-right:auto}
-    .cp695-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp695-empty,.cp695-loading{padding:22px;color:var(--muted);text-align:center}
+    .cp695-list{display:flex;flex-direction:column;border:1px solid var(--border-primary);border-radius:17px;background:var(--surface-primary);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp695-empty,.cp695-loading{padding:22px;color:var(--muted);text-align:center}
     .cp-bottom-nav{z-index:1000!important}.cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;height:56px!important;min-height:56px!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important;transform:none!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:relative!important;top:0!important;left:0!important;transform:none!important;width:34px!important;height:34px!important;margin:0!important;border-width:2px!important;font-size:23px!important;font-weight:500!important;line-height:1!important;box-shadow:0 5px 12px rgba(0,0,0,.22)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
     @media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.ui-priority-card{padding:15px!important}.cp695-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}}
   `;
@@ -13348,7 +13510,7 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
   css.id='cp786ConducaoCSS';
   css.textContent=`
     .cp786-action-tabs{overflow-x:auto;scrollbar-width:none}.cp786-action-tabs::-webkit-scrollbar{display:none}.cp786-action-tabs button{white-space:nowrap}.cp786-action-kpis .ui-kpi{cursor:pointer}.cp786-action-kpis .ui-kpi span{font-size:12px!important}
-    #relatorio .cp-dashboard-continue{width:100%;display:flex!important;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 0;padding:13px 16px;border:1px solid rgba(255,98,88,.36);border-radius:13px;background:rgba(255,98,88,.07);color:var(--lime);font:inherit;font-size:13px;font-weight:950;cursor:pointer}#relatorio .cp-dashboard-continue b{font-size:20px;line-height:1}
+    #relatorio .cp-dashboard-continue{width:100%;display:flex!important;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 0;padding:13px 16px;border:1px solid var(--brand-primary-line);border-radius:13px;background:var(--brand-primary-soft);color:var(--lime);font:inherit;font-size:13px;font-weight:950;cursor:pointer}#relatorio .cp-dashboard-continue b{font-size:20px;line-height:1}
     @media(max-width:760px){.cp786-action-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cp786-action-kpis .ui-kpi{min-width:0!important}.cp786-action-kpis .ui-kpi span{white-space:normal;line-height:1.1}}
   `;
   document.head.appendChild(css);
@@ -13412,7 +13574,7 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
     const yStart = (botY - p*H).toFixed(1), h = (p*H).toFixed(1);
     const cols = [44,58,72], rows = [26,40,54,68,82,96,110,124,138];
     let wins = '';
-    for(const y of rows) for(const x of cols) wins += `<rect x="${x}" y="${y}" width="9" height="9" rx="1.5" fill="#eef4f6" opacity=".9"/>`;
+    for(const y of rows) for(const x of cols) wins += `<rect x="${x}" y="${y}" width="9" height="9" rx="1.5" fill="var(--text-primary)" opacity=".9"/>`;
     const body = '<rect x="36" y="16" width="48" height="146" rx="5"/><rect x="22" y="160" width="76" height="16" rx="3"/>';
     const id = 'cp788pd' + Math.random().toString(36).slice(2,7);
     return `<svg class="cp788-predio${count>=meta?' cheio':''}" width="112" height="178" viewBox="0 0 120 190" aria-hidden="true">`
